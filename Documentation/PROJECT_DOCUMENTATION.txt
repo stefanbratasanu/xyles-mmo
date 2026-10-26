@@ -1,0 +1,92 @@
+Game Design Overview: Hardcore Classic MMO (Lineage 2 Spirit × PoE Skill Depth)
+1. Core Vision & Pillars
+Hardcore Grind & Risk: Classic high-stakes progression, open-world dynamics, and real penalties for death.
+Deep Customization: Path of Exile-inspired skill trees and item modifier pools layered on top of classic Lineage 2 class/archetype structures.
+Meaningful Exploration & Progression: Bestiary-driven skill point acquisition, dynamic quest design, and high-tier crafting/gearing.
+2. World & Quest Systems
+Flexible Stage-Based Questing (AI-Assisted / Modular)
+Architecture: Driven by two core relational tables:
+Quest Stages & Tasks Table: Defines flexible branching steps and objectives.
+Quest Rewards Table: Handles reward distributions based on stage completion.
+Dynamic
+Quest steps progress dynamically, and procedurally.
+Contrary to a normal mmo quest that goes from START TO A1 TO B2 TO C3 TO FINISH, this is random, meaning you start at the same npc, and do instead of 1 your seed will decide you do A22 TO B9 TO C8  and you have several choices to make duruign the conversation / decisions /actions and have a fixed reward + custom rewards depending on the given set of choices and ending with guaranteed directional rewards example : for the skill point npc you have to kill, etc, the key item you needed and so on, you will be able to answer dynamically to the npc’s question, and the npc will be a locally hosted llm that interprets the response and checks if the items are in the reward list it can give.  note that this option should be available based on your general reputation and with the reputation you have with the npc. 
+So i would liek a custom quest window editor where i can set the rewards, quest name, quest dialogue, and your objectives, branched decisions, and seed defined pathways yo ucan go through. Etc. 
+Examples of data points inside the quest wil lbe 
+Start npc stage 1 dialogue(Node0). Stage 2 option(Node 1) 1 (a node connected at start or disconnected meaning it is available for you to access.  (e.g., location/clues pointing to specific world objectives).
+3. World Mechanics: Mana, Buffs, Factions & Classes
+Core Combat Foundations
+Mana System: Mana management is a core resource gate for all combat roles.
+Buff System: Persistent and temporary buff mechanics play a major role in party efficiency and solo survivability.
+Faction & Class Framework
+Races: Multiple distinct races providing foundational stat distributions and traits.
+Archetypes & Classes:
+Melee / Physical Fighters: Frontline damage dealers.
+Tanks: Aggro management and mitigation specialists.
+Mages / Ranged Spells: AoE and single-target elemental/arcane damage.
+Support / Priests: Healers, purifiers, and defensive mitigation.
+Shamans (Buffers): Dedicated stat-enhancers and party enablers.
+4. Skill System & Skill Tree Evolution
+Skill Point Cap & Starting Loadout
+Hard Cap: Maximum of 50 Skill Points total across the character’s life.
+Starter Abilities: Every character begins with 5 basic skill slots:
+Melee Attack
+Cast Attack
+Defend / Block
+Movement
+Support
+Slot Unlocks: Additional active skill slots unlock as the character advances in level and milestone progression (unlimited total pool potential, but restricted equipped active slots).
+Branching Skill Evolutions (PoE-style Tree Nodes)
+Evolution System: Enhancing a skill presents a choice of 3 distinct evolution paths per tier/stage.
+Tier Progression Rules:
+Max Evolutions: Up to 10 total evolutions per individual skill tree.
+Soft Resets / Tier Spreading: You cannot rush straight down a single path to level 10 (X-1 -> X-10). Progression requires evolving cross-branch nodes (e.g., balancing branches X, Y, and Z).
+Respec Flexibility: Players can soft-reset/re-path individual evolution choices (e.g., swapping node 7 out of 10 without resetting the entire character).
+Bestiary-Based Skill Point Acquisition
+Skill points are not gained simply by leveling up; they are awarded through Bestiary Completion (first-kill bonuses per monster tier per region):
+Monster Category
+Example (Region 1: Lvl 0–10)
+Skill Points Awarded
+Mechanics
+Normal Spawn Mobs
+Standard local fauna / foot-soldiers
+2
+First-time kill completion
+Quest-Spawn Mobs
+Unique targets spawned during quest stages
+5
+Stage progression kill
+Daily World Bosses
+Fixed time-interval spawns
+3
+Timed event kill
+
+5. Itemization & Equipment Rarity
+Item Rarity Tiers & Modifier Pools
+Best-in-Slot (BiS) equipment drops primarily from World Bosses.
+Modifiers draw from two pools: General Modifiers (universal stats) and Item-Specific Modifiers (class/skill-altering stats).
+Tier
+Modifier Count
+Legendary
+5+ Modifiers
+Epic
+4 Modifiers
+Rare
+3 Modifiers
+Basic
+2 Modifiers
+
+6. Death Penalties, Durability & Full-Drop Mechanics
+Death & Durability Loss
+Dying inflicts durability loss on equipped items.
+Durability loss per item is randomized in amount and targeted items, scaled relative to item power level.
+Item Drop / Looting Exposure
+Sub-50% Durability: Items reaching below 50% durability become Exposed. Exposed items carry a percentage chance to drop on player death.
+0% Durability: Items reaching 0% durability automatically drop on death.
+7. Economy & Crafting
+Budget & High-Tier Crafting System
+Crafting allows players to craft high-tier gear using scalable resource inputs to accommodate varying budgets.
+Base Crafting Example (Sword of Caca):
+Base Materials: 100 Wood + 100 Iron
+
+
