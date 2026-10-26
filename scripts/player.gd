@@ -13,30 +13,39 @@ func _ready() -> void:
 	name = "Wayfarer"
 	collision_layer = 2
 	collision_mask = 1
-	var shape := CollisionShape3D.new()
-	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.34
-	capsule.height = 1.75
-	shape.shape = capsule
-	shape.position.y = 0.9
-	add_child(shape)
-	visual = Visual.new()
-	add_child(visual)
-	visual.build_knight()
-	var ring := MeshInstance3D.new()
-	var torus := TorusMesh.new()
-	torus.inner_radius = 0.49
-	torus.outer_radius = 0.53
-	torus.rings = 24
-	torus.ring_segments = 8
-	ring.mesh = torus
-	ring.position.y = 0.045
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color("a5c8c0")
-	mat.emission_enabled = true
-	mat.emission = Color("5c9184")
-	ring.material_override = mat
-	add_child(ring)
+	var shape: CollisionShape3D = get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if not is_instance_valid(shape):
+		shape = CollisionShape3D.new()
+		shape.name = "CollisionShape3D"
+		var capsule := CapsuleShape3D.new()
+		capsule.radius = 0.34
+		capsule.height = 1.75
+		shape.shape = capsule
+		shape.position.y = 0.9
+		add_child(shape)
+	visual = get_node_or_null("Visual") as Node3D
+	if not is_instance_valid(visual):
+		visual = Visual.new()
+		visual.name = "Visual"
+		add_child(visual)
+		visual.build_knight()
+	var ring: MeshInstance3D = get_node_or_null("SelectionRing") as MeshInstance3D
+	if not is_instance_valid(ring):
+		ring = MeshInstance3D.new()
+		ring.name = "SelectionRing"
+		var torus := TorusMesh.new()
+		torus.inner_radius = 0.49
+		torus.outer_radius = 0.53
+		torus.rings = 24
+		torus.ring_segments = 8
+		ring.mesh = torus
+		ring.position.y = 0.045
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color("a5c8c0")
+		mat.emission_enabled = true
+		mat.emission = Color("5c9184")
+		ring.material_override = mat
+		add_child(ring)
 
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(game):

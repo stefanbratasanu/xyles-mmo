@@ -54,56 +54,82 @@ var test_mode: bool = false
 
 func _ready() -> void:
 	DisplayServer.window_set_title("XYLES  |  Ashen Frontier")
-	state = StateScript.new()
-	add_child(state)
+	state = get_node_or_null("GameState")
+	if not is_instance_valid(state):
+		state = StateScript.new()
+		state.name = "GameState"
+		add_child(state)
 	test_mode = OS.get_cmdline_user_args().has("--test-mode")
 	if not test_mode:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://saves"))
 	_load_settings()
 	if not test_mode and not OS.get_cmdline_user_args().has("--fresh"):
 		state.load_game(SAVE_PATH)
-	world = WorldScript.new()
-	add_child(world)
-	world.build()
-	player = PlayerScript.new()
+	world = get_node_or_null("World") as Node3D
+	if not is_instance_valid(world):
+		world = WorldScript.new()
+		world.name = "World"
+		add_child(world)
+		world.build()
+	_load_scene_locations()
+	player = get_node_or_null("Player") as CharacterBody3D
+	if not is_instance_valid(player):
+		player = PlayerScript.new()
+		player.name = "Player"
+		add_child(player)
 	player.game = self
-	add_child(player)
 	player.position = world.player_spawn + Vector3(2, 0.1, 1.5)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	camera_pivot = Node3D.new()
-	camera_pivot.name = "CameraOrbit"
-	add_child(camera_pivot)
-	camera_arm = SpringArm3D.new()
-	camera_arm.name = "CameraWallCollision"
-	camera_arm.spring_length = camera_distance
-	camera_arm.margin = 0.18
-	camera_arm.collision_mask = 1
-	var camera_shape := SphereShape3D.new()
-	camera_shape.radius = 0.28
-	camera_arm.shape = camera_shape
-	camera_pivot.add_child(camera_arm)
-	camera = Camera3D.new()
-	camera.fov = 48.0
-	camera.far = 220.0
-	camera_arm.add_child(camera)
+	camera_pivot = get_node_or_null("CameraOrbit") as Node3D
+	if not is_instance_valid(camera_pivot):
+		camera_pivot = Node3D.new()
+		camera_pivot.name = "CameraOrbit"
+		add_child(camera_pivot)
+	camera_arm = camera_pivot.get_node_or_null("CameraWallCollision") as SpringArm3D
+	if not is_instance_valid(camera_arm):
+		camera_arm = SpringArm3D.new()
+		camera_arm.name = "CameraWallCollision"
+		camera_arm.spring_length = camera_distance
+		camera_arm.margin = 0.18
+		camera_arm.collision_mask = 1
+		var camera_shape := SphereShape3D.new()
+		camera_shape.radius = 0.28
+		camera_arm.shape = camera_shape
+		camera_pivot.add_child(camera_arm)
+	camera = camera_arm.get_node_or_null("Camera3D") as Camera3D
+	if not is_instance_valid(camera):
+		camera = Camera3D.new()
+		camera.name = "Camera3D"
+		camera.fov = 48.0
+		camera.far = 220.0
+		camera_arm.add_child(camera)
 	camera.current = true
 	camera_focus = player.position + Vector3.UP
 	_update_camera(1.0)
-	combat_effects = preload("res://scripts/combat_effects.gd").new()
-	add_child(combat_effects)
+	combat_effects = get_node_or_null("CombatEffects") as Node3D
+	if not is_instance_valid(combat_effects):
+		combat_effects = preload("res://scripts/combat_effects.gd").new()
+		combat_effects.name = "CombatEffects"
+		add_child(combat_effects)
 	combat_effects.prepare(player.position)
 	_build_smith()
 	_build_resources()
 	for spawn: Vector3 in world.normal_spawns:
 		_spawn_enemy("normal", spawn)
 	_spawn_enemy("boss", world.boss_spawn)
-	hud = HUDScript.new()
-	add_child(hud)
+	hud = get_node_or_null("HUD") as CanvasLayer
+	if not is_instance_valid(hud):
+		hud = HUDScript.new()
+		hud.name = "HUD"
+		add_child(hud)
 	hud.setup(self)
 	state.notice.connect(_on_notice)
 	state.changed.connect(_on_state_changed)
-	audio = AudioScript.new()
-	add_child(audio)
+	audio = get_node_or_null("Audio")
+	if not is_instance_valid(audio):
+		audio = AudioScript.new()
+		audio.name = "Audio"
+		add_child(audio)
 	audio.set_master_volume(master_volume)
 	_on_state_changed()
 	if bool(state.quests[0]["active"]):
@@ -113,6 +139,32 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	if OS.get_cmdline_user_args().has("--skills"):
 		hud.toggle_panel("skills")
+
+func _load_scene_locations() -> void:
+	var spawn_root: Node3D = get_node_or_null("SpawnPoints") as Node3D
+	if not is_instance_valid(spawn_root):
+		return
+	var player_marker: Marker3D = spawn_root.get_node_or_null("PlayerSpawn") as Marker3D
+	if is_instance_valid(player_marker):
+		world.player_spawn = player_marker.global_position
+	var camp_marker: Marker3D = spawn_root.get_node_or_null("CampCenter") as Marker3D
+	if is_instance_valid(camp_marker):
+		world.camp_position = camp_marker.global_position
+	var normal_markers: Node3D = spawn_root.get_node_or_null("NormalSpawns") as Node3D
+	if is_instance_valid(normal_markers):
+		world.normal_spawns.clear()
+		for marker: Node in normal_markers.get_children():
+			if marker is Node3D:
+				world.normal_spawns.append((marker as Node3D).global_position)
+	var quest_marker: Marker3D = spawn_root.get_node_or_null("QuestSpawn") as Marker3D
+	if is_instance_valid(quest_marker):
+		world.quest_spawn = quest_marker.global_position
+	var boss_marker: Marker3D = spawn_root.get_node_or_null("BossSpawn") as Marker3D
+	if is_instance_valid(boss_marker):
+		world.boss_spawn = boss_marker.global_position
+	var blacksmith: Node3D = get_node_or_null("Characters/Blacksmith") as Node3D
+	if is_instance_valid(blacksmith):
+		smith_position = blacksmith.global_position
 
 func _process(delta: float) -> void:
 	elapsed += delta
@@ -454,7 +506,12 @@ func _in_combat() -> bool:
 	return false
 
 func _build_smith() -> void:
+	var placed_smith: Node3D = get_node_or_null("Characters/Blacksmith") as Node3D
+	if is_instance_valid(placed_smith):
+		smith_position = placed_smith.global_position
+		return
 	var actor := VisualScript.new()
+	actor.name = "Blacksmith"
 	add_child(actor)
 	actor.position = smith_position
 	actor.rotation.y = -0.4
@@ -463,6 +520,12 @@ func _build_smith() -> void:
 	_label_at("[ E ]  TALK & FORGE", smith_position + Vector3.UP * 2.2, Color("b4bdad"), 17)
 
 func _build_resources() -> void:
+	var placed_deposits: Node3D = get_node_or_null("ResourceDeposits") as Node3D
+	if is_instance_valid(placed_deposits) and not placed_deposits.get_children().is_empty():
+		for deposit: Node in placed_deposits.get_children():
+			if deposit is Node3D:
+				gather_nodes.append({"type": str(deposit.get_meta("resource_type", "wood")), "node": deposit, "timer": 0.0})
+		return
 	for resource: Dictionary in [
 		{"type": "wood", "position": Vector3(-8, 0, 10)},
 		{"type": "iron", "position": Vector3(-3, 0, 16)},
