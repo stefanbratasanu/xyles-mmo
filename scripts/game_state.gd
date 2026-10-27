@@ -9,9 +9,11 @@ signal notice(message: String)
 const MAX_LIFETIME_SKILL_POINTS := 50
 const MAX_SKILL_EVOLUTIONS := 10
 const CATEGORY_POINTS := {"normal": 2, "quest": 5, "boss": 3}
-const RARITY_MODIFIERS := {"basic": 2, "rare": 3, "epic": 4, "legendary": 5}
+const MODIFIER_CATALOG_PATH := "res://resources/modifiers/modifier_catalog.tres"
 const CRAFT_MULTIPLIERS := {"basic": 1.0, "rare": 1.5, "epic": 2.2, "legendary": 3.2}
 const SAVE_PATH := "user://xyles_frontier_save.json"
+
+var modifier_catalog: ModifierCatalog = preload("res://resources/modifiers/modifier_catalog.tres")
 
 var hp: float = 120.0
 var max_hp: float = 120.0
@@ -311,29 +313,32 @@ func craft_sword(tier: String = "basic") -> bool:
 	var tier_index := ["basic", "rare", "epic", "legendary"].find(tier)
 	var item := _make_item("Ashforged Sword", tier, "weapon", 15 + tier_index * 6, 100.0)
 	inventory.append(item)
-	_notify("Crafted · %s Ashforged Sword with %d modifiers. Equip it from your inventory." % [tier.capitalize(), RARITY_MODIFIERS[tier]])
+	_notify("Crafted · %s Ashforged Sword with %d modifiers. Equip it from your inventory." % [tier.capitalize(), modifier_catalog.get_modifier_count(tier)])
 	changed.emit()
 	return true
 
 
 func _make_item(title: String, tier: String, slot: String, power: int, durability: float) -> Dictionary:
-	var general_modifiers: Array[String] = ["+8 maximum vitality", "+6 maximum mana", "+4% attack power", "+3% armor", "+5% mana recovery"]
-	var item_modifiers: Array[String] = ["+8% Iron Cleave damage", "+8% Ember Bolt damage", "+10% restoring power", "+6% guard strength"]
-	var modifiers: Array[String] = []
-	var modifier_count := int(RARITY_MODIFIERS.get(tier, 2))
-	for index in range(modifier_count):
-		if index == modifier_count - 1:
-			modifiers.append(item_modifiers[rng.randi_range(0, item_modifiers.size() - 1)])
-		else:
-			var available: Array[String] = []
-			for modifier in general_modifiers:
-				if not modifiers.has(modifier):
-					available.append(modifier)
-			modifiers.append(available[rng.randi_range(0, available.size() - 1)])
+	var modifiers: Array[String] = modifier_catalog.roll_modifiers(tier, slot, rng)
 	return {"id": "%s_%d_%d" % [slot, Time.get_ticks_usec(), rng.randi()],
 		"name": title, "tier": tier, "slot": slot, "power": power,
 		"durability": durability, "max_durability": 100.0,
 		"modifiers": modifiers, "exposed": durability < 50.0}
+
+
+func get_modifier_display_text(modifier_id_or_name: String) -> String:
+	return modifier_catalog.get_modifier_display_text(modifier_id_or_name)
+
+
+func reload_modifier_catalog() -> bool:
+	var loaded: Resource = ResourceLoader.load(MODIFIER_CATALOG_PATH, "", ResourceLoader.CACHE_MODE_REPLACE_DEEP)
+	if not loaded is ModifierCatalog:
+		push_warning("Modifier catalog could not be reloaded from %s." % MODIFIER_CATALOG_PATH)
+		return false
+	modifier_catalog = loaded as ModifierCatalog
+	changed.emit()
+	_notify("Modifier data reloaded.")
+	return true
 
 
 func equip_item(index: int) -> bool:
@@ -368,26 +373,12 @@ func get_equipment_modifiers() -> Dictionary:
 	for item in equipment:
 		if float(item.get("durability", 0.0)) <= 0.0:
 			continue
-		for modifier: String in item.get("modifiers", []):
-			match modifier:
-				"+8 maximum vitality":
-					result["max_hp"] += 8.0
-				"+6 maximum mana":
-					result["max_mana"] += 6.0
-				"+4% attack power":
-					result["attack_multiplier"] += 0.04
-				"+3% armor":
-					result["armor"] += 0.03
-				"+5% mana recovery":
-					result["mana_regen"] += 0.05
-				"+8% Iron Cleave damage":
-					result["melee_multiplier"] += 0.08
-				"+8% Ember Bolt damage":
-					result["cast_multiplier"] += 0.08
-				"+10% restoring power":
-					result["support_multiplier"] += 0.10
-				"+6% guard strength":
-					result["block_strength"] += 0.06
+		for modifier_ref: String in item.get("modifiers", []):
+			var definition := modifier_catalog.get_modifier(modifier_ref)
+			if definition == null or not result.has(String(definition.stat_key)):
+				continue
+			var stat_key := String(definition.stat_key)
+			result[stat_key] = float(result[stat_key]) + definition.amount
 	result["armor"] = minf(float(result["armor"]), 0.6)
 	return result
 
@@ -605,15 +596,16 @@ func _validated_saved_item(value: Variant) -> Dictionary:
 		return {}
 	var tier := str(value.get("tier", ""))
 	var slot := str(value.get("slot", ""))
-	if not RARITY_MODIFIERS.has(tier) or not ["weapon", "armor", "focus", "relic"].has(slot):
+	if not modifier_catalog.has_rarity(tier) or not ["weapon", "armor", "focus", "staff", "relic"].has(slot):
 		return {}
 	var saved_modifiers: Variant = value.get("modifiers", [])
 	if not saved_modifiers is Array:
 		return {}
 	var modifiers: Array[String] = []
 	for modifier: Variant in saved_modifiers:
-		if modifier is String and modifiers.size() < int(RARITY_MODIFIERS[tier]):
-			modifiers.append(modifier)
+		if modifier is String and modifiers.size() < modifier_catalog.get_modifier_count(tier):
+			var definition := modifier_catalog.get_modifier(modifier)
+			modifiers.append(String(definition.id) if definition != null else modifier)
 	var durability := clampf(float(value.get("durability", 100.0)), 0.0, 100.0)
 	return {"id": str(value.get("id", "%s_%d" % [slot, rng.randi()])),
 		"name": str(value.get("name", "Recovered equipment")), "tier": tier, "slot": slot,

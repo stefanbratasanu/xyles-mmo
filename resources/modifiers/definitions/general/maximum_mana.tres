@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemModifierDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/item_modifier_definition.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"maximum_mana"
+display_name = "+6 maximum mana"
+description = "Increases maximum mana."
+stat_key = &"max_mana"
+amount = 6.0

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemModifierDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/item_modifier_definition.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"mana_recovery"
+display_name = "+5% mana recovery"
+description = "Increases mana regeneration."
+stat_key = &"mana_regen"
+amount = 0.05

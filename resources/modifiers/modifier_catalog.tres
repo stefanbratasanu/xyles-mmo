@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ModifierCatalog" format=3 uid="uid://xbrk366hojlf"]
+
+[ext_resource type="Script" uid="uid://bi545m043l566" path="res://scripts/modifier_catalog.gd" id="1_catalog"]
+[ext_resource type="Resource" path="res://resources/modifiers/pools/general_modifiers.tres" id="2_general"]
+[ext_resource type="Resource" uid="uid://c2jx5qc6rd603" path="res://resources/modifiers/pools/item_specific_modifiers.tres" id="3_specific"]
+[ext_resource type="Resource" path="res://resources/modifiers/pools/staff_enchantments.tres" id="4_staff"]
+
+[resource]
+script = ExtResource("1_catalog")
+general_modifiers = ExtResource("2_general")
+item_specific_modifiers = ExtResource("3_specific")
+staff_enchantments = ExtResource("4_staff")

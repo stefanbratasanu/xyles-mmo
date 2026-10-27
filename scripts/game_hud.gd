@@ -536,7 +536,7 @@ func _equipment_card(item: Dictionary, equipped: bool) -> void:
 		if modifier is Dictionary:
 			pieces.append(str(modifier.get("text", modifier.get("name", str(modifier)))))
 		else:
-			pieces.append(str(modifier))
+			pieces.append(game.state.get_modifier_display_text(str(modifier)))
 	var mod_label: Label = _label("   /   ".join(pieces), 11, TEXT)
 	mod_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(mod_label)

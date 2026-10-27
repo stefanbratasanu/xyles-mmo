@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="ItemModifierDefinition" format=3 uid="uid://bun3dciun8mq3"]
+
+[ext_resource type="Script" uid="uid://ctffg0122q4pb" path="res://scripts/item_modifier_definition.gd" id="1_ugioc"]
+
+[resource]
+script = ExtResource("1_ugioc")
+id = &"custom_45429455"
+display_name = "New modifier"
+stat_key = &"attack_multiplier"

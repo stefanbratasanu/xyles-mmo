@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemModifierDefinition" format=3 uid="uid://cn2vo1mcbuyxc"]
+
+[ext_resource type="Script" uid="uid://ctffg0122q4pb" path="res://scripts/item_modifier_definition.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"ember_bolt_damage"
+display_name = "+8% Ember Bolt damage"
+description = "Increases Ember Bolt damage."
+stat_key = &"cast_multiplier"
+amount = 0.08

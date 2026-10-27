@@ -356,11 +356,12 @@ func use_skill(index: int) -> void:
 			audio.cue("melee")
 		1:
 			player.face_point(target.global_position)
-			player.attack_animation()
+			player.cast_animation()
 			var damage: float = (28.0 + equipment_power * 0.5) * power * buff * float(mods["cast_multiplier"])
 			_projectile(target, damage)
 			audio.cue("cast")
 		2:
+			player.block_animation()
 			block_time = 4.0 + (power - 1.0) * 3.0
 			burst(player.global_position, Color("83b7bf"), 1.2, 0.5)
 			floating_text(player.global_position + Vector3.UP * 2.0, "GUARD", Color("91c8cb"))
@@ -370,6 +371,7 @@ func use_skill(index: int) -> void:
 			burst(player.global_position, Color("afd4c9"), 0.8, 0.3)
 			audio.cue("move")
 		4:
+			player.support_animation()
 			var healing: float = 38.0 * power * float(mods["support_multiplier"])
 			state.hp = minf(state.max_hp + float(mods["max_hp"]), state.hp + healing)
 			support_time = 10.0
@@ -402,6 +404,11 @@ func _projectile(enemy: CharacterBody3D, damage: float) -> void:
 	var orb: MeshInstance3D = combat_effects.take_orb()
 	orb.position = player.position + Vector3.UP * 1.2
 	var hit_point := enemy.position + Vector3.UP * (1.0 if enemy.kind != "boss" else 2.3)
+	var flame := orb.get_node_or_null("EmberTrail") as EffekseerEmitter3D
+	if flame != null:
+		var direction := (hit_point - orb.position).normalized()
+		flame.rotation.y = atan2(direction.z, -direction.x)
+		flame.play()
 	var duration: float = clampf(orb.position.distance_to(hit_point) / 24.0, 0.15, 0.8)
 	var tween := create_tween()
 	tween.tween_property(orb, "position", hit_point, duration)
@@ -436,12 +443,12 @@ func _player_died() -> void:
 	var result: Dictionary = state.apply_death()
 	if not result["dropped"].is_empty():
 		_drop_satchel(player.global_position, result["dropped"])
-	player.visual.rotation.z = 1.25
+	player.death_animation()
 	_on_notice("You have fallen. Equipment durability lost. Returning to Emberfall in 4 seconds.")
 	audio.cue("death")
 	await get_tree().create_timer(4.0).timeout
 	player.position = world.player_spawn + Vector3(2, 0.2, 1)
-	player.visual.rotation.z = 0
+	player.revive_animation()
 	state.restore()
 	player.invulnerable_time = 3.0
 	is_dead = false

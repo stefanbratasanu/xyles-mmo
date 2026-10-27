@@ -5,6 +5,7 @@ var orbs: Array[MeshInstance3D] = []
 var labels: Array[Label3D] = []
 var orb_mesh: SphereMesh
 var orb_material: StandardMaterial3D
+const EMBER_BOLT_EFFECT = preload("res://assets/effects/ember_bolt/EmberBolt.efkefc")
 
 func prepare(at: Vector3) -> void:
 	var ring_mesh := TorusMesh.new()
@@ -96,6 +97,12 @@ func _new_orb() -> MeshInstance3D:
 	light.light_energy = 2.0
 	light.omni_range = 3.0
 	orb.add_child(light)
+	var flame := EffekseerEmitter3D.new()
+	flame.name = "EmberTrail"
+	flame.effect = EMBER_BOLT_EFFECT
+	flame.autoplay = false
+	flame.scale = Vector3.ONE * 0.6
+	orb.add_child(flame)
 	orb.set_meta("busy", false)
 	add_child(orb)
 	orbs.append(orb)
@@ -114,6 +121,9 @@ func take_orb() -> MeshInstance3D:
 	return extra
 
 func release_orb(orb: MeshInstance3D) -> void:
+	var flame := orb.get_node_or_null("EmberTrail") as EffekseerEmitter3D
+	if flame != null:
+		flame.stop()
 	orb.hide()
 	orb.set_meta("busy", false)
 

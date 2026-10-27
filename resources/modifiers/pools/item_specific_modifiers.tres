@@ -1,0 +1,59 @@
+[gd_resource type="Resource" script_class="ModifierPool" format=3 uid="uid://c2jx5qc6rd603"]
+
+[ext_resource type="Script" uid="uid://cso6p244llhek" path="res://scripts/modifier_pool.gd" id="1_pool"]
+[ext_resource type="Script" uid="uid://7joxm2pbkcvw" path="res://scripts/weighted_modifier_entry.gd" id="2_entry"]
+[ext_resource type="Resource" uid="uid://bg1d6id057sw1" path="res://resources/modifiers/definitions/item_specific/iron_cleave_damage.tres" id="3_cleave"]
+[ext_resource type="Resource" uid="uid://cn2vo1mcbuyxc" path="res://resources/modifiers/definitions/item_specific/ember_bolt_damage.tres" id="4_ember"]
+[ext_resource type="Resource" uid="uid://clvre375soogr" path="res://resources/modifiers/definitions/item_specific/restoring_power.tres" id="5_restore"]
+[ext_resource type="Resource" uid="uid://blqxhfvdqg4ca" path="res://resources/modifiers/definitions/item_specific/guard_strength.tres" id="6_guard"]
+[ext_resource type="Resource" uid="uid://c1rumdeegrnid" path="res://resources/modifiers/definitions/item_specific/custom_44533314.tres" id="6_iih7b"]
+[ext_resource type="Resource" uid="uid://dm5036j3a6kpa" path="res://resources/modifiers/definitions/item_specific/custom_45103253.tres" id="7_foav8"]
+[ext_resource type="Resource" uid="uid://bun3dciun8mq3" path="res://resources/modifiers/definitions/item_specific/custom_45429455.tres" id="8_najfp"]
+[ext_resource type="Resource" uid="uid://61idhmeh3wib" path="res://resources/modifiers/definitions/item_specific/custom_45711364.tres" id="9_26yse"]
+[ext_resource type="Resource" uid="uid://pspg4m1rcfm5" path="res://resources/modifiers/definitions/item_specific/custom_45997256.tres" id="10_0dlyg"]
+
+[sub_resource type="Resource" id="CleaveEntry"]
+script = ExtResource("2_entry")
+modifier = ExtResource("3_cleave")
+weight = 30.0
+
+[sub_resource type="Resource" id="EmberEntry"]
+script = ExtResource("2_entry")
+modifier = ExtResource("4_ember")
+weight = 30.0
+
+[sub_resource type="Resource" id="RestoreEntry"]
+script = ExtResource("2_entry")
+modifier = ExtResource("5_restore")
+weight = 20.0
+
+[sub_resource type="Resource" id="GuardEntry"]
+script = ExtResource("2_entry")
+modifier = ExtResource("6_guard")
+weight = 20.0
+
+[sub_resource type="Resource" id="Resource_5kgtm"]
+script = ExtResource("2_entry")
+modifier = ExtResource("6_iih7b")
+
+[sub_resource type="Resource" id="Resource_rtf40"]
+script = ExtResource("2_entry")
+modifier = ExtResource("7_foav8")
+
+[sub_resource type="Resource" id="Resource_2o44l"]
+script = ExtResource("2_entry")
+modifier = ExtResource("8_najfp")
+
+[sub_resource type="Resource" id="Resource_omghb"]
+script = ExtResource("2_entry")
+modifier = ExtResource("9_26yse")
+
+[sub_resource type="Resource" id="Resource_pejul"]
+script = ExtResource("2_entry")
+modifier = ExtResource("10_0dlyg")
+
+[resource]
+script = ExtResource("1_pool")
+pool_id = &"item_specific"
+display_name = "Item-specific modifiers"
+entries = Array[ExtResource("2_entry")]([SubResource("CleaveEntry"), SubResource("EmberEntry"), SubResource("RestoreEntry"), SubResource("GuardEntry"), SubResource("Resource_5kgtm"), SubResource("Resource_rtf40"), SubResource("Resource_2o44l"), SubResource("Resource_omghb"), SubResource("Resource_pejul")])

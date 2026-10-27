@@ -9,7 +9,7 @@ Architecture: Driven by two core relational tables:
 Quest Stages & Tasks Table: Defines flexible branching steps and objectives.
 Quest Rewards Table: Handles reward distributions based on stage completion.
 Dynamic
-Quest steps progress dynamically, and procedurally.
+Quest steps progress +8% Iron Cleave damagedynamically, and procedurally.
 Contrary to a normal mmo quest that goes from START TO A1 TO B2 TO C3 TO FINISH, this is random, meaning you start at the same npc, and do instead of 1 your seed will decide you do A22 TO B9 TO C8  and you have several choices to make duruign the conversation / decisions /actions and have a fixed reward + custom rewards depending on the given set of choices and ending with guaranteed directional rewards example : for the skill point npc you have to kill, etc, the key item you needed and so on, you will be able to answer dynamically to the npc’s question, and the npc will be a locally hosted llm that interprets the response and checks if the items are in the reward list it can give.  note that this option should be available based on your general reputation and with the reputation you have with the npc. 
 So i would liek a custom quest window editor where i can set the rewards, quest name, quest dialogue, and your objectives, branched decisions, and seed defined pathways yo ucan go through. Etc. 
 Examples of data points inside the quest wil lbe 
@@ -90,3 +90,8 @@ Base Crafting Example (Sword of Caca):
 Base Materials: 100 Wood + 100 Iron
 
 
+8. Editing tools
+Editing /balancing / quest creation tools have to be easy to use, iterate quickly, reloaded easily in the live gameserver and the data files they export have to be versionable easily
+For example, the skill enchantments list for staffs has to have all the available enchantments and the e enchantment values in a distribution list where n can increase / decrease the roll chances for that specific enchantment. And adjusting one, autmataticly adjust the others to always add u pto 100 % or a similar system like this without aunty data leak points and safe.
+The quests system has to use the quest example.png example and so on.
+The skill enhancement has to have a sort of  tree-line where yo ucan see each skill’s enchantment. Skills arranged as columns and values arranges as lines sort of look.

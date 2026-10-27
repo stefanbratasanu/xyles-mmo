@@ -1,8 +1,11 @@
 extends CharacterBody3D
 
-const Visual = preload("res://scripts/actor_visual.gd")
+const CHARACTER_SCENE = preload("res://addons/RPG_Animations_GLB_FREE-0.1.0-2/Unarmed.glb")
 var game: Node
 var visual: Node3D
+var animation_player: AnimationPlayer
+var action_active := false
+var is_dying := false
 var destination := Vector3.ZERO
 var moving_to_click: bool = false
 var move_direction := Vector3.FORWARD
@@ -10,7 +13,6 @@ var dash_time: float = 0.0
 var invulnerable_time: float = 0.0
 
 func _ready() -> void:
-	name = "Wayfarer"
 	collision_layer = 2
 	collision_mask = 1
 	var shape: CollisionShape3D = get_node_or_null("CollisionShape3D") as CollisionShape3D
@@ -25,10 +27,22 @@ func _ready() -> void:
 		add_child(shape)
 	visual = get_node_or_null("Visual") as Node3D
 	if not is_instance_valid(visual):
-		visual = Visual.new()
+		visual = Node3D.new()
 		visual.name = "Visual"
 		add_child(visual)
-		visual.build_knight()
+	var character := visual.get_node_or_null("Character") as Node3D
+	if not is_instance_valid(character):
+		character = CHARACTER_SCENE.instantiate() as Node3D
+		character.name = "Character"
+		character.scale = Vector3.ONE * 0.7
+		visual.add_child(character)
+	animation_player = character.get_node_or_null("AnimationPlayer") as AnimationPlayer
+	if animation_player != null:
+		for animation_name: String in ["UnarmedIdle", "UnarmedRunForward", "UnarmedSprint"]:
+			if animation_player.has_animation(animation_name):
+				animation_player.get_animation(animation_name).loop_mode = Animation.LOOP_LINEAR
+		animation_player.animation_finished.connect(_on_animation_finished)
+		_play_locomotion("UnarmedIdle")
 	var ring: MeshInstance3D = get_node_or_null("SelectionRing") as MeshInstance3D
 	if not is_instance_valid(ring):
 		ring = MeshInstance3D.new()
@@ -86,7 +100,9 @@ func _physics_process(delta: float) -> void:
 	if direction.length_squared() > 0.01:
 		move_direction = direction
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), delta * 14.0)
-	visual.animate(delta, Vector2(velocity.x, velocity.z).length())
+	if not action_active and not is_dying:
+		var speed := Vector2(velocity.x, velocity.z).length()
+		_play_locomotion("UnarmedSprint" if dash_time > 0.0 else ("UnarmedRunForward" if speed > 0.15 else "UnarmedIdle"))
 
 func face_point(point: Vector3) -> void:
 	var offset := point - global_position
@@ -94,9 +110,40 @@ func face_point(point: Vector3) -> void:
 		visual.rotation.y = atan2(-offset.x, -offset.z)
 
 func attack_animation() -> void:
-	visual.strike = 1.0
+	_play_action("UnarmedAttackR1")
+
+func cast_animation() -> void:
+	_play_action("UnarmedActivate")
+
+func block_animation() -> void:
+	_play_action("UnarmedBlock")
+
+func support_animation() -> void:
+	_play_action("UnarmedBoost1")
+
+func death_animation() -> void:
+	is_dying = true
+	_play_action("UnarmedDeath1")
+
+func revive_animation() -> void:
+	is_dying = false
+	_play_action("UnarmedGetup1")
+
+func _play_locomotion(animation_name: String) -> void:
+	if animation_player != null and animation_player.has_animation(animation_name) and animation_player.current_animation != animation_name:
+		animation_player.play(animation_name, 0.15)
+
+func _play_action(animation_name: String) -> void:
+	if animation_player == null or not animation_player.has_animation(animation_name):
+		return
+	action_active = true
+	animation_player.play(animation_name, 0.1)
+
+func _on_animation_finished(_animation_name: StringName) -> void:
+	action_active = false
 
 func dash() -> void:
 	dash_time = 0.28
 	invulnerable_time = 0.38
 	moving_to_click = false
+	_play_action("UnarmedRollForward")

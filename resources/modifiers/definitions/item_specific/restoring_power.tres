@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemModifierDefinition" format=3 uid="uid://clvre375soogr"]
+
+[ext_resource type="Script" uid="uid://ctffg0122q4pb" path="res://scripts/item_modifier_definition.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"restoring_power"
+display_name = "+10% restoring power"
+description = "Increases support restoration strength."
+stat_key = &"support_multiplier"
+amount = 0.1
