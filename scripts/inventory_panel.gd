@@ -19,7 +19,8 @@ func icon(kind: String) -> Texture2D:
 
 func render() -> void:
 	var state: Node = hud.game.state
-	hud.overlay_title.text = "Inventory                                      (%d/%d)" % [state.inventory.size(), Slots.CAPACITY]
+	var used_slots: int = state.inventory.size() + int(state.wood > 0) + int(state.iron > 0)
+	hud.overlay_title.text = "Inventory                                      (%d/%d)" % [used_slots, Slots.CAPACITY]
 	var body := HBoxContainer.new()
 	body.add_theme_constant_override("separation", 10)
 	hud.overlay_content.add_child(body)
@@ -87,7 +88,8 @@ func render() -> void:
 		if index < entries.size():
 			var item: Dictionary = entries[index].item
 			var definition: Array = Slots.definition(str(item.get("slot", "")))
-			var tile := _tile(item, str(definition[2]) if not definition.is_empty() else "dye", 36)
+			var artwork: String = str(item.id) if item.get("category", "") == "material" else (str(definition[2]) if not definition.is_empty() else "dye")
+			var tile := _tile(item, artwork, 36)
 			grid.add_child(tile)
 			if int(entries[index].index) >= 0:
 				tile.pressed.connect(_select.bind(str(item.id)))
@@ -117,7 +119,7 @@ func render() -> void:
 	var gold: Label = hud._label("◈  %s" % state.gold, 11, hud.GOLD)
 	gold.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	currencies.add_child(gold)
-	var capacity: Label = hud._label("Bag capacity  %.2f%%" % (state.inventory.size() * 100.0 / Slots.CAPACITY), 9, hud.TEXT)
+	var capacity: Label = hud._label("Bag capacity  %.2f%%" % (used_slots * 100.0 / Slots.CAPACITY), 9, hud.TEXT)
 	capacity.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	currencies.add_child(capacity)
 	var trash: Button = hud._button("×" if not confirm_discard else "Sure?", 12)
@@ -154,8 +156,12 @@ func _tile(item: Dictionary, silhouette: String, edge: int) -> Button:
 		tile.tooltip_text = _description(item)
 		if item.has("count"):
 			var count: Label = hud._label(str(item.count), 9, hud.TEXT)
-			count.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-			count.position -= Vector2(25, 14)
+			count.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+			count.offset_left = 2
+			count.offset_top = -14
+			count.offset_right = -2
+			count.offset_bottom = -1
+			count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			tile.add_child(count)
 	return tile
 

@@ -118,6 +118,15 @@ func render() -> void:
 	capacity.tooltip_text = "All five active skill slots are equipped."
 	capacity.pressed.connect(func(): hud.show_notice("Your five active slots are equipped: melee, cast, guard, movement and support."))
 	hud.overlay_content.add_child(capacity)
+	var reset: Button = hud._button("RESET ALL EVOLUTIONS", 11)
+	reset.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	reset.tooltip_text = "Remove all skill evolutions and refund every spent skill point."
+	var spent := 0
+	for skill: Dictionary in state.skills.values():
+		spent += int(skill["investments"])
+	reset.disabled = spent == 0
+	reset.pressed.connect(_reset)
+	hud.overlay_content.add_child(reset)
 
 func _tile(texture: Texture2D, edge: int, color: Color) -> Button:
 	var button: Button = hud._button("", 12, true)
@@ -126,6 +135,10 @@ func _tile(texture: Texture2D, edge: int, color: Color) -> Button:
 	button.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	button.add_theme_stylebox_override("normal", hud._style(Color("171511"), color.darkened(0.25), 1, 0, 3, 3))
 	button.add_theme_stylebox_override("hover", hud._style(Color("494130"), hud.GOLD, 2, 0, 3, 3))
+	# Every state must keep the same padding; the generic button's pressed
+	# padding clipped the denominator on the narrow evolution counter.
+	button.add_theme_stylebox_override("pressed", hud._style(Color("282419"), hud.GOLD, 2, 0, 3, 3))
+	button.add_theme_stylebox_override("disabled", hud._style(Color("171511"), color.darkened(0.4), 1, 0, 3, 3))
 	if texture:
 		var picture := TextureRect.new()
 		picture.texture = texture
@@ -139,6 +152,13 @@ func _tile(texture: Texture2D, edge: int, color: Color) -> Button:
 		picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		button.add_child(picture)
 	return button
+
+func _reset() -> void:
+	if is_instance_valid(picker):
+		picker.hide()
+	hud.game.state.reset_evolutions()
+	hud.game._save_journey()
+	hud.refresh()
 
 func _choose(id: String, stage: int) -> void:
 	var state: Node = hud.game.state

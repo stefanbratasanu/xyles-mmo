@@ -249,6 +249,19 @@ func respec_skill(skill_id: String, branch: int) -> bool:
 	return true
 
 
+func reset_evolutions() -> int:
+	var refunded := 0
+	for skill: Dictionary in skills.values():
+		refunded += int(skill["investments"])
+		skill["ranks"] = [0, 0, 0]
+		skill["history"] = []
+		skill["investments"] = 0
+	skill_points += refunded
+	_notify("Evolutions reset · %d skill points refunded." % refunded)
+	changed.emit()
+	return refunded
+
+
 func get_skill_bonus(skill_id: String) -> float:
 	if not skills.has(skill_id):
 		return 1.0
