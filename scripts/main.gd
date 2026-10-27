@@ -183,8 +183,6 @@ func _process(delta: float) -> void:
 			state.hp = minf(state.max_hp + float(mods["max_hp"]), state.hp + delta * (8.0 if at_camp else 1.0))
 		if support_time > 0:
 			state.mana = minf(state.max_mana + float(mods["max_mana"]), state.mana + delta * 1.6)
-		if Input.is_physical_key_pressed(KEY_SPACE) and not hud.is_panel_open():
-			use_skill(0)
 		_process_pending_skill()
 	_update_camera(delta)
 	_process_respawns(delta)
@@ -490,6 +488,8 @@ func _process_respawns(delta: float) -> void:
 			respawns.remove_at(index)
 
 func _on_state_changed() -> void:
+	if is_instance_valid(player):
+		player.update_equipment(state.equipment)
 	if not quest_spawned and bool(state.quests[0]["active"]) and int(state.quests[0]["stage"]) == 2:
 		quest_spawned = true
 		_spawn_enemy("quest", world.quest_spawn)

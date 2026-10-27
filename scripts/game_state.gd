@@ -12,6 +12,8 @@ const CATEGORY_POINTS := {"normal": 2, "quest": 5, "boss": 3}
 const MODIFIER_CATALOG_PATH := "res://resources/modifiers/modifier_catalog.tres"
 const CRAFT_MULTIPLIERS := {"basic": 1.0, "rare": 1.5, "epic": 2.2, "legendary": 3.2}
 const SAVE_PATH := "user://xyles_frontier_save.json"
+const EquipmentSlots = preload("res://scripts/equipment_slots.gd")
+var equipment_schema_version: int = 1
 
 var modifier_catalog: ModifierCatalog = preload("res://resources/modifiers/modifier_catalog.tres")
 
@@ -43,8 +45,9 @@ func _init() -> void:
 	equipment = [
 		_make_item("Worn Ironblade", "basic", "weapon", 12, 88.0),
 		_make_item("Wayfarer's Cuirass", "basic", "armor", 10, 92.0),
-		_make_item("Ashen Focus", "rare", "focus", 9, 76.0),
+		_make_item("Ashen Focus", "rare", "offhand", 9, 76.0),
 	]
+	_add_equipment_examples()
 	logs.append("You have reached the Ashen Reach. Speak with the blacksmith [E].")
 
 
@@ -319,7 +322,9 @@ func craft_sword(tier: String = "basic") -> bool:
 
 
 func _make_item(title: String, tier: String, slot: String, power: int, durability: float) -> Dictionary:
-	var modifiers: Array[String] = modifier_catalog.roll_modifiers(tier, slot, rng)
+	var modifier_slot := slot
+	slot = EquipmentSlots.canonical(slot)
+	var modifiers: Array[String] = modifier_catalog.roll_modifiers(tier, "focus" if slot == "offhand" else modifier_slot, rng)
 	return {"id": "%s_%d_%d" % [slot, Time.get_ticks_usec(), rng.randi()],
 		"name": title, "tier": tier, "slot": slot, "power": power,
 		"durability": durability, "max_durability": 100.0,
@@ -355,6 +360,40 @@ func equip_item(index: int) -> bool:
 	_notify("Equipped · " + str(item["name"]))
 	changed.emit()
 	return true
+
+
+func unequip_slot(slot: String) -> bool:
+	if inventory.size() >= EquipmentSlots.CAPACITY:
+		_notify("Your inventory is full.")
+		return false
+	for index in range(equipment.size()):
+		if equipment[index]["slot"] == slot:
+			var item: Dictionary = equipment.pop_at(index)
+			inventory.append(item)
+			_notify("Unequipped · " + str(item["name"]))
+			changed.emit()
+			return true
+	return false
+
+
+func _add_equipment_examples() -> void:
+	# One-time migration gives existing characters access to the expanded slots.
+	for entry: Array in EquipmentSlots.SLOTS:
+		var occupied := false
+		for item: Dictionary in equipment + inventory:
+			if str(item["slot"]) == entry[0]:
+				occupied = true
+				break
+		if not occupied:
+			inventory.append(_make_item(str(entry[3]), "basic", str(entry[0]), 2, 100))
+	# The existing Ashen Focus shares the shield slot; supply a shield alternative.
+	var has_buckler := false
+	for item: Dictionary in equipment + inventory:
+		if str(item.get("name", "")) == "Emberfall Buckler":
+			has_buckler = true
+	if not has_buckler:
+		inventory.append(_make_item("Emberfall Buckler", "basic", "offhand", 2, 100))
+	equipment_schema_version = 1
 
 
 func get_equipment_power() -> float:
@@ -473,6 +512,7 @@ func save_game(path: String = SAVE_PATH) -> bool:
 		"mana": mana, "max_mana": max_mana, "skill_points": skill_points,
 		"earned_skill_points": earned_skill_points, "skill_ranks": ranks, "skill_histories": histories,
 		"bestiary": bestiary, "equipment": equipment, "inventory": inventory,
+		"equipment_schema_version": equipment_schema_version,
 		"quests": quests, "current_region": current_region}))
 	return true
 
@@ -586,6 +626,9 @@ func load_game(path: String = SAVE_PATH) -> bool:
 				if saved_tasks[task_index] is Dictionary:
 					tasks[task_index]["count"] = clampi(int(saved_tasks[task_index].get("count", 0)), 0, int(tasks[task_index]["required"]))
 	current_region = str(parsed.get("current_region", "ashen_reach"))
+	equipment_schema_version = int(parsed.get("equipment_schema_version", 0))
+	if equipment_schema_version < 1:
+		_add_equipment_examples()
 	_notify("Journey restored · Welcome back to the Ashen Reach.")
 	changed.emit()
 	return true
@@ -595,8 +638,8 @@ func _validated_saved_item(value: Variant) -> Dictionary:
 	if not value is Dictionary:
 		return {}
 	var tier := str(value.get("tier", ""))
-	var slot := str(value.get("slot", ""))
-	if not modifier_catalog.has_rarity(tier) or not ["weapon", "armor", "focus", "staff", "relic"].has(slot):
+	var slot: String = EquipmentSlots.canonical(str(value.get("slot", "")))
+	if not modifier_catalog.has_rarity(tier) or EquipmentSlots.definition(slot).is_empty():
 		return {}
 	var saved_modifiers: Variant = value.get("modifiers", [])
 	if not saved_modifiers is Array:

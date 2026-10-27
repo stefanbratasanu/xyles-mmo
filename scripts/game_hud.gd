@@ -1,12 +1,12 @@
 extends CanvasLayer
 class_name XylesHUD
 
-const INK := Color("101820")
-const PANEL := Color(0.045, 0.067, 0.078, 0.94)
-const GOLD := Color("c2a36d")
-const GOLD_DIM := Color("625a45")
-const TEXT := Color("e3dfd4")
-const MUTED := Color("94a09e")
+const INK := Color("171614")
+const PANEL := Color(0.075, 0.069, 0.058, 0.94)
+const GOLD := Color("cbb991")
+const GOLD_DIM := Color("716650")
+const TEXT := Color("e0dcd1")
+const MUTED := Color("a5a196")
 const RED := Color("b46860")
 const TEAL := Color("71aaa1")
 const SKILL_IDS := ["melee", "cast", "block", "move", "support"]
@@ -42,6 +42,17 @@ var minimap: FrontierMap
 var hotbar: Array[Button] = []
 var heading_font: SystemFont
 var skill_view: RefCounted
+var inventory_view: RefCounted
+var overlay_footer: HBoxContainer
+var window_frame: PanelContainer
+var window_positions: Dictionary = {}
+var drag_target: Control
+var drag_id: String = ""
+var drag_offset := Vector2.ZERO
+var floating_windows: Dictionary = {}
+var default_positions: Dictionary = {}
+const LAYOUT_PATH := "res://saves/ui_layout.cfg"
+const FrameScript = preload("res://scripts/classic_frame.gd")
 
 
 class FrontierMap extends Control:
@@ -78,12 +89,21 @@ class FrontierMap extends Control:
 func setup(owner_game: Node) -> void:
 	game = owner_game
 	skill_view = preload("res://scripts/skill_panel.gd").new(self)
+	inventory_view = preload("res://scripts/inventory_panel.gd").new(self)
 	heading_font = SystemFont.new()
-	heading_font.font_names = PackedStringArray(["Georgia", "Noto Serif", "serif"])
+	heading_font.font_names = PackedStringArray(["Tahoma", "Arial", "sans-serif"])
+	_load_layout()
 	root = Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+	var ui_theme := Theme.new()
+	ui_theme.default_font = heading_font
+	ui_theme.default_font_size = 12
+	ui_theme.set_stylebox("panel", "TooltipPanel", _style(Color("1c1a16"), GOLD_DIM, 2, 3, 12, 9))
+	ui_theme.set_color("font_color", "TooltipLabel", TEXT)
+	ui_theme.set_font_size("font_size", "TooltipLabel", 12)
+	root.theme = ui_theme
 	_build_brand()
 	_build_player()
 	_build_quest()
@@ -95,6 +115,8 @@ func setup(owner_game: Node) -> void:
 	_build_overlay()
 	if game.state.has_signal("notice"):
 		game.state.notice.connect(show_notice)
+	get_viewport().size_changed.connect(_clamp_windows)
+	_settle_hud.call_deferred()
 	refresh()
 
 
@@ -122,24 +144,20 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 
 func _build_brand() -> void:
-	var brand: VBoxContainer = VBoxContainer.new()
-	_place(brand, Vector2(28, 23), Vector2(300, 67))
-	brand.add_theme_constant_override("separation", 2)
-	brand.add_child(_label("X Y L E S", 31, GOLD, true))
-	brand.add_child(_label("A S H E N   F R O N T I E R", 10, TEXT))
-	var compass: VBoxContainer = VBoxContainer.new()
-	_place(compass, Vector2(-170, 26), Vector2(340, 45), Vector2(0.5, 0.0))
-	var directions: Label = _label("W          N W          N          N E          E", 10, GOLD)
-	directions.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	compass.add_child(directions)
-	region_label = _label("ASHEN REACH", 14, TEXT, true)
+	var compass := VBoxContainer.new()
+	_place(compass, Vector2(-150, 12), Vector2(300, 40), Vector2(0.5, 0))
+	region_label = _label("EMBERFALL CAMP", 13, TEXT, true)
 	region_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	compass.add_child(region_label)
+	var subtitle := _label("•  ASHEN REACH  •", 9, GOLD)
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	compass.add_child(subtitle)
 
 
 func _build_player() -> void:
 	var panel: PanelContainer = _panel()
-	_place(panel, Vector2(28, 104), Vector2(280, 102))
+	_place(panel, Vector2(12, 12), Vector2(268, 100))
+	_register_window(panel, "status")
 	var column: VBoxContainer = _column(panel, 13, 10)
 	player_name = _label("WANDERER  /  LV. 1", 12, TEXT)
 	column.add_child(player_name)
@@ -147,7 +165,7 @@ func _build_player() -> void:
 	hrow.add_theme_constant_override("separation", 8)
 	column.add_child(hrow)
 	hrow.add_child(_label("VITALITY", 9, MUTED))
-	hp_bar = _bar(Color("974d45"), 9)
+	hp_bar = _bar(Color("a72d29"), 12)
 	hp_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hrow.add_child(hp_bar)
 	hp_text = _label("120 / 120", 10, TEXT)
@@ -158,89 +176,124 @@ func _build_player() -> void:
 	mrow.add_theme_constant_override("separation", 8)
 	column.add_child(mrow)
 	mrow.add_child(_label("MANA     ", 9, MUTED))
-	mana_bar = _bar(Color("477a8c"), 9)
+	mana_bar = _bar(Color("305c9c"), 12)
 	mana_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mrow.add_child(mana_bar)
 	mana_text = _label("100 / 100", 10, TEXT)
 	mana_text.custom_minimum_size.x = 62
 	mana_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	mrow.add_child(mana_text)
-	column.add_child(_label("FREE EXPLORATION   /   CONTESTED LAND", 8, GOLD))
+	column.add_child(_label("XYLES  •  CONTESTED TERRITORY", 8, GOLD))
 
 
 func _build_quest() -> void:
 	var panel: PanelContainer = _panel(Color(0.04, 0.06, 0.07, 0.83), false)
-	_place(panel, Vector2(28, 227), Vector2(280, 156))
+	_place(panel, Vector2(-274, 254), Vector2(262, 145), Vector2(1, 0))
+	_register_window(panel, "quest")
 	var column: VBoxContainer = _column(panel, 14, 12)
-	column.add_child(_label("CHRONICLE  /  I", 9, GOLD))
-	quest_title = _label("A Debt of Iron", 20, TEXT, true)
+	column.add_child(_label("Quest Journal", 9, GOLD))
+	quest_title = _label("A Debt of Iron", 16, TEXT, true)
 	column.add_child(quest_title)
 	quest_text = _label("Speak to the camp blacksmith.", 12, TEXT)
 	quest_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	quest_text.size.x = 230
 	quest_text.custom_minimum_size.y = 45
 	column.add_child(quest_text)
 	column.add_child(_label("[E]  INTERACT NEAR THE FORGE", 9, MUTED))
 
 
 func _build_navigation() -> void:
-	var map_box: PanelContainer = _panel(Color(0.04, 0.06, 0.07, 0.87))
-	_place(map_box, Vector2(-218, 24), Vector2(190, 230), Vector2(1, 0))
-	var column: VBoxContainer = _column(map_box, 8, 8)
-	var location: Label = _label("ASHEN REACH  /  01", 9, GOLD)
+	var map_box := _panel()
+	_place(map_box, Vector2(-244, 12), Vector2(232, 230), Vector2(1, 0))
+	_register_window(map_box, "map")
+	var column := _column(map_box, 8, 8)
+	var location := _label("Map — Ashen Reach", 11, TEXT)
 	location.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(location)
 	minimap = FrontierMap.new()
 	minimap.owner_game = game
-	minimap.custom_minimum_size = Vector2(170, 170)
+	minimap.custom_minimum_size = Vector2(210, 170)
 	minimap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(minimap)
-	var safe: Label = _label("CAMP  /  EMBERFALL", 8, MUTED)
+	var safe := _label("N  •  EMBERFALL CAMP", 9, GOLD)
 	safe.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(safe)
-	var menu: VBoxContainer = VBoxContainer.new()
-	_place(menu, Vector2(-218, 267), Vector2(190, 218), Vector2(1, 0))
-	menu.add_theme_constant_override("separation", 4)
-	for item: Array in [["K", "SKILL EVOLUTIONS", "skills"], ["B", "BESTIARY", "bestiary"], ["I", "EQUIPMENT", "inventory"], ["C", "BLACKSMITH", "forge"], ["H", "FIELD GUIDE", "guide"], ["O", "SETTINGS", "settings"]]:
-		var btn: Button = _button("  %s    %s" % [item[0], item[1]], 10, false)
-		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		btn.custom_minimum_size.y = 30
+	var menu_box := _panel()
+	_place(menu_box, Vector2(-238, -112), Vector2(226, 100), Vector2(1, 1))
+	_register_window(menu_box, "menu")
+	var menu_column := _column(menu_box, 8, 6)
+	menu_column.add_child(_label("Game Menu", 11, TEXT))
+	var menu := GridContainer.new()
+	menu.columns = 3
+	menu.add_theme_constant_override("h_separation", 3)
+	menu.add_theme_constant_override("v_separation", 3)
+	menu_column.add_child(menu)
+	for item: Array in [["K", "Skills", "skills"], ["B", "Bestiary", "bestiary"], ["I", "Items", "inventory"], ["C", "Forge", "forge"], ["H", "Guide", "guide"], ["O", "Options", "settings"]]:
+		var btn := _button("%s [%s]" % [item[1], item[0]], 10)
+		btn.custom_minimum_size = Vector2(67, 28)
 		btn.pressed.connect(toggle_panel.bind(str(item[2])))
 		menu.add_child(btn)
 
 
 func _build_hotbar() -> void:
-	var holder: VBoxContainer = VBoxContainer.new()
-	_place(holder, Vector2(-288, -156), Vector2(576, 136), Vector2(0.5, 1.0))
-	holder.add_theme_constant_override("separation", 8)
-	context_text = _label("WASD  MOVE    /    TAB  TARGET    /    1-5  ABILITIES", 10, TEXT)
+	var holder := _panel()
+	_place(holder, Vector2(-245, -133), Vector2(490, 121), Vector2(0.5, 1))
+	_register_window(holder, "shortcuts")
+	var column := _column(holder, 12, 7)
+	column.add_theme_constant_override("separation", 4)
+	context_text = _label("Shortcuts   •   1–5", 10, TEXT)
 	context_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	holder.add_child(context_text)
-	var row: HBoxContainer = HBoxContainer.new()
+	column.add_child(context_text)
+	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 7)
-	holder.add_child(row)
-	var names: Array[String] = ["CLEAVE", "EMBER BOLT", "GUARD", "STEP", "RESTORE"]
-	for i: int in range(5):
-		var skill: Button = _button("%s\n%s\n%s" % [str(i + 1), SKILL_SIGILS[i], names[i]], 11, true)
-		skill.custom_minimum_size = Vector2(91, 73)
+	row.add_theme_constant_override("separation", 5)
+	column.add_child(row)
+	var names := ["Iron Cleave", "Ember Bolt", "Iron Guard", "Dodge Roll", "Restoring Light"]
+	for i in range(5):
+		var skill := _button("", 12, true)
+		skill.custom_minimum_size = Vector2(54, 54)
 		skill.pressed.connect(_activate_skill.bind(i))
-		skill.icon = skill_view.icon(SKILL_IDS[i])
-		skill.expand_icon = true
-		skill.add_theme_constant_override("icon_max_width", 30)
-		skill.tooltip_text = "%s  [ %d ]" % [names[i].capitalize(), i + 1]
+		skill.tooltip_text = "%s [%d]" % [names[i], i + 1]
 		row.add_child(skill)
+		var picture := TextureRect.new()
+		picture.texture = skill_view.icon(SKILL_IDS[i])
+		picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		picture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		picture.offset_left = 3
+		picture.offset_top = 3
+		picture.offset_right = -3
+		picture.offset_bottom = -3
+		picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		skill.add_child(picture)
+		var key_label := _label(str(i + 1), 10, Color.WHITE)
+		key_label.position = Vector2(5, 2)
+		key_label.add_theme_color_override("font_shadow_color", Color.BLACK)
+		key_label.add_theme_constant_override("shadow_offset_x", 1)
+		key_label.add_theme_constant_override("shadow_offset_y", 1)
+		skill.add_child(key_label)
+		var timer_label := _label("", 14, Color.WHITE)
+		timer_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		timer_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		timer_label.add_theme_color_override("font_shadow_color", Color.BLACK)
+		timer_label.add_theme_constant_override("shadow_offset_x", 2)
+		timer_label.add_theme_constant_override("shadow_offset_y", 2)
+		skill.add_child(timer_label)
+		skill.set_meta("timer_label", timer_label)
 		hotbar.append(skill)
-	progression_text = _label("LEVEL 01    /    0 SKILL POINTS    /    0 OF 50 DISCOVERED", 10, GOLD)
+	progression_text = _label("", 10, GOLD)
 	progression_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	holder.add_child(progression_text)
-	resource_text = _label("180 GOLD     120 WOOD     120 IRON", 9, MUTED)
+	column.add_child(progression_text)
+	resource_text = _label("", 9, MUTED)
 	resource_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	holder.add_child(resource_text)
+	column.add_child(resource_text)
 
 
 func _build_target() -> void:
 	target_panel = _panel()
-	_place(target_panel, Vector2(-160, 92), Vector2(320, 79), Vector2(0.5, 0))
+	_place(target_panel, Vector2(-145, 65), Vector2(290, 74), Vector2(0.5, 0))
+	_register_window(target_panel, "target")
 	var column: VBoxContainer = _column(target_panel, 16, 9)
 	target_name = _label("HOLLOWBOUND", 14, TEXT, true)
 	target_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -255,14 +308,15 @@ func _build_target() -> void:
 
 func _build_log() -> void:
 	var panel: PanelContainer = _panel(Color(0.04, 0.06, 0.07, 0.68), false)
-	_place(panel, Vector2(28, -165), Vector2(330, 139), Vector2(0, 1))
+	_place(panel, Vector2(12, -193), Vector2(350, 181), Vector2(0, 1))
+	_register_window(panel, "journal")
 	var column: VBoxContainer = _column(panel, 12, 10)
-	column.add_child(_label("WORLD JOURNAL", 9, GOLD))
+	column.add_child(_label("All   |   System   |   Combat", 9, GOLD))
 	log_text = RichTextLabel.new()
 	log_text.bbcode_enabled = false
 	log_text.add_theme_color_override("default_color", MUTED)
 	log_text.add_theme_font_size_override("normal_font_size", 11)
-	log_text.custom_minimum_size.y = 66
+	log_text.custom_minimum_size.y = 110
 	log_text.fit_content = false
 	log_text.scroll_active = false
 	log_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -284,57 +338,59 @@ func _build_toast() -> void:
 func _build_overlay() -> void:
 	overlay = Control.new()
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(overlay)
-	var shade: ColorRect = ColorRect.new()
-	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shade.color = Color(0.015, 0.025, 0.03, 0.75)
-	shade.mouse_filter = Control.MOUSE_FILTER_STOP
-	overlay.add_child(shade)
-	var frame: PanelContainer = _panel(Color(0.035, 0.052, 0.061, 0.985))
-	frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	frame.offset_left = 48
-	frame.offset_right = -48
-	frame.offset_top = 30
-	frame.offset_bottom = -30
-	overlay.add_child(frame)
-	var outer: VBoxContainer = _column(frame, 25, 20)
-	outer.add_theme_constant_override("separation", 13)
-	var head: HBoxContainer = HBoxContainer.new()
+	window_frame = _panel()
+	window_frame.ornate = true
+	window_frame.position = Vector2(220, 120)
+	window_frame.size = Vector2(1120, 720)
+	overlay.add_child(window_frame)
+	var outer := _column(window_frame, 14, 9)
+	outer.add_theme_constant_override("separation", 9)
+	var head := HBoxContainer.new()
 	outer.add_child(head)
-	var titles: VBoxContainer = VBoxContainer.new()
-	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(titles)
-	titles.add_child(_label("X Y L E S   /   W A N D E R E R ' S   C O D E X", 9, GOLD))
-	overlay_title = _label("Skill evolutions", 29, TEXT, true)
-	titles.add_child(overlay_title)
-	var close: Button = _button("CLOSE  [ESC]", 11)
-	close.custom_minimum_size = Vector2(120, 35)
+	overlay_title = _label("Skills", 13, TEXT, true)
+	overlay_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	overlay_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.add_child(overlay_title)
+	var close := _button("×", 16)
+	close.custom_minimum_size = Vector2(26, 24)
+	close.tooltip_text = "Close [Esc]"
 	close.pressed.connect(close_panel)
 	head.add_child(close)
-	overlay_subtitle = _label("", 12, MUTED)
+	overlay_subtitle = _label("", 11, MUTED)
 	overlay_subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	outer.add_child(overlay_subtitle)
-	var sep: HSeparator = HSeparator.new()
-	sep.add_theme_stylebox_override("separator", _style(Color("6a6045"), Color.TRANSPARENT, 0, 0))
-	outer.add_child(sep)
-	var scroll: ScrollContainer = ScrollContainer.new()
+	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	outer.add_child(scroll)
 	overlay_content = VBoxContainer.new()
 	overlay_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	overlay_content.add_theme_constant_override("separation", 12)
+	overlay_content.add_theme_constant_override("separation", 9)
 	scroll.add_child(overlay_content)
-	var footer: HBoxContainer = HBoxContainer.new()
-	footer.add_theme_constant_override("separation", 8)
+	var footer := HBoxContainer.new()
+	overlay_footer = footer
+	footer.add_theme_constant_override("separation", 3)
 	outer.add_child(footer)
-	for item: Array in [["K  EVOLUTIONS", "skills"], ["B  BESTIARY", "bestiary"], ["I  EQUIPMENT", "inventory"], ["C  BLACKSMITH", "forge"], ["H  GUIDE", "guide"], ["O  SETTINGS", "settings"]]:
-		var btn: Button = _button(str(item[0]), 10)
+	for item: Array in [["Skills [K]", "skills"], ["Bestiary [B]", "bestiary"], ["Items [I]", "inventory"], ["Forge [C]", "forge"], ["Guide [H]", "guide"], ["Options [O]", "settings"]]:
+		var btn := _button(str(item[0]), 11)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.pressed.connect(_switch_panel.bind(str(item[1])))
 		footer.add_child(btn)
+	var title_layer := Control.new()
+	title_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	window_frame.add_child(title_layer)
+	var handle := Control.new()
+	title_layer.add_child(handle)
+	handle.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	handle.offset_left = 8
+	handle.offset_right = -48
+	handle.offset_top = 5
+	handle.offset_bottom = 38
+	handle.mouse_default_cursor_shape = Control.CURSOR_MOVE
+	handle.gui_input.connect(_begin_drag.bind(window_frame, "active"))
 	overlay.visible = false
 
 
@@ -362,10 +418,9 @@ func refresh() -> void:
 	resource_text.text = "%d GOLD     %d WOOD     %d IRON" % [int(s.gold), int(s.wood), int(s.iron)]
 	var cooldown_data: Variant = game.get("cooldowns")
 	if cooldown_data is Array:
-		var names: Array[String] = ["CLEAVE", "EMBER BOLT", "GUARD", "STEP", "RESTORE"]
 		for i: int in range(mini(hotbar.size(), cooldown_data.size())):
 			var remaining: float = float(cooldown_data[i])
-			hotbar[i].text = "%d\n%s\n%s" % [i + 1, "%.1fs" % remaining if remaining > 0.0 else "", names[i]]
+			(hotbar[i].get_meta("timer_label") as Label).text = "%.1f" % remaining if remaining > 0.0 else ""
 			hotbar[i].modulate = Color(0.65, 0.72, 0.73) if remaining > 0.0 else Color.WHITE
 	var hint: Variant = game.get("context_hint")
 	if hint is String and not hint.is_empty():
@@ -417,20 +472,34 @@ func toggle_panel(panel_name: String) -> void:
 func close_panel() -> void:
 	if current_panel == "settings" and game.has_method("save_settings"):
 		game.save_settings()
+	_store_active_position()
 	current_panel = ""
 	overlay.visible = false
+	if is_instance_valid(skill_view.picker):
+		skill_view.picker.hide()
 
 
 func _switch_panel(panel_name: String) -> void:
 	if current_panel == "settings" and game.has_method("save_settings"):
 		game.save_settings()
+	_store_active_position()
 	current_panel = panel_name
+	var desired := _panel_size(panel_name)
+	window_frame.size = desired.min(get_viewport().get_visible_rect().size - Vector2(24, 40))
+	window_frame.position = window_positions.get(panel_name, (get_viewport().get_visible_rect().size - window_frame.size) * 0.5)
+	_clamp_window(window_frame)
+	if is_instance_valid(skill_view.picker):
+		skill_view.picker.hide()
 	panel_signature = ""
 	overlay.visible = true
+	overlay.move_to_front()
 	_render_overlay()
+	_settle_active.call_deferred(panel_name)
 
 
 func _render_overlay() -> void:
+	overlay_subtitle.visible = current_panel != "inventory"
+	overlay_footer.visible = current_panel != "inventory"
 	for child: Node in overlay_content.get_children():
 		overlay_content.remove_child(child)
 		child.queue_free()
@@ -449,7 +518,7 @@ func _render_skills() -> void:
 
 func _render_bestiary() -> void:
 	var s: Node = game.state
-	overlay_title.text = "The Ashen Reach bestiary"
+	overlay_title.text = "Bestiary — Ashen Reach"
 	overlay_subtitle.text = "Knowledge is power. The first completion of each category in each region grants skill points, up to 50 over your character's life. Repeated kills provide materials and experience."
 	var categories: Array = [["normal", "01", "Briarwolves", "The local predators along the old road", 2], ["quest", "02", "Oathbound Guardian", "A unique target in the blacksmith's chronicle", 5], ["boss", "03", "The Hollow Regent", "A world boss within the ancient sanctuary", 3]]
 	for category: Array in categories:
@@ -490,29 +559,7 @@ func _bestiary_entry(kind: String) -> Dictionary:
 
 
 func _render_inventory() -> void:
-	var s: Node = game.state
-	overlay_title.text = "Steel, scars & survival"
-	overlay_subtitle.text = "Below 50% durability, equipment becomes exposed and may drop on death. At 0%, it always drops. Repair before returning to the Reach."
-	var resources: Label = _label("%d GOLD    /    %d WOOD    /    %d IRON" % [int(s.gold), int(s.wood), int(s.iron)], 13, GOLD)
-	overlay_content.add_child(resources)
-	overlay_content.add_child(_label("E Q U I P P E D", 10, MUTED))
-	for item: Dictionary in s.equipment:
-		_equipment_card(item, true)
-	var repair: Button = _button("REPAIR ALL EQUIPPED GEAR  /  %d GOLD" % int(s.get_repair_cost()), 12, true)
-	repair.custom_minimum_size.y = 40
-	repair.disabled = not _near_forge()
-	repair.pressed.connect(_repair)
-	overlay_content.add_child(repair)
-	if not _near_forge():
-		overlay_content.add_child(_label("Return to Emberfall to craft/repair.", 12, GOLD))
-	overlay_content.add_child(_label("B A G   /   %d ITEMS" % s.inventory.size(), 10, MUTED))
-	if s.inventory.is_empty():
-		overlay_content.add_child(_label("Your bag is empty. Craft equipment or defeat powerful foes to fill it.", 12, MUTED))
-	for index: int in range(s.inventory.size()):
-		_equipment_card(s.inventory[index], false)
-		var equip_button: Button = _button("EQUIP THIS ITEM", 10)
-		equip_button.pressed.connect(_equip.bind(index))
-		overlay_content.add_child(equip_button)
+	inventory_view.render()
 
 
 func _equipment_card(item: Dictionary, equipped: bool) -> void:
@@ -549,7 +596,7 @@ func _equipment_card(item: Dictionary, equipped: bool) -> void:
 
 func _render_forge() -> void:
 	var s: Node = game.state
-	overlay_title.text = "The Emberfall forge"
+	overlay_title.text = "Blacksmith — Emberfall"
 	overlay_subtitle.text = "Shape your next weapon at the camp forge. A basic sword begins at 100 wood + 100 iron; greater investment yields more modifiers. Materials come from combat and chronicle rewards."
 	overlay_content.add_child(_label("AVAILABLE   /   %d WOOD   /   %d IRON   /   %d GOLD" % [int(s.wood), int(s.iron), int(s.gold)], 13, GOLD))
 	if not _near_forge():
@@ -641,14 +688,17 @@ func _render_settings() -> void:
 	defaults.custom_minimum_size.y = 38
 	defaults.pressed.connect(_reset_settings)
 	overlay_content.add_child(defaults)
+	var layout_reset := _button("RESET WINDOW POSITIONS", 11)
+	layout_reset.pressed.connect(_reset_layout)
+	overlay_content.add_child(layout_reset)
 
 
 func _render_guide() -> void:
-	overlay_title.text = "A wanderer's field guide"
+	overlay_title.text = "Field Guide"
 	overlay_subtitle.text = "A playable first chapter in a dangerous world. Your progress is saved locally. Follow the blacksmith's chronicle from camp to the northern sanctuary."
 	var sections: Array = [
-		["TRAVEL & TARGETING", "WASD to move or click the ground. Hold the right mouse button and drag to freely look up, down and around; scroll to zoom. The camera pulls in near walls. Press O or Esc for settings. Click a creature or press Tab to select a target. E interacts with the blacksmith, gathers nearby resources or collects dropped loot."],
-		["FIVE WAYS TO SURVIVE", "1  Iron Cleave: your close combat attack.  2  Ember Bolt: a ranged mana attack.  3  Iron Guard: mitigate incoming damage.  4  Wayfarer's Step: reposition quickly.  5  Restoring Light: spend mana to restore vitality. Hold Space to repeatedly cleave. Watch mana and cooldowns."],
+		["TRAVEL & TARGETING", "WASD to move or click the ground. S backpedals; hold Shift while moving forward to sprint, hold Alt to walk, hold Ctrl to crouch, and press Space to jump. Hold the right mouse button and drag to look around; scroll to zoom. Press O or Esc for settings. Click a creature or press Tab to select a target. E interacts with nearby objects."],
+		["FIVE WAYS TO SURVIVE", "1  Iron Cleave: your close combat attack.  2  Ember Bolt: a ranged mana attack.  3  Iron Guard: mitigate incoming damage.  4  Wayfarer's Step: reposition quickly.  5  Restoring Light: spend mana to restore vitality. Watch mana and cooldowns."],
 		["POWER THROUGH DISCOVERY", "Open B for the regional bestiary. Your first normal, quest and boss completions grant 2, 5 and 3 skill points. Leveling alone grants no skill points. Spend them with K, choosing three branching paths for each starter skill."],
 		["RISK & REPAIR", "Death damages random pieces of equipment. Below 50% durability, gear can drop; at 0%, it always drops. Return to Emberfall and repair through I. Craft better equipment through C. F5 saves your journey, and progress also saves automatically."],
 		["THE CHRONICLE", "Begin at the Emberfall blacksmith. Cull the Briarwolves, confront the Oathbound Guardian, then follow the clue toward the Hollow Regent. Powerful foes reward preparation and careful movement."]
@@ -741,6 +791,7 @@ func _place(control: Control, position: Vector2, control_size: Vector2, anchor: 
 	control.offset_top = position.y
 	control.offset_right = position.x + control_size.x
 	control.offset_bottom = position.y + control_size.y
+	control.set_meta("default_size", control_size)
 	if not control is Container:
 		control.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -757,14 +808,16 @@ func _label(text: String, font_size: int = 12, color: Color = TEXT, serif: bool 
 
 
 func _panel(color: Color = PANEL, border: bool = true) -> PanelContainer:
-	var panel: PanelContainer = PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", _style(color, GOLD_DIM if border else Color(0.25, 0.32, 0.31, 0.3), 1, 2))
+	var panel: PanelContainer = FrameScript.new()
+	panel.ornate = false
+	panel.add_theme_stylebox_override("panel", _style(Color(0.085, 0.078, 0.065, maxf(color.a, 0.86)), GOLD_DIM if border else Color("494438"), 2, 4))
 	panel.mouse_filter = Control.MOUSE_FILTER_PASS
 	return panel
 
 
 func _margin(parent: Node, horizontal: int, vertical: int) -> MarginContainer:
 	var margin: MarginContainer = MarginContainer.new()
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_theme_constant_override("margin_left", horizontal)
 	margin.add_theme_constant_override("margin_right", horizontal)
 	margin.add_theme_constant_override("margin_top", vertical)
@@ -776,6 +829,7 @@ func _margin(parent: Node, horizontal: int, vertical: int) -> MarginContainer:
 func _column(parent: Node, horizontal: int, vertical: int) -> VBoxContainer:
 	var margin: MarginContainer = _margin(parent, horizontal, vertical)
 	var column: VBoxContainer = VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_theme_constant_override("separation", 7)
 	margin.add_child(column)
 	return column
@@ -787,7 +841,7 @@ func _bar(color: Color, height: int) -> ProgressBar:
 	bar.show_percentage = false
 	bar.max_value = 100.0
 	bar.value = 100.0
-	bar.add_theme_stylebox_override("background", _style(Color("263037"), Color("35413f"), 0, 1))
+	bar.add_theme_stylebox_override("background", _style(Color("161512"), Color("5d5444"), 0, 1))
 	bar.add_theme_stylebox_override("fill", _style(color, color.lightened(0.1), 0, 1))
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return bar
@@ -802,16 +856,22 @@ func _button(text: String, font_size: int = 11, primary: bool = false) -> Button
 	btn.add_theme_color_override("font_color", GOLD if primary else TEXT)
 	btn.add_theme_color_override("font_hover_color", Color("f8e8bd"))
 	btn.add_theme_color_override("font_disabled_color", Color("5c6767"))
-	btn.add_theme_stylebox_override("normal", _style(Color("1f282a") if primary else Color(0.05, 0.08, 0.09, 0.85), GOLD_DIM if primary else Color("36453f"), 1, 2, 10, 7))
-	btn.add_theme_stylebox_override("hover", _style(Color("34382f"), GOLD, 1, 2, 10, 7))
-	btn.add_theme_stylebox_override("pressed", _style(Color("49452f"), GOLD, 1, 2, 10, 7))
-	btn.add_theme_stylebox_override("disabled", _style(Color("121c21"), Color("2c3937"), 1, 2, 10, 7))
+	btn.add_theme_stylebox_override("normal", _style(Color("39362c") if primary else Color("28261f"), GOLD_DIM if primary else Color("786e58"), 1, 2, 10, 7))
+	btn.add_theme_stylebox_override("hover", _style(Color("514a39"), GOLD, 1, 2, 10, 7))
+	btn.add_theme_stylebox_override("pressed", _style(Color("1b1914"), GOLD, 1, 2, 10, 7))
+	btn.add_theme_stylebox_override("disabled", _style(Color("1a1915"), Color("3c382f"), 1, 2, 10, 7))
 	return btn
 
 
 func _style(fill: Color, border: Color, width: int = 1, radius: int = 2, horizontal: int = 0, vertical: int = 0) -> StyleBoxFlat:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = fill
+	style.border_color = border
+	style.border_blend = false
+	if width > 0:
+		style.shadow_color = Color(0, 0, 0, 0.5)
+		style.shadow_size = 2
+		style.shadow_offset = Vector2(1, 2)
 	style.border_color = border
 	style.set_border_width_all(width)
 	style.set_corner_radius_all(radius)
@@ -825,3 +885,123 @@ func _style(fill: Color, border: Color, width: int = 1, radius: int = 2, horizon
 func _rarity_color(tier: String) -> Color:
 	return {"basic": Color("a8b5b0"), "rare": Color("80b7bd"), "epic": Color("b29dc9"), "legendary": Color("d2af6e")}.get(tier, TEXT)
 
+
+
+func _register_window(control: Control, id: String) -> void:
+	floating_windows[id] = control
+	default_positions[id] = control.position
+	control.ornate = true
+	var handle := Control.new()
+	handle.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	handle.offset_left = 7
+	handle.offset_right = -7
+	handle.offset_top = 4
+	handle.offset_bottom = 26
+	handle.mouse_default_cursor_shape = Control.CURSOR_MOVE
+	handle.tooltip_text = "Drag to move this window"
+	# A top-level Control avoids PanelContainer stretching the title handle over buttons.
+	var handle_layer := Control.new()
+	handle_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	control.add_child(handle_layer)
+	handle_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	handle_layer.add_child(handle)
+	handle.gui_input.connect(_begin_drag.bind(control, id))
+	if window_positions.has(id):
+		control.set_deferred("position", window_positions[id])
+	_clamp_window.call_deferred(control)
+
+
+func _settle_hud() -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	for control: Control in floating_windows.values():
+		control.size = control.get_meta("default_size")
+		_clamp_window(control)
+
+
+func _settle_active(panel_name: String) -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if current_panel != panel_name:
+		return
+	var desired := _panel_size(panel_name)
+	window_frame.size = desired.min(get_viewport().get_visible_rect().size - Vector2(24, 40))
+	_clamp_window(window_frame)
+
+
+func _begin_drag(event: InputEvent, control: Control, id: String) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		drag_target = control
+		drag_id = current_panel if id == "active" else id
+		drag_offset = control.get_global_mouse_position() - control.global_position
+		control.move_to_front()
+		get_viewport().set_input_as_handled()
+
+
+func _input(event: InputEvent) -> void:
+	if not is_instance_valid(drag_target):
+		return
+	if event is InputEventMouseMotion:
+		drag_target.global_position = drag_target.get_global_mouse_position() - drag_offset
+		_clamp_window(drag_target)
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+		window_positions[drag_id] = drag_target.position
+		drag_target = null
+		_save_layout()
+		get_viewport().set_input_as_handled()
+
+
+func _clamp_window(control: Control) -> void:
+	var extent := get_viewport().get_visible_rect().size
+	control.position = control.position.clamp(Vector2(4, 12), (extent - control.size - Vector2(4, 4)).max(Vector2(4, 12)))
+
+
+func _clamp_windows() -> void:
+	for control: Control in floating_windows.values():
+		_clamp_window(control)
+	if is_instance_valid(window_frame):
+		window_frame.size = window_frame.size.min(get_viewport().get_visible_rect().size - Vector2(24, 40))
+		_clamp_window(window_frame)
+
+
+func _store_active_position() -> void:
+	if not current_panel.is_empty():
+		window_positions[current_panel] = window_frame.position
+		_save_layout()
+
+
+func _load_layout() -> void:
+	if game.test_mode:
+		return
+	var config := ConfigFile.new()
+	if config.load(LAYOUT_PATH) == OK and config.has_section("windows"):
+		for key in config.get_section_keys("windows"):
+			var saved: Variant = config.get_value("windows", key)
+			if saved is Vector2:
+				window_positions[key] = saved
+
+
+func _save_layout() -> void:
+	if game.test_mode:
+		return
+	var config := ConfigFile.new()
+	for key: String in window_positions:
+		config.set_value("windows", key, window_positions[key])
+	config.save(LAYOUT_PATH)
+
+
+func _reset_layout() -> void:
+	window_positions.clear()
+	for id: String in floating_windows:
+		floating_windows[id].position = default_positions[id]
+	window_frame.position = (get_viewport().get_visible_rect().size - window_frame.size) * 0.5
+	_clamp_windows()
+	_save_layout()
+	show_notice("Interface positions restored.")
+
+
+func _panel_size(panel_name: String) -> Vector2:
+	if panel_name == "skills": return Vector2(1120, 720)
+	if panel_name == "inventory": return Vector2(620, 440)
+	return Vector2(820, 640)

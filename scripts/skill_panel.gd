@@ -11,7 +11,7 @@ const EFFECTS := [
 ]
 var hud: CanvasLayer
 var atlas: Texture2D
-var picker: PopupPanel
+var picker: PanelContainer
 var textures: Dictionary = {}
 
 func _init(owner_hud: CanvasLayer) -> void:
@@ -75,8 +75,8 @@ func render() -> void:
 		row.add_child(connector)
 		# Even 10 upgrades + the terminal tile occupy only 820 logical pixels.
 		# At 1600x900 this leaves ample room for detail tooltips.
-		var strip: PanelContainer = hud._panel(Color("101719"))
-		strip.add_theme_stylebox_override("panel", hud._style(Color("101719"), hud.GOLD_DIM, 1, 0))
+		var strip: PanelContainer = hud._panel(Color("1a1814"))
+		strip.add_theme_stylebox_override("panel", hud._style(Color("1a1814"), hud.GOLD_DIM, 1, 0))
 		strip.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		row.add_child(strip)
 		var margin: MarginContainer = hud._margin(strip, 8, 8)
@@ -124,8 +124,8 @@ func _tile(texture: Texture2D, edge: int, color: Color) -> Button:
 	button.custom_minimum_size = Vector2(edge, edge)
 	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	button.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	button.add_theme_stylebox_override("normal", hud._style(Color("101516"), color.darkened(0.25), 1, 0, 3, 3))
-	button.add_theme_stylebox_override("hover", hud._style(Color("2b2921"), hud.GOLD, 2, 0, 3, 3))
+	button.add_theme_stylebox_override("normal", hud._style(Color("171511"), color.darkened(0.25), 1, 0, 3, 3))
+	button.add_theme_stylebox_override("hover", hud._style(Color("494130"), hud.GOLD, 2, 0, 3, 3))
 	if texture:
 		var picture := TextureRect.new()
 		picture.texture = texture
@@ -148,11 +148,11 @@ func _choose(id: String, stage: int) -> void:
 		return
 	if is_instance_valid(picker):
 		picker.queue_free()
-	picker = PopupPanel.new()
-	picker.add_theme_stylebox_override("panel", hud._style(Color("101719"), hud.GOLD_DIM, 1, 3))
-	hud.add_child(picker)
-	var column: VBoxContainer = hud._column(picker, 20, 16)
-	column.add_child(hud._label(data["name"], 23, hud.GOLD, true))
+	picker = hud._panel()
+	picker.theme = hud.root.theme
+	hud.root.add_child(picker)
+	var column: VBoxContainer = hud._column(picker, 20, 10)
+	column.add_child(hud._label(data["name"], 13, hud.TEXT, true))
 	column.add_child(hud._label("Choose stage %d · 1 skill point" % (int(data["investments"]) + 1) if stage < 0 else "Change stage %d · no point cost" % (stage + 1), 12))
 	for branch in range(3):
 		var button: Button = hud._button("%s\n%s" % [data["branches"][branch], EFFECTS[branch]], 13)
@@ -175,7 +175,16 @@ func _choose(id: String, stage: int) -> void:
 	var close: Button = hud._button("CLOSE", 12)
 	close.pressed.connect(picker.hide)
 	column.add_child(close)
-	picker.popup_centered()
+	_position_picker.call_deferred()
+
+func _position_picker() -> void:
+	await hud.get_tree().process_frame
+	if not is_instance_valid(picker):
+		return
+	picker.reset_size()
+	picker.position = (hud.get_viewport().get_visible_rect().size - picker.size) * 0.5
+	picker.set_meta("default_size", picker.size)
+	hud._register_window(picker, "evolution_picker")
 
 func _apply(id: String, stage: int, branch: int) -> void:
 	var success: bool

@@ -9,7 +9,7 @@
 [ext_resource type="Script" uid="uid://cvc6y8njvh0lc" path="res://scripts/game_hud.gd" id="7_a8y0u"]
 [ext_resource type="Script" uid="uid://b5sjob6of2ff7" path="res://scripts/audio_director.gd" id="8_jkv2x"]
 
-[ext_resource type="PackedScene" path="res://addons/RPG_Animations_GLB_FREE-0.1.0-2/Unarmed.glb" id="9_player_character"]
+[ext_resource type="PackedScene" path="res://assets/animations/player_runtime/character.tscn" id="9_player_character"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_jbj1t"]
 sky_top_color = Color(0.20784314, 0.30980393, 0.34509805, 1)
@@ -12744,7 +12744,8 @@ shape = SubResource("CapsuleShape3D_0isci")
 [node name="Visual" type="Node3D" parent="Player"]
 
 [node name="Character" parent="Player/Visual" instance=ExtResource("9_player_character")]
-transform = Transform3D(0.7, 0, 0, 0, 0.7, 0, 0, 0, 0.7, 0, 0, 0)
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
 
 [node name="SelectionRing" type="MeshInstance3D" parent="Player" unique_id=985151749]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.045, 0)
