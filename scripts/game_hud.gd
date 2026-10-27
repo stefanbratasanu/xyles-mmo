@@ -321,7 +321,7 @@ func _build_log() -> void:
 	log_text.scroll_active = false
 	log_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(log_text)
-	column.add_child(_label("RMB  ORBIT   /   WHEEL  ZOOM   /   [O]  SETTINGS", 9, TEXT))
+	column.add_child(_label("RMB ORBIT  /  WHEEL ZOOM  /  X SIT  /  O OPTIONS", 9, TEXT))
 
 
 func _build_toast() -> void:
@@ -697,7 +697,7 @@ func _render_guide() -> void:
 	overlay_title.text = "Field Guide"
 	overlay_subtitle.text = "A playable first chapter in a dangerous world. Your progress is saved locally. Follow the blacksmith's chronicle from camp to the northern sanctuary."
 	var sections: Array = [
-		["TRAVEL & TARGETING", "WASD to move or click the ground. S backpedals; hold Shift while moving forward to sprint, hold Alt to walk, hold Ctrl to crouch, and press Space to jump. Hold the right mouse button and drag to look around; scroll to zoom. Press O or Esc for settings. Click a creature or press Tab to select a target. E interacts with nearby objects."],
+		["TRAVEL & TARGETING", "WASD to move or click the ground. S backpedals; hold Shift while moving forward to sprint, hold Alt to walk, hold Ctrl to crouch, and press Space to jump. X toggles sitting; movement or using a skill starts standing up. Hold the right mouse button and drag to look around; scroll to zoom. Press O or Esc for settings. Click a creature or press Tab to select a target. E interacts with nearby objects."],
 		["FIVE WAYS TO SURVIVE", "1  Iron Cleave: your close combat attack.  2  Ember Bolt: a ranged mana attack.  3  Iron Guard: mitigate incoming damage.  4  Wayfarer's Step: reposition quickly.  5  Restoring Light: spend mana to restore vitality. Watch mana and cooldowns."],
 		["POWER THROUGH DISCOVERY", "Open B for the regional bestiary. Your first normal, quest and boss completions grant 2, 5 and 3 skill points. Leveling alone grants no skill points. Spend them with K, choosing three branching paths for each starter skill."],
 		["RISK & REPAIR", "Death damages random pieces of equipment. Below 50% durability, gear can drop; at 0%, it always drops. Return to Emberfall and repair through I. Craft better equipment through C. F5 saves your journey, and progress also saves automatically."],

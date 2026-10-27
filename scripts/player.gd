@@ -26,6 +26,8 @@ var was_airborne := false
 var jump_started := false
 var roll_elapsed := 0.0
 var rolling := false
+var sitting := false
+const SIT_ANIMATIONS = preload("res://assets/animations/player_runtime/sit_animations.tres")
 const WALK_SPEED_FACTOR := 0.55
 const BACKWARD_SPEED_FACTOR := 0.60
 const CROUCH_SPEED_FACTOR := 0.40
@@ -67,6 +69,7 @@ func _ready() -> void:
 	animation_player = character.get_node_or_null("AnimationPlayer") as AnimationPlayer
 	if animation_player != null:
 		animation_player.add_animation_library(&"protof", PROTOF_ANIMATIONS)
+		animation_player.add_animation_library(&"sit", SIT_ANIMATIONS)
 		animation_player.animation_finished.connect(_on_animation_finished)
 		_play_locomotion("protof/unarmed_idle")
 		upper_body_player = AnimationPlayer.new()
@@ -120,6 +123,11 @@ func _physics_process(delta: float) -> void:
 	var controls_enabled: bool = not game.hud.is_panel_open() and not game.is_dead
 	if controls_enabled:
 		input_dir = Vector2(float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)), float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W)))
+	if sitting:
+		if controls_enabled and (input_dir.length_squared() > 0 or Input.is_physical_key_pressed(KEY_SPACE) or moving_to_click):
+			stand_up()
+		input_dir = Vector2.ZERO
+		controls_enabled = false
 	var walking: bool = controls_enabled and Input.is_key_pressed(KEY_ALT)
 	var crouching: bool = controls_enabled and Input.is_key_pressed(KEY_CTRL)
 	var sprinting: bool = controls_enabled and Input.is_key_pressed(KEY_SHIFT) and input_dir.y < 0.0 and not walking and not crouching
@@ -134,7 +142,7 @@ func _physics_process(delta: float) -> void:
 	if input_dir.length() > 0.0:
 		moving_to_click = false
 		direction = Vector3(input_dir.x, 0, input_dir.y).rotated(Vector3.UP, game.camera_yaw).normalized()
-	elif moving_to_click and not game.hud.is_panel_open() and not game.is_dead:
+	elif moving_to_click and not sitting and not game.hud.is_panel_open() and not game.is_dead:
 		var offset := destination - global_position
 		offset.y = 0
 		if offset.length() > 0.3:
@@ -290,8 +298,29 @@ func update_equipment(equipment: Array) -> void:
 		var handle_offset := 0.04 if weapon_style == "greatsword" else 0.06
 		weapon_visual.quaternion = Quaternion(Vector3.UP, blade_direction)
 		weapon_visual.position = Vector3(0.095, -0.008, 0.039) + blade_direction * handle_offset
+		weapon_visual.visible = not sitting
+
+func toggle_sit() -> void:
+	if sitting:
+		stand_up()
+	elif is_on_floor() and not action_active and not is_dying:
+		sitting = true
+		moving_to_click = false
+		dash_time = 0.0
+		velocity.x = 0.0
+		velocity.z = 0.0
+		if is_instance_valid(weapon_visual):
+			weapon_visual.hide()
+		_play_action("sit/enter")
+
+func stand_up() -> void:
+	if sitting and animation_player.current_animation == "sit/idle":
+		_play_action("sit/exit")
 
 func death_animation() -> void:
+	sitting = false
+	if is_instance_valid(weapon_visual):
+		weapon_visual.show()
 	rolling = false
 	visual.rotation.x = 0.0
 	visual.position = Vector3.ZERO
@@ -333,10 +362,21 @@ func _play_action(animation_name: String) -> void:
 	if upper_body_player != null:
 		upper_body_player.stop()
 	action_active = true
-	animation_player.speed_scale = 1.0
+	animation_player.speed_scale = 1.6 if animation_name.begins_with("sit/") and animation_name != "sit/idle" else 1.0
 	animation_player.play(animation_name, 0.1)
 
-func _on_animation_finished(_animation_name: StringName) -> void:
+func _on_animation_finished(animation_name: StringName) -> void:
+	if sitting:
+		match str(animation_name):
+			"sit/enter": _play_action("sit/down")
+			"sit/down": _play_action("sit/idle")
+			"sit/exit": _play_action("sit/stand")
+			"sit/stand":
+				sitting = false
+				action_active = false
+				if is_instance_valid(weapon_visual):
+					weapon_visual.show()
+		return
 	action_active = false
 
 func dash() -> void:

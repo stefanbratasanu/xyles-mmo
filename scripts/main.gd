@@ -216,7 +216,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			vertical_delta = -vertical_delta
 		camera_pitch = clampf(camera_pitch + vertical_delta * camera_sensitivity, -0.16, 1.28)
 	elif event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode >= KEY_1 and event.physical_keycode <= KEY_5:
+		if event.physical_keycode == KEY_X and not hud.is_panel_open() and not is_dead:
+			player.toggle_sit()
+		elif event.physical_keycode >= KEY_1 and event.physical_keycode <= KEY_5:
 			if not hud.is_panel_open():
 				use_skill(int(event.physical_keycode - KEY_1))
 		elif event.physical_keycode == KEY_E and not hud.is_panel_open():
@@ -313,6 +315,9 @@ func _cycle_target() -> void:
 
 func use_skill(index: int) -> void:
 	if index < 0 or index > 4 or is_dead or cooldowns[index] > 0:
+		return
+	if player.sitting:
+		player.stand_up()
 		return
 	var effects: Dictionary = state.get_skill_effects(SKILL_IDS[index])
 	var mods: Dictionary = state.get_equipment_modifiers()
