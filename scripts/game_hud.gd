@@ -25,10 +25,6 @@ var region_label: Label
 var resource_text: Label
 var progression_text: Label
 var log_text: RichTextLabel
-var target_panel: PanelContainer
-var target_name: Label
-var target_hp: ProgressBar
-var target_info: Label
 var context_text: Label
 var toast: Label
 var toast_timer: float = 0.0
@@ -109,7 +105,6 @@ func setup(owner_game: Node) -> void:
 	_build_quest()
 	_build_navigation()
 	_build_hotbar()
-	_build_target()
 	_build_log()
 	_build_toast()
 	_build_overlay()
@@ -290,22 +285,6 @@ func _build_hotbar() -> void:
 	column.add_child(resource_text)
 
 
-func _build_target() -> void:
-	target_panel = _panel()
-	_place(target_panel, Vector2(-145, 65), Vector2(290, 74), Vector2(0.5, 0))
-	_register_window(target_panel, "target")
-	var column: VBoxContainer = _column(target_panel, 16, 9)
-	target_name = _label("HOLLOWBOUND", 14, TEXT, true)
-	target_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(target_name)
-	target_hp = _bar(Color("9f5a46"), 7)
-	column.add_child(target_hp)
-	target_info = _label("NORMAL  /  LEVEL 1", 9, MUTED)
-	target_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(target_info)
-	target_panel.visible = false
-
-
 func _build_log() -> void:
 	var panel: PanelContainer = _panel(Color(0.04, 0.06, 0.07, 0.68), false)
 	_place(panel, Vector2(12, -193), Vector2(350, 181), Vector2(0, 1))
@@ -430,13 +409,6 @@ func refresh() -> void:
 	for i: int in range(maxi(0, logs.size() - 3), logs.size()):
 		lines.append(str(logs[i]))
 	log_text.text = "\n".join(lines)
-	var enemy: Node = game.get("target")
-	target_panel.visible = is_instance_valid(enemy) and float(enemy.get("hp")) > 0.0
-	if target_panel.visible:
-		target_name.text = str(enemy.display_name)
-		target_hp.max_value = float(enemy.max_hp)
-		target_hp.value = float(enemy.hp)
-		target_info.text = "%s  /  %d OF %d VITALITY" % [str(enemy.kind).to_upper(), int(enemy.hp), int(enemy.max_hp)]
 	minimap.queue_redraw()
 	if is_panel_open():
 		var signature: String = str([s.skill_points, s.earned_skill_points, s.skills, s.bestiary, s.equipment, s.inventory, s.gold, s.wood, s.iron, _near_forge()])

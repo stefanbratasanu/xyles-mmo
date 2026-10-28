@@ -9,7 +9,11 @@ var max_hp: float = 64.0
 var home := Vector3.ZERO
 var visual: Node3D
 var selected_ring: MeshInstance3D
-var health_mesh: MeshInstance3D
+var health_bar_root: Node3D
+var health_bg: MeshInstance3D
+var health_fill: MeshInstance3D
+var health_bar_width: float = 1.0
+var health_display_ratio: float = 1.0
 var name_label: Label3D
 var dead: bool = false
 var attack_timer: float = 1.5
@@ -52,17 +56,29 @@ func _ready() -> void:
 	name_label.modulate = Color("e1c99a") if kind != "boss" else Color("d7b1dd")
 	name_label.outline_size = 5
 	add_child(name_label)
-	health_mesh = MeshInstance3D.new()
-	var health_bar := QuadMesh.new()
-	health_bar.size = Vector2(1.1 * scale_value, 0.055)
-	health_mesh.mesh = health_bar
-	health_mesh.position.y = name_label.position.y - 0.20
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color("b3614a")
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	health_mesh.material_override = material
-	add_child(health_mesh)
+	health_bar_width = 1.1 * scale_value
+	health_bar_root = Node3D.new()
+	health_bar_root.name = "HealthBar"
+	health_bar_root.position.y = name_label.position.y - 0.20
+	add_child(health_bar_root)
+	var background_quad := QuadMesh.new()
+	background_quad.size = Vector2(health_bar_width + 0.07, 0.09)
+	health_bg = MeshInstance3D.new()
+	health_bg.mesh = background_quad
+	health_bg.material_override = _health_bar_material(Color("241c18"))
+	health_bg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	health_bar_root.add_child(health_bg)
+	var fill_quad := QuadMesh.new()
+	fill_quad.size = Vector2(health_bar_width, 0.06)
+	health_fill = MeshInstance3D.new()
+	health_fill.mesh = fill_quad
+	# Sit just in front of the frame so the fill never z-fights with it.
+	health_fill.position.z = 0.01
+	health_fill.material_override = _health_bar_material(Color("a85a45"))
+	health_fill.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	health_bar_root.add_child(health_fill)
+	_apply_health_ratio(1.0)
+	health_bar_root.visible = false
 	wander_offset = randf() * TAU
 	if kind == "boss":
 		var light := OmniLight3D.new()
@@ -71,6 +87,34 @@ func _ready() -> void:
 		light.omni_range = 6.0
 		light.position.y = 3.5
 		add_child(light)
+
+func _health_bar_material(color: Color) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return material
+
+## The fill is anchored at the left edge of the frame: scaling around the mesh
+## center alone would make both ends move inward and look like a floating bar.
+func _apply_health_ratio(ratio: float) -> void:
+	ratio = clampf(ratio, 0.0, 1.0)
+	health_fill.scale.x = maxf(0.001, ratio)
+	health_fill.position.x = -health_bar_width * (1.0 - ratio) * 0.5
+	var material := health_fill.material_override as StandardMaterial3D
+	if material != null:
+		material.albedo_color = Color("7fae66") if ratio > 0.5 else (Color("c49a4f") if ratio > 0.25 else Color("b4553f"))
+
+func _update_health_bar(delta: float) -> void:
+	health_display_ratio = lerpf(health_display_ratio, hp / max_hp, minf(delta * 9.0, 1.0))
+	_apply_health_ratio(health_display_ratio)
+	# Face the whole bar at the camera so the fill can stay anchored to the
+	# frame's left edge instead of shrinking from the centre.
+	var camera := get_viewport().get_camera_3d()
+	if camera != null:
+		health_bar_root.global_rotation = camera.global_rotation
+	# Keep drawing until a heal animation reaches full, then fade out.
+	health_bar_root.visible = hp < max_hp or game.target == self or health_display_ratio < 0.995
 
 func _ring(radius: float, color: Color) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
@@ -93,7 +137,7 @@ func _physics_process(delta: float) -> void:
 	age += delta
 	attack_timer -= delta
 	selected_ring.visible = game.target == self
-	health_mesh.visible = hp < max_hp or game.target == self
+	_update_health_bar(delta)
 	name_label.visible = game.target == self or kind != "normal" or aggro
 	var to_player: Vector3 = game.player.global_position - global_position
 	to_player.y = 0
@@ -162,7 +206,7 @@ func take_damage(amount: float) -> void:
 		return
 	aggro = true
 	hp = maxf(0, hp - amount)
-	health_mesh.scale.x = maxf(0.01, hp / max_hp)
+	health_bar_root.visible = true
 	game.floating_text(global_position + Vector3.UP * 1.6, str(roundi(amount)), Color("f1d7a2"))
 	var tween := create_tween()
 	tween.tween_property(visual, "scale", visual.scale * 1.05, 0.06)
@@ -172,7 +216,7 @@ func take_damage(amount: float) -> void:
 		collision_layer = 0
 		game.enemy_defeated(self)
 		name_label.hide()
-		health_mesh.hide()
+		health_bar_root.hide()
 		selected_ring.hide()
 		if is_instance_valid(telegraph):
 			telegraph.queue_free()
