@@ -28,6 +28,9 @@ var cooldowns: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
 var support_time: float = 0.0
 var block_time: float = 0.0
 var is_dead: bool = false
+var debug_invulnerable: bool = false
+var debug_time_paused: bool = false
+var debug_keys: Dictionary = {"invulnerable": KEY_F2, "heal": KEY_F3, "spawn": KEY_F4}
 var camera_yaw: float = 0.25
 var camera_pitch: float = 0.68
 var camera_distance: float = 20.0
@@ -230,9 +233,9 @@ func _capture_frame(label: String) -> void:
 
 func _process(delta: float) -> void:
 	elapsed += delta
-	if is_instance_valid(world):
+	if is_instance_valid(world) and not debug_time_paused:
 		world.advance_time(delta)
-	if hud != null and hud.is_panel_open() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	if hud != null and hud.blocks_gameplay() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	for index in range(10):
 		cooldowns[index] = float(skill_runtime.skill_cooldowns.get(state.loadout[index], 0))
@@ -271,12 +274,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if event.pressed and not hud.is_panel_open() else Input.MOUSE_MODE_VISIBLE
-		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP and not hud.is_panel_open():
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if event.pressed and not hud.blocks_gameplay() else Input.MOUSE_MODE_VISIBLE
+		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP and not hud.blocks_gameplay():
 			camera_distance = maxf(4.0, camera_distance - 1.5)
-		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN and not hud.is_panel_open():
+		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN and not hud.blocks_gameplay():
 			camera_distance = minf(32.0, camera_distance + 1.5)
-		elif event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not hud.is_panel_open() and not is_dead:
+		elif event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not hud.blocks_gameplay() and not is_dead:
 			_world_click(event.position)
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		camera_yaw = wrapf(camera_yaw - event.screen_relative.x * camera_sensitivity, -PI, PI)
@@ -285,17 +288,20 @@ func _unhandled_input(event: InputEvent) -> void:
 			vertical_delta = -vertical_delta
 		camera_pitch = clampf(camera_pitch + vertical_delta * camera_sensitivity, -0.16, 1.28)
 	elif event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode == KEY_X and not hud.is_panel_open() and not is_dead:
+		if not hud.blocks_gameplay() and not event.ctrl_pressed and not event.alt_pressed and not event.shift_pressed and not event.meta_pressed and _handle_debug_shortcut(event.physical_keycode):
+			get_viewport().set_input_as_handled()
+			return
+		if event.physical_keycode == KEY_X and not hud.blocks_gameplay() and not is_dead:
 			skill_runtime.stop_channel()
 			player.toggle_sit()
 		elif event.physical_keycode >= KEY_1 and event.physical_keycode <= KEY_9:
-			if not hud.is_panel_open():
+			if not hud.blocks_gameplay():
 				use_skill(int(event.physical_keycode - KEY_1))
-		elif event.physical_keycode == KEY_0 and not hud.is_panel_open():
+		elif event.physical_keycode == KEY_0 and not hud.blocks_gameplay():
 			use_skill(9)
-		elif event.physical_keycode == KEY_E and not hud.is_panel_open():
+		elif event.physical_keycode == KEY_E and not hud.blocks_gameplay():
 			interact()
-		elif event.physical_keycode == KEY_TAB and not hud.is_panel_open():
+		elif event.physical_keycode == KEY_TAB and not hud.blocks_gameplay():
 			_cycle_target()
 		elif event.physical_keycode == KEY_F5:
 			_on_notice("Journey saved." if _save_journey() else "Could not save the journey.")
@@ -332,13 +338,55 @@ func _load_settings() -> void:
 	camera_reverse_vertical = bool(config.get_value("camera", "reverse_vertical", true))
 	camera_sensitivity = clampf(float(config.get_value("camera", "sensitivity", camera_sensitivity)), 0.001, 0.015)
 	master_volume = clampf(float(config.get_value("audio", "master_volume", master_volume)), 0.0, 1.0)
+	_load_debug_keys(config)
+
+func _load_debug_keys(config: ConfigFile) -> void:
+	var saved_keys: Dictionary = debug_keys.duplicate()
+	for action: String in saved_keys:
+		saved_keys[action] = int(config.get_value("debug_keys", action, saved_keys[action]))
+	var used: Array = []
+	for action: String in saved_keys:
+		var key: int = saved_keys[action]
+		if not _debug_key_available(key) or used.has(key):
+			return
+		used.append(key)
+	debug_keys = saved_keys
 
 func save_settings() -> void:
 	var config := ConfigFile.new()
 	config.set_value("camera", "reverse_vertical", camera_reverse_vertical)
 	config.set_value("camera", "sensitivity", camera_sensitivity)
 	config.set_value("audio", "master_volume", master_volume)
+	for action: String in debug_keys:
+		config.set_value("debug_keys", action, debug_keys[action])
 	config.save(SETTINGS_PATH)
+
+func _debug_key_available(key: int) -> bool:
+	if key == KEY_NONE or (key >= KEY_0 and key <= KEY_9): return false
+	return key not in [KEY_W, KEY_A, KEY_S, KEY_D, KEY_X, KEY_E, KEY_TAB, KEY_K, KEY_B, KEY_I, KEY_C, KEY_H, KEY_O, KEY_M, KEY_F5, KEY_F6, KEY_F8, KEY_F9, KEY_F10, KEY_F12, KEY_ENTER, KEY_KP_ENTER, KEY_ESCAPE, KEY_SPACE, KEY_SHIFT, KEY_CTRL, KEY_ALT, KEY_META]
+
+func set_debug_key(action: String, key: int) -> bool:
+	if not debug_keys.has(action) or not _debug_key_available(key): return false
+	for other: String in debug_keys:
+		if other != action and int(debug_keys[other]) == key: return false
+	debug_keys[action] = key
+	if not test_mode: save_settings()
+	game_log.ui("debug_shortcut_changed", {"action": action, "key": OS.get_keycode_string(key)})
+	return true
+
+func _handle_debug_shortcut(key: int) -> bool:
+	if key == int(debug_keys["invulnerable"]):
+		debug_set_invulnerable(not debug_invulnerable)
+		hud.show_notice("Invulnerability %s." % ("enabled" if debug_invulnerable else "disabled"))
+		hud.refresh()
+	elif key == int(debug_keys["heal"]):
+		debug_restore_vitals()
+		hud.show_notice("Health and mana restored." if not is_dead else "Cannot restore vitals while dead.")
+	elif key == int(debug_keys["spawn"]):
+		hud._spawn_minions()
+	else:
+		return false
+	return true
 
 func reset_settings() -> void:
 	camera_reverse_vertical = true
@@ -410,6 +458,7 @@ func _process_pending_skill() -> void:
 
 func damage_player(amount: float, source: Node3D = null, delivery: String = "melee") -> void:
 	if is_dead: return
+	if debug_invulnerable: return
 	if player.invulnerable_time > 0:
 		skill_runtime.incoming(0, source, delivery, false, true)
 		return
@@ -431,6 +480,34 @@ func damage_player(amount: float, source: Node3D = null, delivery: String = "mel
 		target = source as CharacterBody3D
 	if state.hp <= 0:
 		_player_died()
+
+func debug_restore_vitals() -> void:
+	if is_dead:
+		return
+	var mods: Dictionary = state.get_equipment_modifiers()
+	state.hp = state.max_hp + float(mods.get("max_hp", 0.0))
+	state.mana = state.max_mana + float(mods.get("max_mana", 0.0))
+	state.changed.emit()
+	game_log.gameplay("debug_restore_vitals", {})
+
+func debug_clear_cooldowns() -> void:
+	if not skill_runtime.channel_id.is_empty():
+		skill_runtime.stop_channel()
+	skill_runtime.skill_cooldowns.clear()
+	cooldowns.fill(0.0)
+	game_log.gameplay("debug_clear_cooldowns", {})
+
+func debug_set_invulnerable(enabled: bool) -> void:
+	debug_invulnerable = enabled
+	game_log.gameplay("debug_invulnerability", {"enabled": enabled})
+
+func debug_set_time_paused(enabled: bool) -> void:
+	debug_time_paused = enabled
+	game_log.world("debug_time_paused", {"enabled": enabled})
+
+func debug_set_time(hours: float) -> void:
+	world.set_time_of_day(hours)
+	game_log.world("debug_set_time", {"clock": world.clock_text()})
 
 func _player_died() -> void:
 	is_dead = true
@@ -457,14 +534,20 @@ func _player_died() -> void:
 	_on_notice("Reawakened at Emberfall. Repair at the forge [I]. Dropped gear remains where you fell.")
 	_save_journey()
 
-func _spawn_enemy(kind: String, at: Vector3) -> CharacterBody3D:
+func _spawn_enemy(kind: String, at: Vector3, training_level: int = 0) -> CharacterBody3D:
 	var enemy := EnemyScript.new()
 	enemy.game = self
 	enemy.kind = kind
 	enemy.display_name = "Briarwolf" if kind == "normal" else ("Oathbound Guardian" if kind == "quest" else "The Hollow Regent")
 	enemy.home = at
 	var zone: Dictionary = world.zone_at(at)
-	enemy.configure_zone(zone)
+	var scaling_zone := zone.duplicate()
+	if training_level > 0:
+		scaling_zone["level_min"] = training_level
+		scaling_zone["level_max"] = training_level
+		enemy.set_meta("training_minion", true)
+		enemy.display_name = "Training Briarwolf"
+	enemy.configure_zone(scaling_zone)
 	add_child(enemy)
 	enemy.position = at + Vector3.UP * 0.15
 	enemies.append(enemy)
@@ -474,7 +557,44 @@ func _spawn_enemy(kind: String, at: Vector3) -> CharacterBody3D:
 	})
 	return enemy
 
+func training_minion_count() -> int:
+	var count := 0
+	for enemy in enemies:
+		if is_instance_valid(enemy) and not enemy.dead and enemy.has_meta("training_minion"):
+			count += 1
+	return count
+
+func spawn_training_minions(count: int, level: int) -> int:
+	var amount := mini(clampi(count, 1, 30), maxi(0, 50 - training_minion_count()))
+	for i in range(amount):
+		var angle := TAU * float(i) / float(amount)
+		var radius := 6.0 + 1.5 * float(floori(float(i) / 12.0))
+		var at: Vector3 = player.global_position + Vector3(cos(angle), 0, sin(angle)) * radius
+		at.x = clampf(at.x, -world.BOUNDS + 1.0, world.BOUNDS - 1.0)
+		at.z = clampf(at.z, -world.BOUNDS + 1.0, world.BOUNDS - 1.0)
+		at.y = world.height_at(at.x, at.z)
+		_spawn_enemy("normal", at, clampi(level, 1, 100))
+	game_log.gameplay("training_minions_spawned", {"count": amount, "level": clampi(level, 1, 100)})
+	return amount
+
+func clear_training_minions() -> void:
+	var removed := 0
+	for enemy in enemies.duplicate():
+		if is_instance_valid(enemy) and enemy.has_meta("training_minion"):
+			if target == enemy:
+				target = null
+			enemies.erase(enemy)
+			enemy.queue_free()
+			removed += 1
+	game_log.gameplay("training_minions_cleared", {"count": removed})
+
 func enemy_defeated(enemy: CharacterBody3D) -> void:
+	if enemy.has_meta("training_minion"):
+		game_log.combat("training_minion_defeated", {"level": enemy.level})
+		if target == enemy:
+			target = null
+		enemies.erase(enemy)
+		return
 	state.register_kill(enemy.kind, enemy.display_name)
 	game_log.combat("enemy_defeated", {"kind": enemy.kind, "name": enemy.display_name, "player_level": int(state.level)})
 	audio.cue("reward")

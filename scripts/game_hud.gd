@@ -62,6 +62,12 @@ const FrameScript = preload("res://scripts/classic_frame.gd")
 const WindowSnap = preload("res://scripts/window_snap.gd")
 var animation_view: RefCounted
 var forge_weapon := "sword"
+var minion_spawn_count := 5
+var minion_spawn_level := 1
+var minion_count_label: Label
+var debug_invulnerability_toggle: CheckButton
+var debug_rebind_action := ""
+var debug_binding_buttons: Dictionary = {}
 
 
 func setup(owner_game: Node) -> void:
@@ -124,7 +130,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		toggle_map()
 		get_viewport().set_input_as_handled()
 	elif key == KEY_ENTER or key == KEY_KP_ENTER:
-		if not is_panel_open():
+		if not blocks_gameplay():
 			focus_chat()
 			get_viewport().set_input_as_handled()
 	elif key == KEY_ESCAPE and is_panel_open():
@@ -529,6 +535,10 @@ func refresh() -> void:
 	if not is_instance_valid(game) or not is_instance_valid(game.get("state")):
 		return
 	var s: Node = game.state
+	if current_panel == "debug" and is_instance_valid(minion_count_label):
+		minion_count_label.text = "ACTIVE MINIONS   %d / 50" % game.training_minion_count()
+		if is_instance_valid(debug_invulnerability_toggle):
+			debug_invulnerability_toggle.set_pressed_no_signal(game.debug_invulnerable)
 	var equipment_mods: Dictionary = s.get_equipment_modifiers() if s.has_method("get_equipment_modifiers") else {}
 	var effective_hp: float = float(s.max_hp) + float(equipment_mods.get("max_hp", 0.0))
 	var effective_mana: float = float(s.max_mana) + float(equipment_mods.get("max_mana", 0.0))
@@ -597,6 +607,13 @@ func is_panel_open() -> bool:
 		return true
 	return not current_panel.is_empty()
 
+func blocks_gameplay() -> bool:
+	if is_instance_valid(world_map) and world_map.visible:
+		return true
+	if not debug_rebind_action.is_empty():
+		return true
+	return not current_panel.is_empty() and current_panel != "debug"
+
 
 func toggle_panel(panel_name: String) -> void:
 	if current_panel == panel_name:
@@ -606,6 +623,7 @@ func toggle_panel(panel_name: String) -> void:
 
 
 func close_panel() -> void:
+	debug_rebind_action = ""
 	if current_panel == "settings" and game.has_method("save_settings"):
 		game.save_settings()
 	_store_active_position()
@@ -616,12 +634,14 @@ func close_panel() -> void:
 
 
 func _switch_panel(panel_name: String) -> void:
+	debug_rebind_action = ""
 	if is_instance_valid(world_map) and world_map.visible:
 		world_map.close()
 	if current_panel == "settings" and game.has_method("save_settings"):
 		game.save_settings()
 	_store_active_position()
 	current_panel = panel_name
+	window_frame.mouse_filter = Control.MOUSE_FILTER_STOP if panel_name == "debug" else Control.MOUSE_FILTER_PASS
 	var desired := _panel_size(panel_name)
 	window_frame.size = desired.min(get_viewport().get_visible_rect().size - Vector2(24, 40))
 	window_frame.position = window_positions.get(panel_name, (get_viewport().get_visible_rect().size - window_frame.size) * 0.5)
@@ -637,7 +657,7 @@ func _switch_panel(panel_name: String) -> void:
 
 func _render_overlay() -> void:
 	overlay_subtitle.visible = current_panel != "inventory"
-	overlay_footer.visible = current_panel != "inventory"
+	overlay_footer.visible = current_panel != "inventory" and current_panel != "debug"
 	for child: Node in overlay_content.get_children():
 		overlay_content.remove_child(child)
 		child.queue_free()
@@ -648,6 +668,7 @@ func _render_overlay() -> void:
 		"forge": _render_forge()
 		"settings": _render_settings()
 		"animations": animation_view.render()
+		"debug": _render_debug()
 		_: _render_guide()
 
 
@@ -838,7 +859,157 @@ func _render_settings() -> void:
 	var animations_button:=_button("ANIMATION SELECTION [F6]",11)
 	animations_button.pressed.connect(_switch_panel.bind("animations"))
 	overlay_content.add_child(animations_button)
+	var debug_button := _button("DEBUG MENU", 11)
+	debug_button.custom_minimum_size.y = 38
+	debug_button.pressed.connect(_switch_panel.bind("debug"))
+	overlay_content.add_child(debug_button)
 	overlay_content.add_child(layout_reset)
+
+
+func _render_debug() -> void:
+	overlay_title.text = "Debug Menu"
+	overlay_subtitle.text = "Tools for testing combat and the world. Training minions give no rewards and do not respawn."
+	var player_card := _panel(Color("121f25"))
+	overlay_content.add_child(player_card)
+	var player_column := _column(player_card, 16, 12)
+	player_column.add_child(_label("PLAYER & COMBAT", 11, GOLD))
+	var invulnerable := CheckButton.new()
+	debug_invulnerability_toggle = invulnerable
+	invulnerable.name = "DebugInvulnerable"
+	invulnerable.focus_mode = Control.FOCUS_NONE
+	invulnerable.text = "Invulnerable (this session)"
+	invulnerable.button_pressed = game.debug_invulnerable
+	invulnerable.toggled.connect(game.debug_set_invulnerable)
+	player_column.add_child(invulnerable)
+	var player_buttons := HBoxContainer.new()
+	player_buttons.add_theme_constant_override("separation", 8)
+	player_column.add_child(player_buttons)
+	var restore := _button("RESTORE HEALTH & MANA", 11)
+	restore.name = "DebugRestore"
+	restore.pressed.connect(game.debug_restore_vitals)
+	player_buttons.add_child(restore)
+	var cooldowns_button := _button("RESET COOLDOWNS", 11)
+	cooldowns_button.name = "DebugCooldowns"
+	cooldowns_button.pressed.connect(game.debug_clear_cooldowns)
+	player_buttons.add_child(cooldowns_button)
+	var card := _panel(Color("121f25"))
+	overlay_content.add_child(card)
+	var column := _column(card, 20, 16)
+	column.add_theme_constant_override("separation", 14)
+	column.add_child(_label("TRAINING MINIONS", 11, GOLD))
+	_add_minion_slider(column, "NUMBER TO SPAWN", 1, 30, minion_spawn_count, true)
+	_add_minion_slider(column, "MINION LEVEL", 1, 100, minion_spawn_level, false)
+	minion_count_label = _label("ACTIVE MINIONS   %d / 50" % game.training_minion_count(), 11, GOLD)
+	column.add_child(minion_count_label)
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 8)
+	column.add_child(buttons)
+	var spawn := _button("SPAWN", 11, true)
+	spawn.custom_minimum_size = Vector2(140, 38)
+	spawn.pressed.connect(_spawn_minions)
+	buttons.add_child(spawn)
+	var clear := _button("CLEAR MINIONS", 11)
+	clear.custom_minimum_size = Vector2(140, 38)
+	clear.pressed.connect(_clear_minions)
+	buttons.add_child(clear)
+	var world_card := _panel(Color("121f25"))
+	overlay_content.add_child(world_card)
+	var world_column := _column(world_card, 16, 12)
+	world_column.add_child(_label("WORLD TIME", 11, GOLD))
+	var pause := CheckButton.new()
+	pause.name = "DebugPauseTime"
+	pause.focus_mode = Control.FOCUS_NONE
+	pause.text = "Pause day / night cycle"
+	pause.button_pressed = game.debug_time_paused
+	pause.toggled.connect(game.debug_set_time_paused)
+	world_column.add_child(pause)
+	var times := HBoxContainer.new()
+	times.add_theme_constant_override("separation", 8)
+	world_column.add_child(times)
+	for item: Array in [["DAWN", 6.0], ["NOON", 12.0], ["DUSK", 18.0], ["NIGHT", 22.0]]:
+		var time_button := _button(str(item[0]), 11)
+		time_button.pressed.connect(game.debug_set_time.bind(float(item[1])))
+		times.add_child(time_button)
+	var key_card := _panel(Color("121f25"))
+	overlay_content.add_child(key_card)
+	var key_column := _column(key_card, 16, 12)
+	key_column.add_child(_label("KEYBOARD SHORTCUTS", 11, GOLD))
+	key_column.add_child(_label("Click a key, then press an unused key. Esc cancels.", 10, MUTED))
+	debug_binding_buttons.clear()
+	for item: Array in [["Invulnerability", "invulnerable"], ["Restore vitals", "heal"], ["Spawn minions", "spawn"]]:
+		var row := HBoxContainer.new()
+		key_column.add_child(row)
+		var label := _label(str(item[0]), 11, TEXT)
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(label)
+		var action: String = item[1]
+		var key_button := _button(OS.get_keycode_string(int(game.debug_keys[action])), 11)
+		key_button.custom_minimum_size.x = 130
+		key_button.pressed.connect(_start_debug_rebind.bind(action))
+		row.add_child(key_button)
+		debug_binding_buttons[action] = key_button
+
+
+func _start_debug_rebind(action: String) -> void:
+	debug_rebind_action = action
+	for key: String in debug_binding_buttons:
+		debug_binding_buttons[key].text = "PRESS A KEY…" if key == action else OS.get_keycode_string(int(game.debug_keys[key]))
+
+
+func _capture_debug_key(event: InputEvent) -> bool:
+	if debug_rebind_action.is_empty() or not event is InputEventKey:
+		return false
+	if not event.pressed or event.echo:
+		return true
+	if event.physical_keycode == KEY_ESCAPE:
+		debug_rebind_action = ""
+		_render_overlay()
+		return true
+	if event.ctrl_pressed or event.alt_pressed or event.shift_pressed or event.meta_pressed or not game.set_debug_key(debug_rebind_action, event.physical_keycode):
+		show_notice("Key unavailable. Choose an unused key without modifiers.")
+		return true
+	debug_rebind_action = ""
+	_render_overlay()
+	return true
+
+
+func _add_minion_slider(parent: VBoxContainer, title: String, minimum: int, maximum: int, value: int, is_count: bool) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	parent.add_child(row)
+	var title_label := _label(title, 11, MUTED)
+	title_label.custom_minimum_size.x = 140
+	row.add_child(title_label)
+	var slider := HSlider.new()
+	slider.name = "MinionCountSlider" if is_count else "MinionLevelSlider"
+	slider.focus_mode = Control.FOCUS_NONE
+	slider.min_value = minimum
+	slider.max_value = maximum
+	slider.step = 1
+	slider.value = value
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(slider)
+	var readout := _label(str(value), 12, TEXT)
+	readout.custom_minimum_size.x = 36
+	readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(readout)
+	slider.value_changed.connect(func(new_value: float):
+		if is_count: minion_spawn_count = roundi(new_value)
+		else: minion_spawn_level = roundi(new_value)
+		readout.text = str(roundi(new_value))
+	)
+
+
+func _spawn_minions() -> void:
+	var amount: int = game.spawn_training_minions(minion_spawn_count, minion_spawn_level)
+	show_notice("Spawned %d training minions." % amount if amount > 0 else "Training minion limit reached.")
+	refresh()
+
+
+func _clear_minions() -> void:
+	game.clear_training_minions()
+	show_notice("Training minions cleared.")
+	refresh()
 
 
 func _render_guide() -> void:
@@ -1090,6 +1261,9 @@ func _begin_drag(event: InputEvent, control: Control, id: String) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if _capture_debug_key(event):
+		get_viewport().set_input_as_handled()
+		return
 	if not is_instance_valid(drag_target):
 		return
 	if event is InputEventMouseMotion:
@@ -1164,6 +1338,7 @@ func _reset_layout() -> void:
 
 
 func _panel_size(panel_name: String) -> Vector2:
+	if panel_name == "debug": return Vector2(600, 760)
 	if panel_name == "skills": return Vector2(1120, 720)
 	if panel_name == "inventory": return Vector2(620, 440)
 	if panel_name == "animations": return Vector2(1000,740)

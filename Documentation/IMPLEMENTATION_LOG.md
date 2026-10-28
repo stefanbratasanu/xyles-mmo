@@ -268,3 +268,35 @@ The 640 px map texture is generated lazily on first open and cached, so the firs
 **Verified.** After importing, progression, combat effects, skill panel, world, skill runtime, skill catalog and secondary damage tests passed; world was rerun separately to avoid concurrent LATEST.txt contention. A normal Direct3D 12 test-mode launch exited successfully without script errors, and its runtime log recorded boot and world construction. The import completed but reported missing textures in local source FBX files; the sandbox also could not write Godot user settings/logs. A normal launch outside the sandbox used Direct3D 12 successfully.
 
 **Risk / follow-up.** The new skill runtime reports out-of-range targets instead of automatically approaching them. The ten-slot HUD needs an in-game visual review at the intended resolutions. The original GitHub Desktop stash is retained; generated UID/import files and an Effekseer temporary file are not part of the conflict resolution.
+
+## 2026-10-28 - Hostile training minion popup
+
+**Intent.** Provide a temporary combat testing tool for spawning multiple hostile minions at a chosen level.
+
+**Changed.** `scripts/game_hud.gd` adds an Options entry and compact draggable popup with spawn-count and level sliders, a live active count, spawn and clear controls. `scripts/main.gd` spawns normal hostile Briarwolves at terrain height around the player, reusing zone level scaling, with 1–30 per batch and a 50-active cap. Training kills bypass rewards, progression and respawns; clear removes only training minions. `tests/test_training_minions.gd` covers controls, scaling, terrain placement, reward isolation, cap and clearing.
+
+**Visual decisions.** The reference topic was reachable, but its popup images were unavailable. Followed `Documentation/UI_STANDARD.md`: compact layout, dark interior, bronze frames and ivory labels, using the existing overlay and helpers.
+
+**Verified.** The new test passed headless and under Direct3D 12; its popup screenshot was inspected at 1600x900. `test_combat_effects.gd` and `test_world.gd` passed. The runtime log recorded training spawn, defeat and clear events without game errors. Headless sandbox runs reported user-log and certificate access errors and the known two ObjectDB leaks on exit.
+
+**Risk / follow-up.** Spawned enemies are temporary and can attack immediately; they are not persisted. High levels and large groups can be lethal and may affect performance.
+
+## 2026-10-28 - Debug menu for combat and world testing
+
+**Intent.** Group the existing training spawner with useful debug controls in one in-game window.
+
+**Changed.** `scripts/game_hud.gd` exposes Options → Debug Menu with the existing minion controls, recovery and cooldown buttons, an invulnerability toggle, world-time pause and dawn/noon/dusk/night presets. It reuses the existing compact bronze window and card helpers. `scripts/main.gd` owns the actions, logs them, restores equipment-adjusted maximum vitals, clears channel cooldowns safely, and keeps invulnerability and time pause disabled by default and out of saves. `tests/test_training_minions.gd` exercises these actions and the previous minion behavior.
+
+**Verified.** Debug-menu integration test passed headless and under Direct3D 12; the popup was visually inspected at 1600×900. `test_combat_effects.gd` and `test_world.gd` passed. The headless sandbox reports user-log/certificate access errors and the known two ObjectDB exit leaks.
+
+**Risk / follow-up.** Vitals restored through the menu are normal game state and may be included in an ordinary save. Debug invulnerability, paused time and temporary minions are not persisted. Resetting cooldowns stops an active channel.
+
+## 2026-10-28 - Nonmodal debug tools and key bindings
+
+**Intent.** Allow gameplay with the debug window open and let the player bind the three frequently used debug actions.
+
+**Changed.** `scripts/game_hud.gd` separates window visibility from blocking gameplay, retains map/other panel and text-input protection, consumes clicks on the debug frame, and provides rebinding controls with Escape cancellation. `scripts/main.gd` routes configurable physical-key shortcuts, avoids collisions with gameplay or other debug bindings, ignores shortcuts during chat and blocking panels, and persists keys in settings. Defaults: F2 invulnerability, F3 restore vitals, F4 spawn configured training minions. `scripts/player.gd` and `scripts/skills/skill_runtime.gd` use the gameplay-blocking check so movement and channels continue with the debug window open. `tests/test_training_minions.gd` covers movement, skill use, rebinding validation, settings loading, shortcut actions and input suppression.
+
+**Verified.** Integration test passed under Direct3D 12 and its 1600×900 layout was inspected. Skill runtime, skill panel, combat effects and world tests passed. Runtime diagnostics recorded key changes and debug actions without game errors. Headless sandbox runs reported user-log/certificate access errors and the known ObjectDB exit warning.
+
+**Risk / follow-up.** Shortcuts operate outside the debug window whenever gameplay input is available. Rebinding accepts unused single physical keys only; modifier combinations and existing gameplay bindings are rejected. Window positions and bindings are saved separately.

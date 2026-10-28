@@ -97,3 +97,21 @@ starting camp all the way to the foothills.
 - Applied the preserved GitHub Desktop stash on the pulled world branch, prioritizing the ten-slot skill catalog, runtime and enchantments. Kept world-scaled enemy damage, the frameless hotbar, world bounds, chat focus and logging.
 - The skill runtime currently reports out-of-range targeted skills instead of the former automatic approach. The prior three-branch skill and five-slot rules are superseded in the prototype; the longer-term design remains documented separately.
 - The original stash remains available. Progression, combat, skill panel, skill runtime, catalog, secondary damage and world tests passed; a Direct3D 12 test-mode launch completed without script errors. The full import reported missing textures in local source FBX files. Visually review the ten-slot HUD in game.
+
+## 2026-10-28 - Training minion spawner
+
+- Open Options → **Debug Menu** to spawn hostile Briarwolves around the player. Choose 1–30 per batch and level 1–100; the popup shows the active count (maximum 50) and can clear them.
+- Training minions use normal level scaling and combat AI, but never grant rewards, advance the bestiary or quest, or respawn. They are temporary and are not saved.
+- The popup uses the existing compact bronze frame, ivory labels and window dragging. The referenced forum's popup images were unavailable, so the written UI standard guided the layout.
+- Verified with the training minion test, combat effects and world tests, plus a Direct3D 12 popup render. Headless runs report sandbox user-log/certificate errors and the existing ObjectDB exit warning.
+
+## 2026-10-28 - Debug menu
+
+- Options → Debug Menu groups training minions with health/mana recovery, cooldown reset, session-only invulnerability, day/night pause and dawn/noon/dusk/night presets. The toggles start disabled each launch.
+- The debug controls and existing combat/world tests passed; the 1600×900 Direct3D 12 layout was inspected.
+
+## 2026-10-28 - Playable debug window and configurable shortcuts
+
+- The debug window no longer blocks movement, combat, camera or channeling; clicking its controls stays within the window. Other panels and the map still block gameplay. Chat focus still blocks gameplay shortcuts.
+- Debug shortcuts default to F2 (invulnerability), F3 (restore health/mana) and F4 (spawn the currently selected batch and level). Click a key in the debug menu and press an unused replacement; Esc cancels. Bindings are stored in `saves/settings.cfg` and apply while gameplay is available, including with the debug window closed.
+- Verified movement, skill use, rebinding, conflict rejection, text/modal suppression and debug actions in the integration test, plus combat, skill and world tests. The Direct3D 12 layout was inspected at 1600×900.
