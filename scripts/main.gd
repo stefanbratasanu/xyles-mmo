@@ -9,9 +9,6 @@ const HUDScript = preload("res://scripts/game_hud.gd")
 const VisualScript = preload("res://scripts/actor_visual.gd")
 const AudioScript = preload("res://scripts/audio_director.gd")
 const GameLogScript = preload("res://scripts/game_log.gd")
-const SKILL_IDS := ["melee", "cast", "block", "move", "support"]
-const SKILL_NAMES := ["Iron Cleave", "Ember Bolt", "Iron Guard", "Wayfarer's Step", "Restoring Light"]
-const BASE_COSTS := [4.0, 15.0, 12.0, 9.0, 24.0]
 const SAVE_PATH := "res://saves/journey.json"
 const SETTINGS_PATH := "res://saves/settings.cfg"
 
@@ -28,7 +25,6 @@ var combat_effects: Node3D
 var target: CharacterBody3D
 var enemies: Array[CharacterBody3D] = []
 var cooldowns: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
-var max_cooldowns: Array[float] = [0.8, 3.0, 7.0, 4.0, 11.0]
 var support_time: float = 0.0
 var block_time: float = 0.0
 var is_dead: bool = false
@@ -54,6 +50,7 @@ var quest_spawned: bool = false
 var hud_tick: float = 0.0
 var autosave_tick: float = 0.0
 var pending_skill: int = -1
+var skill_runtime: Node
 var elapsed: float = 0.0
 var arrow: Node3D
 var last_failed_notice: float = -10.0
@@ -136,6 +133,11 @@ func _ready() -> void:
 		combat_effects.name = "CombatEffects"
 		add_child(combat_effects)
 	combat_effects.prepare(player.position)
+	skill_runtime = preload("res://scripts/skills/skill_runtime.gd").new()
+	add_child(skill_runtime)
+	skill_runtime.setup(self)
+	cooldowns.resize(10)
+	cooldowns.fill(0.0)
 	_build_smith()
 	_build_resources()
 	for spawn: Vector3 in world.normal_spawns:
@@ -232,8 +234,8 @@ func _process(delta: float) -> void:
 		world.advance_time(delta)
 	if hud != null and hud.is_panel_open() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	for index in range(5):
-		cooldowns[index] = maxf(0.0, cooldowns[index] - delta)
+	for index in range(10):
+		cooldowns[index] = float(skill_runtime.skill_cooldowns.get(state.loadout[index], 0))
 	block_time = maxf(0, block_time - delta)
 	support_time = maxf(0, support_time - delta)
 	if not is_dead:
@@ -262,6 +264,9 @@ func _process(delta: float) -> void:
 		_save_journey()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and not event.pressed and skill_runtime != null and skill_runtime.channel_slot >= 0:
+		var released_slot: int = 9 if event.physical_keycode == KEY_0 else int(event.physical_keycode - KEY_1)
+		if released_slot == skill_runtime.channel_slot: skill_runtime.stop_channel()
 	if ui_text_input:
 		return
 	if event is InputEventMouseButton:
@@ -281,10 +286,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera_pitch = clampf(camera_pitch + vertical_delta * camera_sensitivity, -0.16, 1.28)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_X and not hud.is_panel_open() and not is_dead:
+			skill_runtime.stop_channel()
 			player.toggle_sit()
-		elif event.physical_keycode >= KEY_1 and event.physical_keycode <= KEY_5:
+		elif event.physical_keycode >= KEY_1 and event.physical_keycode <= KEY_9:
 			if not hud.is_panel_open():
 				use_skill(int(event.physical_keycode - KEY_1))
+		elif event.physical_keycode == KEY_0 and not hud.is_panel_open():
+			use_skill(9)
 		elif event.physical_keycode == KEY_E and not hud.is_panel_open():
 			interact()
 		elif event.physical_keycode == KEY_TAB and not hud.is_panel_open():
@@ -391,140 +399,33 @@ func _cycle_target() -> void:
 	hud.refresh()
 
 func use_skill(index: int) -> void:
-	if index < 0 or index > 4 or is_dead or cooldowns[index] > 0:
-		return
-	if player.sitting:
-		player.stand_up()
-		game_log.gameplay("stood_up", {"reason": "skill"})
-		return
-	var effects: Dictionary = state.get_skill_effects(SKILL_IDS[index])
-	var mods: Dictionary = state.get_equipment_modifiers()
-	if index <= 1:
-		if not is_instance_valid(target) or target.dead:
-			target = _nearest_enemy(22.0)
-		if not is_instance_valid(target):
-			_fail_notice("No target nearby. Explore the old road east of camp.")
-			game_log.combat("skill_no_target", {"skill": SKILL_NAMES[index]})
-			return
-		var reach: float = (3.1 if index == 0 else 22.0) * float(effects["range"])
-		if target.kind == "boss" and index == 0:
-			reach += 1.5
-		if player.global_position.distance_to(target.global_position) > reach:
-			pending_skill = index
-			player.destination = target.global_position
-			player.moving_to_click = true
-			return
-	var cost: float = BASE_COSTS[index] * float(effects["mana_cost"])
-	if not state.spend_mana(cost):
-		_fail_notice("Not enough mana. Rest at camp or let your mana recover.")
-		game_log.combat("skill_no_mana", {"skill": SKILL_NAMES[index], "mana": state.mana})
-		return
-	pending_skill = -1
-	cooldowns[index] = max_cooldowns[index] * float(effects["cooldown"])
-	var power: float = float(effects["power"])
-	var equipment_power: float = state.get_equipment_power()
-	var buff: float = 1.12 if support_time > 0 else 1.0
-	match index:
-		0:
-			player.face_point(target.global_position)
-			player.attack_animation()
-			var damage: float = (16.0 + equipment_power * 0.35) * power * buff * float(mods["attack_multiplier"]) * float(mods["melee_multiplier"])
-			burst(player.global_position + Vector3.UP * 0.15, Color("e4be78"), 2.2, 0.23)
-			var struck := target
-			struck.take_damage(damage)
-			if int(state.skills["melee"]["ranks"][0]) > 0:
-				for enemy in enemies:
-					if is_instance_valid(enemy) and not enemy.dead and enemy != struck and player.global_position.distance_to(enemy.global_position) < 3.3:
-						enemy.take_damage(damage * 0.45)
-			audio.cue("melee")
-		1:
-			player.face_point(target.global_position)
-			player.cast_animation()
-			var damage: float = (28.0 + equipment_power * 0.5) * power * buff * float(mods["cast_multiplier"])
-			_projectile(target, damage)
-			audio.cue("cast")
-		2:
-			player.block_animation()
-			block_time = 4.0 + (power - 1.0) * 3.0
-			burst(player.global_position, Color("83b7bf"), 1.2, 0.5)
-			floating_text(player.global_position + Vector3.UP * 2.0, "GUARD", Color("91c8cb"))
-			audio.cue("block")
-		3:
-			player.dash()
-			burst(player.global_position, Color("afd4c9"), 0.8, 0.3)
-			audio.cue("move")
-		4:
-			player.support_animation()
-			var healing: float = 38.0 * power * float(mods["support_multiplier"])
-			state.hp = minf(state.max_hp + float(mods["max_hp"]), state.hp + healing)
-			support_time = 10.0
-			burst(player.global_position, Color("90c6a4"), 2.0, 0.8)
-			floating_text(player.global_position + Vector3.UP * 2.0, "+%d" % int(healing), Color("b7dda0"))
-			audio.cue("support")
-	var target_name := "none"
-	var target_hp: Variant = null
-	if is_instance_valid(target):
-		target_name = str(target.display_name)
-		target_hp = snappedf(float(target.hp), 0.1)
-	game_log.combat("skill_used", {
-		"skill": SKILL_NAMES[index], "target": target_name, "target_hp": target_hp,
-		"mana_after": snappedf(float(state.mana), 0.1), "player_hp": snappedf(float(state.hp), 0.1),
-	})
-	hud.refresh()
+	if skill_runtime != null:
+		if skill_runtime.cast_slot(index):
+			game_log.combat("skill_used", {"skill": str(state.loadout[index]), "mana_after": snappedf(float(state.mana), 0.1), "player_hp": snappedf(float(state.hp), 0.1)})
+		hud.refresh()
 
 func _process_pending_skill() -> void:
-	if pending_skill < 0:
-		return
-	if not is_instance_valid(target) or target.dead or hud.is_panel_open():
-		pending_skill = -1
-		return
-	if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_D):
-		pending_skill = -1
-		return
-	player.destination = target.global_position
-	player.moving_to_click = true
-	var reach: float = (3.0 if pending_skill == 0 else 21.0) * float(state.get_skill_effects(SKILL_IDS[pending_skill])["range"])
-	if target.kind == "boss" and pending_skill == 0:
-		reach += 1.5
-	if player.global_position.distance_to(target.global_position) <= reach:
-		player.moving_to_click = false
-		var next := pending_skill
-		pending_skill = -1
-		use_skill(next)
+	pass
 
-func _projectile(enemy: CharacterBody3D, damage: float) -> void:
-	var orb: MeshInstance3D = combat_effects.take_orb()
-	orb.position = player.position + Vector3.UP * 1.2
-	var hit_point := enemy.position + Vector3.UP * (1.0 if enemy.kind != "boss" else 2.3)
-	var flame := orb.get_node_or_null("EmberTrail") as Node3D
-	if flame != null and flame.has_method("play"):
-		var direction := (hit_point - orb.position).normalized()
-		flame.rotation.y = atan2(direction.z, -direction.x)
-		flame.call("play")
-	var duration: float = clampf(orb.position.distance_to(hit_point) / 24.0, 0.15, 0.8)
-	var tween := create_tween()
-	tween.tween_property(orb, "position", hit_point, duration)
-	tween.tween_callback(func():
-		burst(orb.position - Vector3.UP * 0.5, Color("e3a76b"), 1.1, 0.35)
-		if is_instance_valid(enemy) and not enemy.dead:
-			enemy.take_damage(damage)
-		combat_effects.release_orb(orb)
-	)
 
-func damage_player(amount: float, source: Node3D = null) -> void:
-	if is_dead or player.invulnerable_time > 0:
+func damage_player(amount: float, source: Node3D = null, delivery: String = "melee") -> void:
+	if is_dead: return
+	if player.invulnerable_time > 0:
+		skill_runtime.incoming(0, source, delivery, false, true)
 		return
+	if is_instance_valid(source): amount *= 1.0 - skill_runtime.enemy_stat(source, "outgoing_damage")
 	var mods: Dictionary = state.get_equipment_modifiers()
 	var mitigation: float = clampf(float(mods["armor"]), 0.0, 0.55)
 	if block_time > 0:
 		mitigation = minf(0.9, mitigation + 0.60 * float(mods["block_strength"]) * state.get_skill_bonus("block"))
-	var taken: float = amount * (1.0 - mitigation)
+	var taken: float = skill_runtime.incoming(amount * (1.0 - mitigation), source, delivery, block_time > 0)
 	state.hp = maxf(0, state.hp - taken)
 	game_log.combat("player_damaged", {
 		"source": str(source.display_name) if is_instance_valid(source) and source.get("display_name") != null else "world",
 		"raw": snappedf(amount, 0.1), "taken": snappedf(taken, 0.1),
 		"mitigation": snappedf(mitigation, 0.01), "hp": snappedf(float(state.hp), 0.1),
 	})
+	if state.hp > 0: skill_runtime.after_incoming(amount * (1.0 - mitigation), source, delivery, block_time > 0)
 	floating_text(player.global_position + Vector3.UP * 1.8, "-%d" % roundi(taken), Color("e38e80"))
 	if not is_instance_valid(target) and is_instance_valid(source):
 		target = source as CharacterBody3D
@@ -533,6 +434,8 @@ func damage_player(amount: float, source: Node3D = null) -> void:
 
 func _player_died() -> void:
 	is_dead = true
+	skill_runtime._react("ON_DEATH", null)
+	skill_runtime.clear_combat()
 	block_time = 0
 	support_time = 0
 	pending_skill = -1

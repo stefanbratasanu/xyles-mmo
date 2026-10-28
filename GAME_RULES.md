@@ -8,7 +8,7 @@ file is the shorter contract used during implementation.
 ## 1. Core pillars
 
 1. **Hardcore risk:** death costs durability and can expose or drop equipment.
-2. **Deep customisation:** three-branch skill evolution and weighted item
+2. **Deep customisation:** skill evolution and weighted item
    modifier pools, inspired by Path of Exile.
 3. **Discovery-driven progression:** skill points come from first-time bestiary
    discoveries, not from ordinary levelling.
@@ -22,7 +22,7 @@ file is the shorter contract used during implementation.
 | `W A S D` | Move |
 | Right mouse | Capture mouse / orbit camera |
 | Mouse wheel | Zoom camera |
-| `1` - `5` | Use skill slot |
+| `1` - `9`, `0` | Use skill slot |
 | `E` | Interact (blacksmith, resource, dropped loot) |
 | `Tab` | Cycle nearby enemy target |
 | Left click | Select enemy or move to ground point |
@@ -86,11 +86,10 @@ file is the shorter contract used during implementation.
 
 ## 3. Combat and feedback
 
-- Five active skill slots: Melee, Cast, Block, Move, Support.
-- Base mana costs: `4`, `15`, `12`, `9`, `24`.
-- Base cooldowns: `0.8`, `3.0`, `7.0`, `4.0`, `11.0` seconds.
-- Melee range is short; casting range is long. A skill used out of range makes
-  the player walk into range and then fire automatically.
+- Ten equipped skill slots, selected from learned abilities; keys `1`–`9` and `0` activate them.
+- Skill costs, cooldowns, range, delivery and evolution effects come from the
+  skill catalog and compiled skill state. Targeted skills report an out-of-range
+  target rather than automatically walking to it.
 - `Tab` and clicking an enemy set a single current target. The target ring is the
   only selection marker.
 - Every enemy has **one** health display: a world-space bar above the enemy.
@@ -114,9 +113,9 @@ file is the shorter contract used during implementation.
   - Quest enemy: **5** points
   - World boss: **3** points
 - Lifetime skill points are capped at **50**.
-- Each skill has three branches and at most **10** evolutions.
-- A branch may not run more than two ranks ahead of the lowest other branch;
-  players must spread investments. Individual evolutions can be respec'd.
+- Each skill has at most **10** evolution stages. Each stage presents saved
+  modifier offers; compatible choices can be replaced, or all stages reset for
+  a refund. Discovered offers retain their rolls.
 - Skill points are never awarded twice for the same region/category.
 
 ## 5. Enemies
@@ -175,8 +174,8 @@ Visual language:
 - Square artwork and skill slots.
 - Compact sans-serif labels; avoid oversized panels.
 - Status top-left; clock, menu and quest journal top/right; chat bottom-left;
-  system log bottom-right; five skills bottom centre.
-- The five-skill hotbar is **bare**: the tiles sit directly on the world with no
+  system log bottom-right; ten skills bottom centre.
+- The skill hotbar is **bare**: the tiles sit directly on the world with no
   container panel around them.
 - The clock panel shows time, day and phase; the full-screen map replaces the old
   minimap entirely.

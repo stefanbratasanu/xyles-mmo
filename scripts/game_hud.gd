@@ -9,7 +9,6 @@ const TEXT := Color("e0dcd1")
 const MUTED := Color("a5a196")
 const RED := Color("b46860")
 const TEAL := Color("71aaa1")
-const SKILL_IDS := ["melee", "cast", "block", "move", "support"]
 const SKILL_SIGILS := ["I", "II", "III", "IV", "V"]
 
 var game: Node
@@ -60,12 +59,16 @@ var floating_windows: Dictionary = {}
 var default_positions: Dictionary = {}
 const LAYOUT_PATH := "res://saves/ui_layout.cfg"
 const FrameScript = preload("res://scripts/classic_frame.gd")
+const WindowSnap = preload("res://scripts/window_snap.gd")
+var animation_view: RefCounted
+var forge_weapon := "sword"
 
 
 func setup(owner_game: Node) -> void:
 	game = owner_game
 	skill_view = preload("res://scripts/skill_panel.gd").new(self)
 	inventory_view = preload("res://scripts/inventory_panel.gd").new(self)
+	animation_view = preload("res://scripts/animation_selection.gd").new(self)
 	heading_font = SystemFont.new()
 	heading_font.font_names = PackedStringArray(["Tahoma", "Arial", "sans-serif"])
 	_load_layout()
@@ -113,7 +116,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed or event.echo:
 		return
 	var key: int = event.physical_keycode
-	var panel_keys: Dictionary = {KEY_K: "skills", KEY_B: "bestiary", KEY_I: "inventory", KEY_C: "forge", KEY_H: "guide", KEY_O: "settings"}
+	var panel_keys: Dictionary = {KEY_K: "skills", KEY_B: "bestiary", KEY_I: "inventory", KEY_C: "forge", KEY_H: "guide", KEY_O: "settings", KEY_F6:"animations"}
 	if panel_keys.has(key):
 		toggle_panel(str(panel_keys[key]))
 		get_viewport().set_input_as_handled()
@@ -364,7 +367,7 @@ func _build_hotbar() -> void:
 	# Intentionally not a floating window: the skill bar must sit on the world
 	# with no frame around it. Only the skill tiles have a background.
 	var holder := Control.new()
-	_place(holder, Vector2(-245, -128), Vector2(490, 112), Vector2(0.5, 1))
+	_place(holder, Vector2(-290, -128), Vector2(580, 112), Vector2(0.5, 1))
 	holder.mouse_filter = Control.MOUSE_FILTER_PASS
 	var column := VBoxContainer.new()
 	column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -372,7 +375,7 @@ func _build_hotbar() -> void:
 	column.mouse_filter = Control.MOUSE_FILTER_PASS
 	column.add_theme_constant_override("separation", 5)
 	holder.add_child(column)
-	context_text = _label("Shortcuts   •   1–5", 11, Color("f0e6c8"))
+	context_text = _label("Shortcuts   •   1–9, 0", 11, Color("f0e6c8"))
 	context_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_shadowed(context_text)
 	column.add_child(context_text)
@@ -381,18 +384,18 @@ func _build_hotbar() -> void:
 	row.mouse_filter = Control.MOUSE_FILTER_PASS
 	row.add_theme_constant_override("separation", 6)
 	column.add_child(row)
-	var names := ["Iron Cleave", "Ember Bolt", "Iron Guard", "Dodge Roll", "Restoring Light"]
-	for i in range(5):
+	for i in range(10):
 		var skill := _button("", 12, true)
-		skill.custom_minimum_size = Vector2(54, 54)
+		skill.custom_minimum_size = Vector2(50, 50)
 		skill.add_theme_stylebox_override("normal", _style(Color(0.05, 0.06, 0.06, 0.80), Color("6f6854"), 1, 4, 0, 0))
 		skill.add_theme_stylebox_override("hover", _style(Color(0.12, 0.13, 0.11, 0.9), GOLD, 1, 4, 0, 0))
 		skill.add_theme_stylebox_override("pressed", _style(Color(0.02, 0.03, 0.03, 0.9), GOLD, 1, 4, 0, 0))
 		skill.pressed.connect(_activate_skill.bind(i))
-		skill.tooltip_text = "%s [%d]" % [names[i], i + 1]
+		skill.tooltip_text = "%s [%d]" % [game.state.skills[game.state.loadout[i]].name, (i + 1) % 10]
 		row.add_child(skill)
 		var picture := TextureRect.new()
-		picture.texture = skill_view.icon(SKILL_IDS[i])
+		picture.texture = skill_view.icon(str(game.state.skill_catalog.data.skills[game.state.loadout[i]].icon))
+		skill.set_meta("picture", picture)
 		picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 		picture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -402,7 +405,7 @@ func _build_hotbar() -> void:
 		picture.offset_bottom = -3
 		picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		skill.add_child(picture)
-		var key_label := _label(str(i + 1), 10, Color.WHITE)
+		var key_label := _label(str((i + 1) % 10), 10, Color.WHITE)
 		key_label.position = Vector2(5, 2)
 		key_label.add_theme_color_override("font_shadow_color", Color.BLACK)
 		key_label.add_theme_constant_override("shadow_offset_x", 1)
@@ -502,7 +505,7 @@ func _build_overlay() -> void:
 	overlay_footer = footer
 	footer.add_theme_constant_override("separation", 3)
 	outer.add_child(footer)
-	for item: Array in [["Skills [K]", "skills"], ["Bestiary [B]", "bestiary"], ["Items [I]", "inventory"], ["Forge [C]", "forge"], ["Guide [H]", "guide"], ["Options [O]", "settings"]]:
+	for item: Array in [["Skills [K]", "skills"], ["Bestiary [B]", "bestiary"], ["Items [I]", "inventory"], ["Forge [C]", "forge"], ["Guide [H]", "guide"], ["Animations [F6]","animations"], ["Options [O]", "settings"]]:
 		var btn := _button(str(item[0]), 11)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.pressed.connect(_switch_panel.bind(str(item[1])))
@@ -543,11 +546,15 @@ func refresh() -> void:
 	if region is String:
 		region_label.text = region.to_upper()
 	progression_text.text = "LEVEL %02d    /    %d SKILL POINTS    /    %d OF 50 DISCOVERED" % [int(s.level), int(s.skill_points), int(s.earned_skill_points)]
-	resource_text.text = "%d GOLD     %d WOOD     %d IRON" % [int(s.gold), int(s.wood), int(s.iron)]
+	resource_text.text = game.skill_runtime.status_text() if not game.skill_runtime.buffs.is_empty() or not game.skill_runtime.channel_id.is_empty() else "%d GOLD     %d WOOD     %d IRON" % [int(s.gold), int(s.wood), int(s.iron)]
 	var cooldown_data: Variant = game.get("cooldowns")
 	if cooldown_data is Array:
 		for i: int in range(mini(hotbar.size(), cooldown_data.size())):
 			var remaining: float = float(cooldown_data[i])
+			var skill_id: String = game.state.loadout[i]
+			(hotbar[i].get_meta("picture") as TextureRect).texture = skill_view.icon(str(game.state.skill_catalog.data.skills[skill_id].icon))
+			var compiled: Dictionary=s.compiled_skill(skill_id)
+			hotbar[i].tooltip_text = "%s [%d] · %d / 10 enchantments\n%s\nMana %.1f · Cooldown %.1fs · Range %.1fm%s" % [s.skills[skill_id].name,(i+1)%10,s.skills[skill_id].evolutions.size(),s.skills[skill_id].description,float(compiled.cost)*float(compiled.cost_scale),float(compiled.cooldown)*float(compiled.cooldown_scale),float(compiled.range),"\nHold key to channel; click again to stop. Movement 50%; facing limited to 360°/s." if compiled.tags.has("channel") else ""]
 			(hotbar[i].get_meta("timer_label") as Label).text = "%.1f" % remaining if remaining > 0.0 else ""
 			hotbar[i].modulate = Color(0.65, 0.72, 0.73) if remaining > 0.0 else Color.WHITE
 	var hint: Variant = game.get("context_hint")
@@ -563,10 +570,12 @@ func refresh() -> void:
 		clock_label.text = "%s   DAY %02d" % [world.clock_text(), int(world.day_number)]
 		clock_phase.text = str(world.phase_text()).to_upper()
 	if is_panel_open():
-		var signature: String = str([s.skill_points, s.earned_skill_points, s.skills, s.bestiary, s.equipment, s.inventory, s.gold, s.wood, s.iron, _near_forge()])
+		var signature: String = str([s.skill_points, s.earned_skill_points, s.skills, s.bestiary, s.equipment, s.inventory, s.gold, s.wood, s.iron, s.loadout, _near_forge()])
 		if signature != panel_signature:
 			panel_signature = signature
 			_render_overlay()
+		if current_panel == "skills": skill_view.update_edit_status()
+		if current_panel == "skills": skill_view.update_debug()
 
 
 func set_context(message: String) -> void:
@@ -580,6 +589,7 @@ func show_notice(message: String) -> void:
 	toast_timer = 4.2
 	toast.modulate.a = 1.0
 	toast.visible = true
+	toast.move_to_front()
 
 
 func is_panel_open() -> bool:
@@ -637,6 +647,7 @@ func _render_overlay() -> void:
 		"inventory": _render_inventory()
 		"forge": _render_forge()
 		"settings": _render_settings()
+		"animations": animation_view.render()
 		_: _render_guide()
 
 
@@ -725,7 +736,13 @@ func _equipment_card(item: Dictionary, equipped: bool) -> void:
 func _render_forge() -> void:
 	var s: Node = game.state
 	overlay_title.text = "Blacksmith — Emberfall"
-	overlay_subtitle.text = "Shape your next weapon at the camp forge. A basic sword begins at 100 wood + 100 iron; greater investment yields more modifiers. Materials come from combat and chronicle rewards."
+	overlay_subtitle.text = "Choose a weapon to craft at the camp forge. Basic weapons begin at 100 wood + 100 iron; greater investment yields more modifiers."
+	var weapon_picker:=OptionButton.new()
+	var weapon_types: Array=s.WEAPON_DEFINITIONS.keys()
+	for kind: String in weapon_types: weapon_picker.add_item(kind.capitalize())
+	weapon_picker.select(weapon_types.find(forge_weapon))
+	weapon_picker.item_selected.connect(func(index: int): forge_weapon=str(weapon_types[index]); _render_overlay())
+	overlay_content.add_child(weapon_picker)
 	overlay_content.add_child(_label("AVAILABLE   /   %d WOOD   /   %d IRON   /   %d GOLD" % [int(s.wood), int(s.iron), int(s.gold)], 13, GOLD))
 	if not _near_forge():
 		overlay_content.add_child(_label("Return to Emberfall to craft/repair.", 12, GOLD))
@@ -736,14 +753,14 @@ func _render_forge() -> void:
 		var col: VBoxContainer = _column(card, 18, 17)
 		var row: HBoxContainer = HBoxContainer.new()
 		col.add_child(row)
-		var title: Label = _label("%s  /  ASHFORGED SWORD" % tier.to_upper(), 19, _rarity_color(tier), true)
+		var title: Label = _label("%s  /  ASHFORGED %s" % [tier.to_upper(),forge_weapon.to_upper()], 19, _rarity_color(tier), true)
 		title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(title)
 		var count: Dictionary = {"basic": 2, "rare": 3, "epic": 4, "legendary": 5}
 		row.add_child(_label("%d MODIFIERS" % int(count[tier]), 11, MUTED))
 		var desc: Label = _label("%d wood  +  %d iron%s" % [int(cost.get("wood", 100)), int(cost.get("iron", 100)), "  +  %d gold" % int(cost.get("gold", 0)) if int(cost.get("gold", 0)) > 0 else ""], 13, TEXT)
 		col.add_child(desc)
-		var btn: Button = _button("FORGE %s SWORD" % tier.to_upper(), 11, true)
+		var btn: Button = _button("FORGE %s %s" % [tier.to_upper(),forge_weapon.to_upper()], 11, true)
 		btn.custom_minimum_size.y = 36
 		btn.disabled = not _near_forge()
 		btn.pressed.connect(_craft.bind(tier))
@@ -818,6 +835,9 @@ func _render_settings() -> void:
 	overlay_content.add_child(defaults)
 	var layout_reset := _button("RESET WINDOW POSITIONS", 11)
 	layout_reset.pressed.connect(_reset_layout)
+	var animations_button:=_button("ANIMATION SELECTION [F6]",11)
+	animations_button.pressed.connect(_switch_panel.bind("animations"))
+	overlay_content.add_child(animations_button)
 	overlay_content.add_child(layout_reset)
 
 
@@ -827,7 +847,7 @@ func _render_guide() -> void:
 	var sections: Array = [
 		["TRAVEL & TARGETING", "WASD to move or click the ground. S backpedals; hold Shift while moving forward to sprint, hold Alt to walk, hold Ctrl to crouch, and press Space to jump. X toggles sitting; movement or using a skill starts standing up. Hold the right mouse button and drag to look around; scroll to zoom. Press O or Esc for settings. Click a creature or press Tab to select a target. E interacts with nearby objects."],
 		["FIVE WAYS TO SURVIVE", "1  Iron Cleave: your close combat attack.  2  Ember Bolt: a ranged mana attack.  3  Iron Guard: mitigate incoming damage.  4  Wayfarer's Step: reposition quickly.  5  Restoring Light: spend mana to restore vitality. Watch mana and cooldowns."],
-		["POWER THROUGH DISCOVERY", "Open B for the regional bestiary. Your first normal, quest and boss completions grant 2, 5 and 3 skill points. Leveling alone grants no skill points. Spend them with K, choosing three branching paths for each starter skill."],
+		["POWER THROUGH DISCOVERY", "Open B for the regional bestiary. Your first normal, quest and boss completions grant 2, 5 and 3 skill points. Leveling alone grants no skill points. Spend them with K, choosing from five compatible enchantments at each of ten stages. Equip ten abilities with the slot buttons; keys 1–0 activate them. Channel skills slow movement and turn gradually."],
 		["RISK & REPAIR", "Death damages random pieces of equipment. Below 50% durability, gear can drop; at 0%, it always drops. Return to Emberfall and repair through I. Craft better equipment through C. F5 saves your journey, and progress also saves automatically."],
 		["THE CHRONICLE", "Begin at the Emberfall blacksmith. Cull the Briarwolves, confront the Oathbound Guardian, then follow the clue toward the Hollow Regent. Powerful foes reward preparation and careful movement."]
 	]
@@ -855,7 +875,7 @@ func _craft(tier: String) -> void:
 	if not _near_forge():
 		show_notice("Return to Emberfall to craft/repair.")
 		return
-	game.state.craft_sword(tier)
+	game.state.craft_weapon(forge_weapon,tier)
 	refresh()
 
 
@@ -1037,6 +1057,7 @@ func _register_window(control: Control, id: String) -> void:
 	if window_positions.has(id):
 		control.set_deferred("position", window_positions[id])
 	_clamp_window.call_deferred(control)
+	_snap_window.call_deferred(control,true)
 
 
 func _settle_hud() -> void:
@@ -1045,6 +1066,7 @@ func _settle_hud() -> void:
 	for control: Control in floating_windows.values():
 		control.size = control.get_meta("default_size")
 		_clamp_window(control)
+		if control.is_visible_in_tree(): _snap_window(control,true)
 
 
 func _settle_active(panel_name: String) -> void:
@@ -1055,6 +1077,7 @@ func _settle_active(panel_name: String) -> void:
 	var desired := _panel_size(panel_name)
 	window_frame.size = desired.min(get_viewport().get_visible_rect().size - Vector2(24, 40))
 	_clamp_window(window_frame)
+	_snap_window(window_frame,true)
 
 
 func _begin_drag(event: InputEvent, control: Control, id: String) -> void:
@@ -1071,13 +1094,20 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseMotion:
 		drag_target.global_position = drag_target.get_global_mouse_position() - drag_offset
-		_clamp_window(drag_target)
+		_snap_window(drag_target,false)
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+		_snap_window(drag_target,true)
 		window_positions[drag_id] = drag_target.position
 		drag_target = null
 		_save_layout()
 		get_viewport().set_input_as_handled()
+
+func _snap_window(control: Control, release: bool = true) -> void:
+	if not is_instance_valid(control) or control.is_queued_for_deletion() or not control.is_visible_in_tree(): return
+	var peers: Array=floating_windows.values()
+	peers.append(window_frame)
+	control.global_position=WindowSnap.for_control(control,get_viewport().get_visible_rect().size,peers,release)
 
 
 func _clamp_window(control: Control) -> void:
@@ -1087,10 +1117,13 @@ func _clamp_window(control: Control) -> void:
 
 func _clamp_windows() -> void:
 	for control: Control in floating_windows.values():
-		_clamp_window(control)
+		if is_instance_valid(control):
+			_clamp_window(control)
+			if control.is_visible_in_tree() and drag_target==null: _snap_window(control,true)
 	if is_instance_valid(window_frame):
 		window_frame.size = window_frame.size.min(get_viewport().get_visible_rect().size - Vector2(24, 40))
 		_clamp_window(window_frame)
+		if window_frame.is_visible_in_tree() and drag_target==null: _snap_window(window_frame,true)
 
 
 func _store_active_position() -> void:
@@ -1123,6 +1156,7 @@ func _reset_layout() -> void:
 	window_positions.clear()
 	for id: String in floating_windows:
 		floating_windows[id].position = default_positions[id]
+		if floating_windows[id].is_visible_in_tree(): _snap_window(floating_windows[id],true)
 	window_frame.position = (get_viewport().get_visible_rect().size - window_frame.size) * 0.5
 	_clamp_windows()
 	_save_layout()
@@ -1132,4 +1166,5 @@ func _reset_layout() -> void:
 func _panel_size(panel_name: String) -> Vector2:
 	if panel_name == "skills": return Vector2(1120, 720)
 	if panel_name == "inventory": return Vector2(620, 440)
+	if panel_name == "animations": return Vector2(1000,740)
 	return Vector2(820, 640)

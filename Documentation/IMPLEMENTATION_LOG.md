@@ -258,3 +258,13 @@ the mountains.
 annoying, the grass placement rejection loops are the first thing to optimise.
 The 640 px map texture is generated lazily on first open and cached, so the first
 `M` press can hitch. The waygate is still decorative.
+
+## 2026-10-28 - Integrate skill stash with forest world
+
+**Intent.** Apply the local skill, animation and editor work on top of the pulled forest world, prioritizing the skill implementation while retaining compatible world and HUD changes.
+
+**Changed.** Resolved enemy, HUD, main, player and test conflicts. The skill runtime and ten-slot loadout are retained, with a frameless hotbar; area damage retains zone scaling, landing uses the selected animation profile, and world bounds, chat focus and diagnostic events remain. Updated the world test and current rules for the skill prototype.
+
+**Verified.** After importing, progression, combat effects, skill panel, world, skill runtime, skill catalog and secondary damage tests passed; world was rerun separately to avoid concurrent LATEST.txt contention. A normal Direct3D 12 test-mode launch exited successfully without script errors, and its runtime log recorded boot and world construction. The import completed but reported missing textures in local source FBX files; the sandbox also could not write Godot user settings/logs. A normal launch outside the sandbox used Direct3D 12 successfully.
+
+**Risk / follow-up.** The new skill runtime reports out-of-range targets instead of automatically approaching them. The ten-slot HUD needs an in-game visual review at the intended resolutions. The original GitHub Desktop stash is retained; generated UID/import files and an Effekseer temporary file are not part of the conflict resolution.

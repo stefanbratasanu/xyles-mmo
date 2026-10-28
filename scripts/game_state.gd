@@ -13,8 +13,20 @@ const MODIFIER_CATALOG_PATH := "res://resources/modifiers/modifier_catalog.tres"
 const CRAFT_MULTIPLIERS := {"basic": 1.0, "rare": 1.5, "epic": 2.2, "legendary": 3.2}
 const SAVE_PATH := "user://xyles_frontier_save.json"
 const EquipmentSlots = preload("res://scripts/equipment_slots.gd")
-var equipment_schema_version: int = 1
+const WEAPON_DEFINITIONS := {
+	"sword": {"name":"Ashforged Sword","base_power":15,"icon":"sword","modifier_slot":"weapon"},
+	"greatsword": {"name":"Ashforged Greatsword","base_power":18,"icon":"sword","modifier_slot":"weapon"},
+	"spear": {"name":"Ashforged Spear","base_power":16,"icon":"spear","modifier_slot":"weapon"},
+	"staff": {"name":"Ashforged Staff","base_power":13,"icon":"sword","modifier_slot":"staff"},
+}
+var equipment_schema_version: int = 2
 
+var skill_catalog = preload("res://resources/skills/skill_catalog.tres")
+var skill_offers: Dictionary = {}
+var skill_seed: int = 0
+var loadout: Array = []
+var learned_skills: Array = []
+var compiled_skills: Dictionary = {}
 var modifier_catalog: ModifierCatalog = preload("res://resources/modifiers/modifier_catalog.tres")
 
 var hp: float = 120.0
@@ -40,6 +52,8 @@ var rng := RandomNumberGenerator.new()
 
 func _init() -> void:
 	rng.randomize()
+	skill_seed = rng.randi()
+	changed.connect(func(): compiled_skills.clear())
 	_define_skills()
 	_define_quests()
 	equipment = [
@@ -48,27 +62,18 @@ func _init() -> void:
 		_make_item("Ashen Focus", "rare", "offhand", 9, 76.0),
 	]
 	_add_equipment_examples()
+	_add_spear_example()
 	logs.append("You have reached the Ashen Reach. Speak with the blacksmith [E].")
 
 
 func _define_skills() -> void:
-	skills = {
-		"melee": _skill("Iron Cleave", "A close-range physical strike.",
-			["Ravager", "Duelist", "Reaver"],
-			["Heavy impacts and cleaving force.", "Precise strikes and efficiency.", "Sustain through relentless combat."]),
-		"cast": _skill("Ember Bolt", "A ranged arcane projectile.",
-			["Pyromancy", "Stormcalling", "Voidcraft"],
-			["Raw elemental damage.", "Rapid casts and mana flow.", "Concentrated arcane force."]),
-		"block": _skill("Iron Guard", "Brace against incoming damage.",
-			["Bastion", "Retaliation", "Resolve"],
-			["A stronger defensive stance.", "Turn pressure into power.", "Preserve mana while guarding."]),
-		"move": _skill("Wayfarer's Step", "Dash through danger.",
-			["Fleetfoot", "Phasewalk", "Onslaught"],
-			["Further evasive movement.", "Fluid repositioning.", "Carry momentum into the fight."]),
-		"support": _skill("Restoring Light", "Restore health with a burst of mana.",
-			["Lifebloom", "Wardkeeper", "Spiritbond"],
-			["More powerful restoration.", "Endurance for the journey.", "Renewal through spirit."]),
-	}
+	skills.clear()
+	for id: String in skill_catalog.data.skills:
+		var definition: Dictionary = skill_catalog.data.skills[id]
+		skills[id] = {"name": definition.name, "description": str(definition.type).replace("_", " ").capitalize(), "ranks": [0, 0, 0], "investments": 0, "history": [], "evolutions": []}
+	loadout = skill_catalog.data.default_loadout.duplicate()
+	learned_skills = loadout.duplicate()
+	compiled_skills.clear()
 
 
 func _skill(title: String, description: String, branches: Array, branch_descriptions: Array) -> Dictionary:
@@ -129,6 +134,7 @@ func register_kill(kind: String, monster_name: String) -> void:
 	entry["kills"] = int(entry["kills"]) + 1
 	if not bool(entry["discovered"]):
 		entry["discovered"] = true
+		discover_skill()
 		var award := mini(int(CATEGORY_POINTS[kind]), MAX_LIFETIME_SKILL_POINTS - earned_skill_points)
 		award = maxi(award, 0)
 		entry["points_awarded"] = award
@@ -196,118 +202,171 @@ func get_quest_text() -> String:
 	return "%s  %d / %d%s" % [stage["title"], task["count"], task["required"], direction]
 
 
-func can_evolve_skill(skill_id: String, branch: int) -> bool:
-	if not skills.has(skill_id) or branch < 0 or branch > 2 or skill_points <= 0:
-		return false
-	var skill: Dictionary = skills[skill_id]
-	if int(skill["investments"]) >= MAX_SKILL_EVOLUTIONS:
-		return false
-	var ranks: Array = skill["ranks"]
-	var lowest_other := 99
-	for index in range(3):
-		if index != branch:
-			lowest_other = mini(lowest_other, int(ranks[index]))
-	return int(ranks[branch]) + 1 <= lowest_other + 2
+func get_skill_offers(id: String, stage: int) -> Array:
+	if not skills.has(id) or stage < 0 or stage >= 10: return []
+	var key := "%s:%d" % [id, stage]
+	if not skill_offers.has(key):
+		var equipped: Array = skills[id].evolutions.duplicate(true)
+		if stage < equipped.size(): equipped.remove_at(stage)
+		skill_offers[key] = skill_catalog.offers(id, equipped, hash(str(skill_seed) + key), weapon_context())
+	return skill_offers[key]
 
+func weapon_context() -> String:
+	for item: Dictionary in equipment:
+		if item.slot == "weapon":
+			return item_weapon_type(item)
+	return "unarmed"
 
-func evolve_skill(skill_id: String, branch: int) -> bool:
-	if not can_evolve_skill(skill_id, branch):
-		_notify("Evolution unavailable · Earn bestiary points and spread investments across branches.")
-		return false
-	var skill: Dictionary = skills[skill_id]
-	skill["ranks"][branch] = int(skill["ranks"][branch]) + 1
-	skill["investments"] = int(skill["investments"]) + 1
-	skill["history"].append(branch)
-	skill_points -= 1
-	_notify("%s evolved · %s rank %d" % [skill["name"], skill["branches"][branch], skill["ranks"][branch]])
-	changed.emit()
+func item_weapon_type(item: Dictionary) -> String:
+	var explicit := str(item.get("weapon_type",""))
+	if WEAPON_DEFINITIONS.has(explicit): return explicit
+	var title := str(item.get("name","")).to_lower()
+	if "spear" in title or "polearm" in title or "pike" in title: return "spear"
+	if "greatblade" in title or "greatsword" in title: return "greatsword"
+	if "staff" in title: return "staff"
+	return "sword"
+
+func can_install(id: String, stage: int, candidate: Dictionary) -> bool:
+	if not skills.has(id) or stage < 0 or stage > skills[id].evolutions.size() or stage >= 10: return false
+	var entries: Array = skills[id].evolutions.duplicate(true)
+	if stage < entries.size(): entries[stage] = candidate
+	else:
+		if skill_points <= 0: return false
+		entries.append(candidate)
+	var families: Array = []
+	for i in range(entries.size()):
+		var entry: Dictionary = entries[i]
+		if entry.op != "legacy" and families.has(entry.family): return false
+		families.append(entry.family)
+		var others := entries.duplicate()
+		others.remove_at(i)
+		if not skill_catalog.compatible(id, entry, others): return false
+	# Resolve providers from the base skill outward; mutually dependent nodes cannot bootstrap each other.
+	var resolved: Array=[]
+	var pending: Array=entries.duplicate()
+	while not pending.is_empty():
+		var progress := false
+		for i in range(pending.size()-1,-1,-1):
+			if skill_catalog.compatible(id,pending[i],resolved):
+				resolved.append(pending.pop_at(i)); progress=true
+		if not progress: return false
 	return true
 
-
-func respec_skill(skill_id: String, branch: int) -> bool:
-	if not skills.has(skill_id) or branch < 0 or branch > 2:
+func install_evolution(id: String, stage: int, choice: int) -> bool:
+	var options := get_skill_offers(id, stage)
+	if choice < 0 or choice >= options.size(): return false
+	var candidate: Dictionary = options[choice]
+	if not can_install(id, stage, candidate):
+		_notify("Incompatible choice: check points, duplicate families and dependent effects.")
 		return false
-	var skill: Dictionary = skills[skill_id]
-	var ranks: Array = skill["ranks"]
-	if int(ranks[branch]) <= 0:
-		_notify("This branch has no evolution to reclaim.")
-		return false
-	# A single node can be reclaimed without silently invalidating another path.
-	var candidate: Array = ranks.duplicate()
-	candidate[branch] = int(candidate[branch]) - 1
-	if int(candidate.max()) > int(candidate.min()) + 2:
-		_notify("Reclaim a higher branch first to preserve the cross-branch balance.")
-		return false
-	skill["ranks"] = candidate
-	var last: int = skill["history"].rfind(branch)
-	if last >= 0:
-		skill["history"].remove_at(last)
-	skill["investments"] = int(skill["investments"]) - 1
-	skill_points += 1
-	_notify("Evolution reclaimed · 1 skill point refunded.")
+	if stage == skills[id].evolutions.size():
+		skills[id].evolutions.append(candidate.duplicate(true))
+		skill_points -= 1
+	else: skills[id].evolutions[stage] = candidate.duplicate(true)
+	skills[id].history = skills[id].evolutions.duplicate(true)
+	skills[id].investments = skills[id].evolutions.size()
 	changed.emit()
+	_notify("%s: %s installed." % [skills[id].name, candidate.name])
 	return true
-
 
 func reset_evolutions() -> int:
 	var refunded := 0
 	for skill: Dictionary in skills.values():
-		refunded += int(skill["investments"])
-		skill["ranks"] = [0, 0, 0]
-		skill["history"] = []
-		skill["investments"] = 0
-	skill_points += refunded
-	_notify("Evolutions reset · %d skill points refunded." % refunded)
+		refunded += skill.evolutions.size()
+		skill.evolutions = []
+		skill.history = []
+		skill.ranks = [0, 0, 0]
+		skill.investments = 0
+	skill_points = mini(earned_skill_points, skill_points + refunded)
 	changed.emit()
+	_notify("Evolutions reset: %d points refunded. Discovered offers retained." % refunded)
 	return refunded
 
+func compiled_skill(id: String) -> Dictionary:
+	if not compiled_skills.has(id): compiled_skills[id] = skill_catalog.compile(id, skills[id].evolutions)
+	return compiled_skills[id]
 
-func get_skill_bonus(skill_id: String) -> float:
-	if not skills.has(skill_id):
-		return 1.0
-	return float(get_skill_effects(skill_id)["power"])
+func get_skill_effects(id: String) -> Dictionary:
+	var compiled := compiled_skill(id)
+	return {"power": compiled.power_scale, "cooldown": compiled.cooldown_scale, "mana_cost": compiled.cost_scale, "range": 1.0}
 
-
-func get_skill_effects(skill_id: String) -> Dictionary:
-	# Branch 0 specializes potency, branch 1 specializes speed, and branch 2
-	# specializes resource economy. Every rank has a modest shared benefit.
-	if not skills.has(skill_id):
-		return {"power": 1.0, "cooldown": 1.0, "mana_cost": 1.0, "range": 1.0}
-	var ranks: Array = skills[skill_id]["ranks"]
-	var total := int(skills[skill_id]["investments"])
-	return {
-		"power": 1.0 + total * 0.04 + int(ranks[0]) * 0.12,
-		"cooldown": maxf(0.55, 1.0 - int(ranks[1]) * 0.07),
-		"mana_cost": maxf(0.5, 1.0 - int(ranks[2]) * 0.09),
-		"range": 1.0 + int(ranks[1]) * 0.06,
-	}
-
+func get_skill_bonus(id: String) -> float:
+	return float(get_skill_effects(id).power)
 
 func get_unlocked_active_slots() -> int:
-	return 5
+	return 10
 
-
-func replace_evolution(skill_id: String, stage: int, branch: int) -> bool:
-	if not skills.has(skill_id) or branch < 0 or branch > 2:
-		return false
-	var skill: Dictionary = skills[skill_id]
-	var history: Array = skill["history"]
-	if stage < 0 or stage >= history.size():
-		return false
-	var old_branch: int = int(history[stage])
-	if old_branch == branch:
-		return false
-	var candidate: Array = skill["ranks"].duplicate()
-	candidate[old_branch] -= 1
-	candidate[branch] += 1
-	if int(candidate.max()) > int(candidate.min()) + 2:
-		_notify("That change would break the cross-branch balance.")
-		return false
-	history[stage] = branch
-	skill["ranks"] = candidate
-	_notify("Stage %d changed to %s." % [stage + 1, skill["branches"][branch]])
+func equip_skill(id: String, slot: int) -> bool:
+	if not learned_skills.has(id) or slot < 0 or slot >= 10: return false
+	var other := loadout.find(id)
+	if other >= 0: loadout[other] = loadout[slot]
+	loadout[slot] = id
 	changed.emit()
 	return true
+
+func discover_skill() -> String:
+	var weights: Dictionary = {}
+	for id: String in skill_catalog.data.skills:
+		if not learned_skills.has(id) and skill_catalog.data.skills[id].get("enabled",true): weights[id] = skill_catalog.data.skills[id].acquisition_weight
+	var id: String = skill_catalog.weighted(weights, rng)
+	if not id.is_empty():
+		learned_skills.append(id)
+		_notify("Learned skill: " + str(skills[id].name))
+	return id
+
+func reload_skill_catalog() -> bool:
+	var candidate = ResourceLoader.load("res://resources/skills/skill_catalog.tres", "", ResourceLoader.CACHE_MODE_IGNORE_DEEP)
+	if candidate == null or not candidate.validate().is_empty(): return false
+	# Existing skill IDs are stable save identities.
+	for id: String in skills:
+		if not candidate.data.skills.has(id): return false
+	skill_catalog = candidate
+	for id: String in candidate.data.skills:
+		var definition: Dictionary=candidate.data.skills[id]
+		if not skills.has(id): skills[id]={"name":definition.name,"description":str(definition.type).replace("_"," "),"ranks":[0,0,0],"investments":0,"history":[],"evolutions":[]}
+		else: skills[id].name=definition.name
+	changed.emit()
+	return true
+
+func _restore_evolutions(parsed: Dictionary) -> void:
+	skill_offers = {}
+	if parsed.get("skill_offers") is Dictionary:
+		for key: String in parsed.skill_offers:
+			var options: Variant=parsed.skill_offers[key]
+			if not options is Array or options.size()>5: continue
+			var valid := true
+			for m: Variant in options:
+				if not skill_catalog.valid_roll(m): valid=false; break
+			if valid: skill_offers[key]=options
+	skill_seed = int(parsed.get("skill_seed", skill_seed))
+	var saved: Dictionary = parsed.get("evolutions", {}) if parsed.get("evolutions", {}) is Dictionary else {}
+	var spent := 0
+	for id: String in skills:
+		var entries: Array = []
+		if saved.has(id) and saved[id] is Array:
+			for m: Variant in saved[id]:
+				if skill_catalog.valid_roll(m) and entries.size() < 10 and spent < earned_skill_points:
+					entries.append(m)
+					spent += 1
+		else:
+			for branch: Variant in skills[id].history:
+				if not (branch is int or branch is float) or spent >= earned_skill_points: continue
+				entries.append({"id": "legacy", "family": "legacy", "name": "Legacy evolution", "op": "legacy", "event": "PASSIVE", "values": {"power": .16 if int(branch) == 0 else .04, "cost": .09 if int(branch) == 2 else 0, "cooldown": .07 if int(branch) == 1 else 0, "range": .06 if int(branch) == 1 else 0}})
+				spent += 1
+		skills[id].evolutions = entries
+		skills[id].history = entries.duplicate(true)
+		skills[id].investments = entries.size()
+	skill_points = earned_skill_points - spent
+	if parsed.get("learned_skills") is Array:
+		for id: Variant in parsed.learned_skills:
+			if skills.has(str(id)) and not learned_skills.has(str(id)): learned_skills.append(str(id))
+	if parsed.get("loadout") is Array and parsed.loadout.size() == 10:
+		var seen: Array = []
+		for id: Variant in parsed.loadout:
+			if not learned_skills.has(str(id)) or seen.has(str(id)): break
+			seen.append(str(id))
+		if seen.size() == 10: loadout = seen
+	compiled_skills.clear()
 
 
 func get_craft_cost(tier: String = "basic") -> Dictionary:
@@ -318,6 +377,16 @@ func get_craft_cost(tier: String = "basic") -> Dictionary:
 
 
 func craft_sword(tier: String = "basic") -> bool:
+	return craft_weapon("sword",tier)
+
+func craft_spear(tier: String = "basic") -> bool:
+	return craft_weapon("spear",tier)
+
+func craft_weapon(kind: String, tier: String = "basic") -> bool:
+	if not WEAPON_DEFINITIONS.has(kind): return false
+	if inventory.size() >= EquipmentSlots.CAPACITY:
+		_notify("Your inventory is full.")
+		return false
 	var cost := get_craft_cost(tier)
 	if cost.is_empty():
 		return false
@@ -327,21 +396,29 @@ func craft_sword(tier: String = "basic") -> bool:
 	wood -= int(cost["wood"])
 	iron -= int(cost["iron"])
 	var tier_index := ["basic", "rare", "epic", "legendary"].find(tier)
-	var item := _make_item("Ashforged Sword", tier, "weapon", 15 + tier_index * 6, 100.0)
+	var definition: Dictionary=WEAPON_DEFINITIONS[kind]
+	var item := _make_item(definition.name, tier, "weapon", int(definition.base_power) + tier_index * 6, 100.0,kind)
 	inventory.append(item)
-	_notify("Crafted · %s Ashforged Sword with %d modifiers. Equip it from your inventory." % [tier.capitalize(), modifier_catalog.get_modifier_count(tier)])
+	_notify("Crafted · %s %s with %d modifiers. Equip it from your inventory." % [tier.capitalize(), definition.name,modifier_catalog.get_modifier_count(tier)])
 	changed.emit()
 	return true
 
 
-func _make_item(title: String, tier: String, slot: String, power: int, durability: float) -> Dictionary:
+func _make_item(title: String, tier: String, slot: String, power: int, durability: float, weapon_type: String = "") -> Dictionary:
 	var modifier_slot := slot
 	slot = EquipmentSlots.canonical(slot)
+	if slot=="weapon":
+		if weapon_type.is_empty(): weapon_type=item_weapon_type({"name":title})
+		modifier_slot=str(WEAPON_DEFINITIONS[weapon_type].modifier_slot)
 	var modifiers: Array[String] = modifier_catalog.roll_modifiers(tier, "focus" if slot == "offhand" else modifier_slot, rng)
-	return {"id": "%s_%d_%d" % [slot, Time.get_ticks_usec(), rng.randi()],
+	var result := {"id": "%s_%d_%d" % [slot, Time.get_ticks_usec(), rng.randi()],
 		"name": title, "tier": tier, "slot": slot, "power": power,
 		"durability": durability, "max_durability": 100.0,
 		"modifiers": modifiers, "exposed": durability < 50.0}
+	if slot=="weapon":
+		result.weapon_type=weapon_type
+		result.icon=WEAPON_DEFINITIONS[weapon_type].icon
+	return result
 
 
 func get_modifier_display_text(modifier_id_or_name: String) -> String:
@@ -407,6 +484,17 @@ func _add_equipment_examples() -> void:
 	if not has_buckler:
 		inventory.append(_make_item("Emberfall Buckler", "basic", "offhand", 2, 100))
 	equipment_schema_version = 1
+
+func _add_spear_example() -> void:
+	# One-time, versioned migration: lost/dropped spears are not regenerated on later loads.
+	var owns_spear := false
+	for item: Dictionary in equipment+inventory:
+		if item.get("slot","")=="weapon" and item_weapon_type(item)=="spear":
+			owns_spear=true
+			break
+	if not owns_spear:
+		inventory.append(_make_item("Emberfall Infantry Spear","basic","weapon",14,100.0,"spear"))
+	equipment_schema_version=2
 
 
 func get_equipment_power() -> float:
@@ -525,8 +613,9 @@ func save_game(path: String = SAVE_PATH) -> bool:
 		"mana": mana, "max_mana": max_mana, "skill_points": skill_points,
 		"earned_skill_points": earned_skill_points, "skill_ranks": ranks, "skill_histories": histories,
 		"bestiary": bestiary, "equipment": equipment, "inventory": inventory,
+		"evolutions": _evolution_save(), "skill_offers": skill_offers, "skill_seed": skill_seed, "loadout": loadout, "learned_skills": learned_skills,
 		"equipment_schema_version": equipment_schema_version,
-		"quests": quests, "current_region": current_region}))
+		"quests": quests, "current_region": current_region}, "", true, true))
 	return true
 
 
@@ -642,6 +731,9 @@ func load_game(path: String = SAVE_PATH) -> bool:
 	equipment_schema_version = int(parsed.get("equipment_schema_version", 0))
 	if equipment_schema_version < 1:
 		_add_equipment_examples()
+	if equipment_schema_version < 2:
+		_add_spear_example()
+	_restore_evolutions(parsed)
 	_notify("Journey restored · Welcome back to the Ashen Reach.")
 	changed.emit()
 	return true
@@ -663,8 +755,18 @@ func _validated_saved_item(value: Variant) -> Dictionary:
 			var definition := modifier_catalog.get_modifier(modifier)
 			modifiers.append(String(definition.id) if definition != null else modifier)
 	var durability := clampf(float(value.get("durability", 100.0)), 0.0, 100.0)
-	return {"id": str(value.get("id", "%s_%d" % [slot, rng.randi()])),
+	var result := {"id": str(value.get("id", "%s_%d" % [slot, rng.randi()])),
 		"name": str(value.get("name", "Recovered equipment")), "tier": tier, "slot": slot,
 		"power": clampi(int(value.get("power", 1)), 1, 100),
 		"durability": durability, "max_durability": 100.0,
 		"modifiers": modifiers, "exposed": durability < 50.0}
+	if slot=="weapon":
+		result.weapon_type=item_weapon_type(value)
+		result.icon=WEAPON_DEFINITIONS[result.weapon_type].icon
+	return result
+
+
+func _evolution_save() -> Dictionary:
+	var result: Dictionary = {}
+	for id: String in skills: result[id] = skills[id].evolutions
+	return result

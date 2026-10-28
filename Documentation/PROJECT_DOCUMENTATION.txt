@@ -27,6 +27,7 @@ Mages / Ranged Spells: AoE and single-target elemental/arcane damage.
 Support / Priests: Healers, purifiers, and defensive mitigation.
 Shamans (Buffers): Dedicated stat-enhancers and party enablers.
 4. Skill System & Skill Tree Evolution
+Current local prototype: ten equipped slots and up to ten stages of saved modifier offers per skill. The earlier five-slot and three-branch design below remains a design reference; see GAME_RULES.md and Documentation/SKILL_SYSTEM_IMPLEMENTED.md for implemented behavior.
 Skill Point Cap & Starting Loadout
 Hard Cap: Maximum of 50 Skill Points total across the character’s life.
 Starter Abilities: Every character begins with 5 basic skill slots:

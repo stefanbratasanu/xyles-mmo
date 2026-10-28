@@ -209,7 +209,7 @@ func _test_map() -> void:
 	for zone: Dictionary in world.zones:
 		assert(world.zone_boundary(zone, 32).size() == 32)
 	assert(not hud.hotbar.is_empty(), "the bare skill bar must still exist")
-	assert(hud.hotbar.size() == 5)
+	assert(hud.hotbar.size() == 10)
 	# Shift-click style guard: the hotbar is deliberately not a floating window.
 	assert(not hud.floating_windows.has("shortcuts"), "the skill bar must not have a panel frame")
 

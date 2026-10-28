@@ -153,7 +153,7 @@ func _physics_process(delta: float) -> void:
 	if dead or not is_instance_valid(game) or not is_instance_valid(game.player):
 		return
 	age += delta
-	attack_timer -= delta
+	attack_timer -= delta * (1.0 - game.skill_runtime.enemy_stat(self, "attack_speed")) if game.skill_runtime != null else delta
 	selected_ring.visible = game.target == self
 	_update_health_bar(delta)
 	name_label.visible = game.target == self or kind != "normal" or aggro
@@ -189,6 +189,7 @@ func _physics_process(delta: float) -> void:
 			speed_value = 0.7
 		if hp < max_hp:
 			hp = minf(max_hp, hp + delta * 4.0)
+	if game.skill_runtime != null: speed_value *= 1.0 - game.skill_runtime.enemy_stat(self, "movement_speed")
 	velocity.x = direction.x * speed_value
 	velocity.z = direction.z * speed_value
 	velocity.y -= delta * 20.0
@@ -213,7 +214,7 @@ func _begin_slam() -> void:
 		if not dead:
 			game.burst(global_position + Vector3.UP * 0.1, Color("ba7dc4"), 5.5)
 			if game.player.global_position.distance_to(global_position) < 5.8:
-				game.damage_player(36.0 * damage_scale, self)
+				game.damage_player(36.0 * damage_scale, self, "area")
 		winding_up = false
 		if is_instance_valid(telegraph):
 			telegraph.queue_free()

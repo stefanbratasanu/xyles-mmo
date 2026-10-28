@@ -43,17 +43,11 @@ func _test_evolutions() -> void:
 	var state = GameState.new()
 	state.earned_skill_points = 20
 	state.skill_points = 20
-	_check(state.evolve_skill("melee", 0), "First rank must be legal")
-	_check(state.evolve_skill("melee", 0), "Second rank must be legal")
-	_check(not state.evolve_skill("melee", 0), "Third straight investment must require spreading")
-	_check(state.evolve_skill("melee", 1) and state.evolve_skill("melee", 2), "Other branches must be available")
-	_check(state.evolve_skill("melee", 0), "Spreading should unlock the next rank")
-	_check(not state.respec_skill("melee", 1), "Respec must not invalidate branch balance")
-	_check(state.respec_skill("melee", 0), "A single top node should be reclaimable")
-	_check(state.earned_skill_points == 20 and state.skill_points == 16, "Respec refunds available points without changing lifetime earnings")
-	for index in range(20):
-		state.evolve_skill("melee", index % 3)
-	_check(state.skills["melee"]["investments"] == 10, "Skill tree must cap at ten evolutions")
+	for stage in range(10):
+		_check(state.install_evolution("melee",stage,0),"Stage %d must install" % stage)
+	_check(not state.install_evolution("melee",10,0),"Ten-stage cap")
+	_check(state.skill_points==10,"Point conservation")
+	_check(state.reset_evolutions()==10 and state.skill_points==20,"Reset refunds all points")
 	state.free()
 
 
@@ -108,12 +102,12 @@ func _test_save_round_trip() -> void:
 	var state = GameState.new()
 	state.register_kill("normal", "Briarwolf")
 	state.start_quest()
-	state.evolve_skill("cast", 1)
+	state.install_evolution("cast", 0, 1)
 	_check(state.save_game("res://.godot/xyles_test_save.json"), "Save should write successfully")
 	var restored = GameState.new()
 	_check(restored.load_game("res://.godot/xyles_test_save.json"), "Save should reload successfully")
 	_check(restored.earned_skill_points == 2 and restored.skill_points == 1, "Save must preserve earned and unspent points")
-	_check(restored.skills["cast"]["ranks"][1] == 1, "Save must preserve individual evolution choices")
+	_check(restored.skills["cast"]["evolutions"] == state.skills["cast"]["evolutions"], "Save must preserve individual evolution choices")
 	_check(restored.quests[0]["stage"] == 1, "Save must preserve quest progress")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("res://.godot/xyles_test_save.json"))
 	state.free()
@@ -148,7 +142,7 @@ func _test_save_validation() -> void:
 	file = FileAccess.open(path, FileAccess.WRITE)
 	file.store_string(JSON.stringify({"version": 1, "earned_skill_points": 8,
 		"skill_ranks": {"melee": "invalid", "cast": [3, 3, 3]},
-		"equipment": [false, {"tier": "invalid", "slot": "weapon"}],
+		"equipment_schema_version": 1, "equipment": [false, {"tier": "invalid", "slot": "weapon"}],
 		"bestiary": {"bad": false},
 		"quests": [{"id": "a_debt_of_iron", "active": false, "stage": 999}]}))
 	file.close()

@@ -27,19 +27,18 @@ func _run() -> void:
 	sample_frames = true
 	for i in range(12):
 		game.state.mana = 100.0
-		game.cooldowns[1] = 0.0
-		game.cooldowns[3] = 0.0
+		game.skill_runtime.skill_cooldowns.clear()
 		game.use_skill(3)
 		game.use_skill(1)
 		await create_timer(0.4).timeout
 	sample_frames = false
-	assert(enemy.hp < 9600.0)
+	assert(game.skill_runtime.counts.get("ON_PROJECTILE_LANDED",0)==12)
 	await create_timer(0.7).timeout
 	for ring in game.combat_effects.rings:
 		assert(not ring.get_meta("busy"))
 	for orb in game.combat_effects.orbs:
 		assert(not orb.get_meta("busy"))
-	assert(game.combat_effects.orbs.size() == 6)
+	assert(game.combat_effects.orbs.size() == 32)
 	assert(game.audio.voices.size() == 16)
 	frame_times.sort()
 	if not frame_times.is_empty():

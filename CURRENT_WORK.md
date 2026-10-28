@@ -91,3 +91,9 @@ starting camp all the way to the foothills.
 - The world rebuild costs about 2.5 s at startup (terrain, ~2,000 trees and
   ~31,000 grass tufts); it is logged as
   `[WORLD] world_ready {"build_ms": ...}`.
+
+## 2026-10-28 - Skill stash integration
+
+- Applied the preserved GitHub Desktop stash on the pulled world branch, prioritizing the ten-slot skill catalog, runtime and enchantments. Kept world-scaled enemy damage, the frameless hotbar, world bounds, chat focus and logging.
+- The skill runtime currently reports out-of-range targeted skills instead of the former automatic approach. The prior three-branch skill and five-slot rules are superseded in the prototype; the longer-term design remains documented separately.
+- The original stash remains available. Progression, combat, skill panel, skill runtime, catalog, secondary damage and world tests passed; a Direct3D 12 test-mode launch completed without script errors. The full import reported missing textures in local source FBX files. Visually review the ten-slot HUD in game.

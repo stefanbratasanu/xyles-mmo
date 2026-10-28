@@ -39,7 +39,7 @@ func prepare(at: Vector3) -> void:
 	orb_material.emission_enabled = true
 	orb_material.emission = Color("f99a4c")
 	orb_material.emission_energy_multiplier = 4.0
-	for i in range(6):
+	for i in range(32):
 		var orb := _new_orb()
 		orb.position = at + Vector3.UP
 		orb.scale = Vector3.ONE * 0.001

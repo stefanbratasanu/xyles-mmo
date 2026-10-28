@@ -10,4 +10,8 @@ The library also contains every non-root-motion `Humanoid@...fbx` clip from the 
 
 The two-handed set contains dodge steps but no forward roll. The movement skill uses a procedural body rotation over a crouched pose, with its movement and rotation timed together. Casting and healing use the wizard's shorter spell gestures on the upper body.
 
+The **Animations [F6]** window selects and saves presentation independently for each weapon style and skill delivery type. It includes a character/weapon preview, clip search, playback speed, upper-body layering, save and restore-default controls. Profiles are stored in `saves/animation_profiles.json`; changing a draft or playing a preview does not alter the live mapping until Save.
+
+`action_animations.tres` adds 73 native clips from the supplied FBX collection: additional sword attacks/blocks, wizard casting and staff locomotion, and fencing thrusts. Rebuild that library with `--headless --path . --script res://scripts/editor/build_action_animation_library.gd`. It supplements the original library. Spear defaults use the fencing thrust and staff movement because the supplied collection has no dedicated spear animation set. The editable native spear model has its grip at the local origin.
+
 To rebuild these resources, run Godot with `--headless --path . --script res://scripts/editor/build_native_protof.gd`. This imports the source FBX data and writes Godot scenes, textures and an animation library. Review the character's materials and weapon alignment in Godot after changing source assets.

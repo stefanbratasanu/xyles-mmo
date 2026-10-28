@@ -4,6 +4,12 @@ const CHARACTER_SCENE = preload("res://assets/animations/player_runtime/characte
 const PROTOF_ANIMATIONS = preload("res://assets/animations/player_runtime/protof_animations.tres")
 const SWORD_MODEL = preload("res://assets/animations/player_runtime/sword.tscn")
 const GREATSWORD_MODEL = preload("res://assets/animations/player_runtime/greatsword.tscn")
+const STAFF_MODEL = preload("res://assets/animations/player_runtime/staff.tscn")
+const SPEAR_MODEL = preload("res://assets/animations/player_runtime/spear.tscn")
+const ACTION_ANIMATIONS = preload("res://assets/animations/player_runtime/action_animations.tres")
+const AnimationProfiles = preload("res://scripts/animation_profiles.gd")
+var animation_profiles = AnimationProfiles.new()
+var channel_animation_active := false
 const AUTHORED_SPEEDS_PATH := "res://assets/animations/player_runtime/authored_speeds.json"
 var game: Node
 var visual: Node3D
@@ -20,6 +26,7 @@ var destination := Vector3.ZERO
 var moving_to_click: bool = false
 var move_direction := Vector3.FORWARD
 var dash_time: float = 0.0
+var dash_speed := 11.2
 var invulnerable_time: float = 0.0
 var jump_key_held := false
 var was_airborne := false
@@ -69,7 +76,9 @@ func _ready() -> void:
 	animation_player = character.get_node_or_null("AnimationPlayer") as AnimationPlayer
 	if animation_player != null:
 		animation_player.add_animation_library(&"protof", PROTOF_ANIMATIONS)
+		animation_player.add_animation_library(&"actions", ACTION_ANIMATIONS)
 		animation_player.add_animation_library(&"sit", SIT_ANIMATIONS)
+		animation_profiles.load_profiles(animation_player.get_animation_list())
 		animation_player.animation_finished.connect(_on_animation_finished)
 		_play_locomotion("protof/unarmed_idle")
 		upper_body_player = AnimationPlayer.new()
@@ -131,12 +140,13 @@ func _physics_process(delta: float) -> void:
 	var walking: bool = controls_enabled and Input.is_key_pressed(KEY_ALT)
 	var crouching: bool = controls_enabled and Input.is_key_pressed(KEY_CTRL)
 	var sprinting: bool = controls_enabled and Input.is_key_pressed(KEY_SHIFT) and input_dir.y < 0.0 and not walking and not crouching
-	var jump_pressed: bool = controls_enabled and Input.is_physical_key_pressed(KEY_SPACE)
+	var channeling: bool = game.skill_runtime != null and not game.skill_runtime.channel_id.is_empty()
+	var jump_pressed: bool = controls_enabled and not channeling and Input.is_physical_key_pressed(KEY_SPACE)
 	var on_ground := is_on_floor()
 	if jump_pressed and not jump_key_held and on_ground and not crouching and dash_time <= 0.0:
 		velocity.y = JUMP_SPEED
 		jump_started = true
-		_play_action("protof/greatsword_JumpToApex2HandMelee" if weapon_style == "greatsword" else "protof/jump")
+		play_profile_action("jump")
 	jump_key_held = jump_pressed
 	var direction := Vector3.ZERO
 	if input_dir.length() > 0.0:
@@ -171,7 +181,9 @@ func _physics_process(delta: float) -> void:
 		if clip_speed > 0.05:
 			speed_value = minf(speed_value, clip_speed * MAX_WALK_ANIMATION_RATE)
 	if dash_time > 0:
-		speed_value = 11.2
+		speed_value = dash_speed
+	if channeling: speed_value *= float(game.state.skill_catalog.data.rules.channel_speed)
+	speed_value *= 1.0 + game.skill_runtime.own_stat("movement_speed") if game.skill_runtime != null else 1.0
 	velocity.x = direction.x * speed_value
 	velocity.z = direction.z * speed_value
 	velocity.y -= 20.0 * delta
@@ -185,7 +197,7 @@ func _physics_process(delta: float) -> void:
 		was_airborne = true
 	elif is_on_floor() and was_airborne:
 		was_airborne = false
-		_play_action("protof/greatsword_LandingLight2HandMelee" if weapon_style == "greatsword" else "protof/land")
+		play_profile_action("land")
 	var world_limit: float = float(game.world.BOUNDS) - 1.0
 	position.x = clampf(position.x, -world_limit, world_limit)
 	position.z = clampf(position.z, -world_limit, world_limit)
@@ -196,14 +208,15 @@ func _physics_process(delta: float) -> void:
 	if direction.length_squared() > 0.01:
 		move_direction = direction
 		var facing_yaw: float = game.camera_yaw if input_dir.length_squared() > 0.0 and dash_time <= 0.0 else atan2(-direction.x, -direction.z)
-		visual.rotation.y = lerp_angle(visual.rotation.y, facing_yaw, minf(delta * 14.0, 1.0))
+		if not channeling: visual.rotation.y = lerp_angle(visual.rotation.y, facing_yaw, minf(delta * 14.0, 1.0))
 		if animation_player != null and animation_player.current_animation in ["protof/land", "protof/greatsword_LandingLight2HandMelee"]:
 			action_active = false
 	if not action_active and not is_dying:
 		var speed := Vector2(velocity.x, velocity.z).length()
 		var moving := speed > 0.15
 		if was_airborne:
-			_play_locomotion("protof/greatsword_Falling2HandMelee" if weapon_style == "greatsword" else "protof/fall")
+			var falling: Dictionary=animation_entry("fall")
+			_play_locomotion(str(falling.clip),float(falling.speed))
 		else:
 			var animation_input := input_dir if input_dir.length_squared() > 0.0 else (Vector2.UP if moving else Vector2.ZERO)
 			var clip := _movement_animation(animation_input, walking, crouching, moving, sprinting)
@@ -211,6 +224,8 @@ func _physics_process(delta: float) -> void:
 			var fallback_speed := BASE_MOVEMENT_SPEED * reference_factor
 			var authored_speed := float(authored_animation_speeds.get(clip.trim_prefix("protof/"), fallback_speed))
 			var rate := clampf(speed / maxf(authored_speed, 0.05), 0.25, 6.0) if moving else 1.0
+			var action_name := _locomotion_action(animation_input,walking,moving,sprinting)
+			if action_name in animation_profiles.actions(): rate *= float(animation_entry(action_name).speed)
 			_play_locomotion(clip, rate)
 
 func _process(delta: float) -> void:
@@ -223,7 +238,7 @@ func _movement_animation(input_dir: Vector2, walking: bool, crouching: bool, mov
 	if not moving:
 		if crouching:
 			return "protof/greatsword_IdleCrouchBreathe2HandMelee" if weapon_style == "greatsword" else "protof/crouch_idle"
-		return "protof/" + weapon_style + "_idle"
+		return str(animation_entry("idle").clip)
 	var horizontal := signi(int(input_dir.x))
 	var vertical := signi(int(input_dir.y))
 	var direction := "forward" if vertical < 0 else ("back" if vertical > 0 else "")
@@ -238,19 +253,68 @@ func _movement_animation(input_dir: Vector2, walking: bool, crouching: bool, mov
 			return "protof/greatsword_Crouch" + str(crouch_names[direction]) + "2HandMelee"
 		return "protof/crouch_" + direction
 	if sprinting and vertical < 0:
-		return "protof/" + weapon_style + "_sprint"
+		return str(animation_entry("sprint").clip)
 	var gait := "walk" if walking or vertical > 0 else "run"
 	if gait == "run" and direction == "forward":
-		return "protof/" + weapon_style + "_run"
-	return "protof/%s_%s_%s" % [weapon_style, gait, direction]
+		return str(animation_entry("run").clip)
+	var key := gait+"_"+direction
+	if key in animation_profiles.actions(): return str(animation_entry(key).clip)
+	var family := "actions/staff" if weapon_style in ["staff","spear"] else "protof/"+weapon_style
+	return "%s_%s_%s" % [family,gait,direction]
+
+func _locomotion_action(input_dir: Vector2,walking: bool,moving: bool,sprinting: bool) -> String:
+	if not moving: return "idle"
+	if sprinting and input_dir.y<0: return "sprint"
+	if not walking and input_dir.y<=0: return "run"
+	if input_dir.y>0: return "walk_back"
+	if input_dir.y<0: return "walk_forward"
+	return "walk_left" if input_dir.x<0 else "walk_right"
+
+func animation_entry(action: String, style: String = "") -> Dictionary:
+	return animation_profiles.resolve(weapon_style if style.is_empty() else style,action,animation_player.get_animation_list() if animation_player!=null else PackedStringArray())
+
+func available_animations() -> PackedStringArray:
+	return animation_player.get_animation_list() if animation_player!=null else PackedStringArray()
+
+func play_profile_action(action: String) -> bool:
+	if animation_player==null: return false
+	var entry:=animation_entry(action)
+	if entry.clip=="procedural_roll": return false
+	channel_animation_active=action.begins_with("channel")
+	if entry.upper_body: return _play_upper_body_action(str(entry.clip),float(entry.speed),channel_animation_active)
+	# An idle/loop clip selected as an attack still finishes cleanly.
+	var name:=str(entry.clip)
+	if action not in animation_profiles.MOVEMENT or action in ["jump","land","death"]:
+		var library_name: String="selected_loop" if channel_animation_active else "selected_once"
+		if not animation_player.has_animation_library(library_name): animation_player.add_animation_library(library_name,AnimationLibrary.new())
+		var library:=animation_player.get_animation_library(library_name)
+		var key:=name.replace("/","_")
+		if not library.has_animation(key):
+			var one_shot: Animation=animation_player.get_animation(name).duplicate(true)
+			one_shot.loop_mode=Animation.LOOP_LINEAR if channel_animation_active else Animation.LOOP_NONE
+			library.add_animation(key,one_shot)
+		name=library_name+"/"+key
+	_play_action(name)
+	animation_player.speed_scale=float(entry.speed)
+	return true
+
+func play_skill_animation(delivery_type: String, variant: String = "") -> bool:
+	return play_profile_action(variant if not variant.is_empty() else delivery_type)
+
+func stop_skill_animation(_delivery_type: String = "") -> void:
+	if not channel_animation_active: return
+	channel_animation_active=false
+	if upper_body_player!=null: upper_body_player.stop()
+	if animation_player!=null and animation_player.current_animation.begins_with("selected_loop/"):
+		animation_player.stop(); action_active=false
 
 func face_point(point: Vector3) -> void:
 	var offset := point - global_position
 	if Vector2(offset.x, offset.z).length() > 0.01:
 		visual.rotation.y = atan2(-offset.x, -offset.z)
 
-func attack_animation() -> void:
-	_play_upper_body_action("protof/greatsword_attack" if weapon_style == "greatsword" else ("protof/sword_attack" if weapon_style == "sword" else "protof/unarmed_attack"))
+func attack_animation(attack_type: String = "melee_cone") -> void:
+	play_profile_action(attack_type)
 
 ## Play any imported two-handed clip using the part of its FBX filename after
 ## "Humanoid@". Looping full-body clips remain active until explicitly stopped.
@@ -270,21 +334,23 @@ func stop_greatsword_animation() -> void:
 		animation_player.stop()
 	action_active = false
 
-func cast_animation() -> void:
-	_play_upper_body_action("protof/wizard_cast", 2.0)
+func cast_animation(attack_type: String = "cast_projectile") -> void:
+	play_profile_action(attack_type)
 
-func block_animation() -> void:
-	_play_action("protof/greatsword_block" if weapon_style == "greatsword" else ("protof/sword_block" if weapon_style == "sword" else "protof/unarmed_block"))
+func block_animation(attack_type: String = "block") -> void:
+	play_profile_action(attack_type)
 
-func support_animation() -> void:
-	_play_upper_body_action("protof/wizard_support", 2.8)
+func support_animation(attack_type: String = "cast_effect") -> void:
+	play_profile_action(attack_type)
 
 func update_equipment(equipment: Array) -> void:
 	var next_style := "unarmed"
 	for item: Dictionary in equipment:
 		if str(item.get("slot", "")) == "weapon":
 			var item_name := str(item.get("name", "")).to_lower()
-			next_style = "greatsword" if "greatblade" in item_name or "greatsword" in item_name else "sword"
+			next_style = str(item.get("weapon_type",""))
+			if next_style not in AnimationProfiles.WEAPONS:
+				next_style = "spear" if "spear" in item_name or "polearm" in item_name else ("staff" if "staff" in item_name else ("greatsword" if "greatblade" in item_name or "greatsword" in item_name else "sword"))
 			break
 	if next_style == weapon_style:
 		return
@@ -293,15 +359,17 @@ func update_equipment(equipment: Array) -> void:
 		weapon_visual.queue_free()
 		weapon_visual = null
 	if weapon_attachment != null and weapon_style != "unarmed":
-		weapon_visual = (GREATSWORD_MODEL if weapon_style == "greatsword" else SWORD_MODEL).instantiate() as Node3D
+		weapon_visual = create_weapon_visual(weapon_style)
 		weapon_attachment.add_child(weapon_visual)
-		# FBX prop pivots and the hand bone use different axes. Align the blade
-		# along the grip and move the handle into the fingers.
-		var blade_direction := (Vector3(0.07, 0.0, 1.0) if weapon_style == "greatsword" else Vector3(0.25, -0.06, 0.96)).normalized()
-		var handle_offset := 0.04 if weapon_style == "greatsword" else 0.06
-		weapon_visual.quaternion = Quaternion(Vector3.UP, blade_direction)
-		weapon_visual.position = Vector3(0.095, -0.008, 0.039) + blade_direction * handle_offset
 		weapon_visual.visible = not sitting
+
+func create_weapon_visual(style: String) -> Node3D:
+	var scene: PackedScene={"greatsword":GREATSWORD_MODEL,"staff":STAFF_MODEL,"spear":SPEAR_MODEL}.get(style,SWORD_MODEL)
+	var model:=scene.instantiate() as Node3D
+	var blade_direction := (Vector3(0.07,0,1) if style=="greatsword" else Vector3(0.25,-0.06,.96)).normalized()
+	model.quaternion=Quaternion(Vector3.UP,blade_direction)
+	model.position=Vector3(.095,-.008,.039)+(Vector3.ZERO if style=="spear" else blade_direction*(.04 if style=="greatsword" else .06))
+	return model
 
 func toggle_sit() -> void:
 	if sitting:
@@ -328,12 +396,12 @@ func death_animation() -> void:
 	visual.rotation.x = 0.0
 	visual.position = Vector3.ZERO
 	is_dying = true
-	_play_action("protof/greatsword_DeathFront2HandMelee" if weapon_style == "greatsword" else "protof/death")
+	play_profile_action("death")
 
 func revive_animation() -> void:
 	is_dying = false
 	action_active = false
-	_play_locomotion("protof/unarmed_idle")
+	_play_locomotion(str(animation_entry("idle").clip))
 
 func _play_locomotion(animation_name: String, playback_rate: float = 1.0) -> void:
 	if animation_player == null or not animation_player.has_animation(animation_name):
@@ -342,14 +410,15 @@ func _play_locomotion(animation_name: String, playback_rate: float = 1.0) -> voi
 	if animation_player.current_animation != animation_name or not animation_player.is_playing():
 		animation_player.play(animation_name, 0.15)
 
-func _play_upper_body_action(animation_name: String, playback_speed: float = 1.0) -> bool:
+func _play_upper_body_action(animation_name: String, playback_speed: float = 1.0, looping: bool = false) -> bool:
 	if animation_player == null or upper_body_player == null or not animation_player.has_animation(animation_name):
 		return false
-	var clip_key := animation_name.trim_prefix("protof/")
+	var clip_key := animation_name.trim_prefix("protof/").replace("/","_")
+	if looping: clip_key="loop_"+clip_key
 	if not upper_body_library.has_animation(clip_key):
 		var source: Animation = animation_player.get_animation(animation_name)
 		var upper_clip: Animation = source.duplicate(true)
-		upper_clip.loop_mode = Animation.LOOP_NONE
+		upper_clip.loop_mode = Animation.LOOP_LINEAR if looping else Animation.LOOP_NONE
 		for track in range(upper_clip.get_track_count() - 1, -1, -1):
 			var path: NodePath = upper_clip.track_get_path(track)
 			var bone := String(path.get_subname(0)) if path.get_subname_count() > 0 else ""
@@ -389,3 +458,7 @@ func dash() -> void:
 	invulnerable_time = 0.38
 	moving_to_click = false
 	_play_action("protof/greatsword_IdleCrouchBreathe2HandMelee" if weapon_style == "greatsword" else "protof/crouch_idle")
+	var entry:=animation_entry("dash")
+	if entry.clip!="procedural_roll":
+		rolling=false
+		play_profile_action("dash")

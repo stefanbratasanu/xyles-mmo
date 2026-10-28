@@ -133,6 +133,8 @@ func _row_y(row: int) -> float:
 	return [14, 58, 102, 146, 190, 220, 266][row]
 
 func _tile(item: Dictionary, silhouette: String, edge: int) -> Button:
+	# An equipped spear keeps the same main-hand slot but uses its own item artwork.
+	silhouette=str(item.get("icon",silhouette))
 	var tile: Button = hud._button("", 10)
 	tile.custom_minimum_size = Vector2(edge, edge)
 	tile.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
@@ -169,6 +171,7 @@ func _description(item: Dictionary) -> String:
 	if item.get("category", "") == "material":
 		return "%s × %d\nCrafting material" % [item.name, item.count]
 	var result := "%s\n%s · %s\nDurability: %d / %d" % [item.get("name", "Equipment"), str(item.get("tier", "basic")).capitalize(), Slots.label(str(item.get("slot", ""))), item.get("durability", 100), item.get("max_durability", 100)]
+	if item.get("slot","")=="weapon": result+="\nWeapon type: "+hud.game.state.item_weapon_type(item).capitalize()
 	for modifier: String in item.get("modifiers", []):
 		result += "\n" + hud.game.state.get_modifier_display_text(modifier)
 	return result

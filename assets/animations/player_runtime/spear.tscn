@@ -1,0 +1,127 @@
+[gd_scene load_steps=13 format=3]
+
+[sub_resource type="StandardMaterial3D" id="Wood"]
+resource_name = "Dark ash shaft"
+albedo_color = Color(0.27, 0.18, 0.10, 1)
+roughness = 0.78
+
+[sub_resource type="StandardMaterial3D" id="Steel"]
+resource_name = "Forged spear steel"
+albedo_color = Color(0.53, 0.63, 0.64, 1)
+metallic = 0.82
+roughness = 0.32
+
+[sub_resource type="StandardMaterial3D" id="Leather"]
+resource_name = "Grip leather"
+albedo_color = Color(0.12, 0.10, 0.075, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="Brass"]
+resource_name = "Weathered brass rings"
+albedo_color = Color(0.53, 0.39, 0.18, 1)
+metallic = 0.68
+roughness = 0.5
+
+[sub_resource type="CylinderMesh" id="Shaft"]
+material = SubResource("Wood")
+top_radius = 0.022
+bottom_radius = 0.028
+height = 1.95
+radial_segments = 8
+rings = 1
+
+[sub_resource type="CylinderMesh" id="Grip"]
+material = SubResource("Leather")
+top_radius = 0.032
+bottom_radius = 0.033
+height = 0.29
+radial_segments = 8
+rings = 1
+
+[sub_resource type="CylinderMesh" id="Collar"]
+material = SubResource("Steel")
+top_radius = 0.042
+bottom_radius = 0.031
+height = 0.15
+radial_segments = 8
+rings = 1
+
+[sub_resource type="CylinderMesh" id="Head"]
+material = SubResource("Steel")
+top_radius = 0.0
+bottom_radius = 0.115
+height = 0.50
+radial_segments = 4
+rings = 1
+
+[sub_resource type="CylinderMesh" id="HeadShoulder"]
+material = SubResource("Steel")
+top_radius = 0.115
+bottom_radius = 0.035
+height = 0.12
+radial_segments = 4
+rings = 1
+
+[sub_resource type="CylinderMesh" id="Butt"]
+material = SubResource("Steel")
+top_radius = 0.031
+bottom_radius = 0.0
+height = 0.19
+radial_segments = 6
+rings = 1
+
+[sub_resource type="TorusMesh" id="GripRing"]
+material = SubResource("Brass")
+inner_radius = 0.027
+outer_radius = 0.037
+rings = 8
+ring_segments = 6
+
+[sub_resource type="CylinderMesh" id="Band"]
+material = SubResource("Leather")
+top_radius = 0.025
+bottom_radius = 0.025
+height = 0.12
+radial_segments = 8
+rings = 1
+
+[node name="Spear" type="Node3D"]
+metadata/weapon_type = "spear"
+metadata/grip = "Local origin; shaft points along positive Y."
+
+[node name="AshShaft" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.11, 0)
+mesh = SubResource("Shaft")
+
+[node name="HandGrip" type="MeshInstance3D" parent="."]
+mesh = SubResource("Grip")
+
+[node name="UpperGripRing" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.15, 0)
+mesh = SubResource("GripRing")
+
+[node name="LowerGripRing" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.15, 0)
+mesh = SubResource("GripRing")
+
+[node name="Socket" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.08, 0)
+mesh = SubResource("Collar")
+
+[node name="HeadShoulder" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.08, 0)
+scale = Vector3(1, 1, 0.38)
+mesh = SubResource("HeadShoulder")
+
+[node name="ForgedHead" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.39, 0)
+scale = Vector3(1, 1, 0.38)
+mesh = SubResource("Head")
+
+[node name="ButtSpike" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.92, 0)
+mesh = SubResource("Butt")
+
+[node name="SocketBinding" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.94, 0)
+mesh = SubResource("Band")

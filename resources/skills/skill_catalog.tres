@@ -1,0 +1,1441 @@
+[gd_resource type="Resource" format=3]
+
+[ext_resource type="Script" path="res://scripts/skills/skill_catalog.gd" id="1_ev8p3"]
+
+[resource]
+script = ExtResource("1_ev8p3")
+data = {
+"affinities": [{
+"event": "*",
+"family": "*",
+"item": "*",
+"multiplier": 1.0,
+"power_percent": 100.0,
+"skill": "*",
+"stat": "*"
+}],
+"default_loadout": ["melee", "cast", "block", "move", "support", "whirl", "flame", "burst", "ray", "barrage"],
+"modifiers": {
+"afterglow": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Natural expiry of this skill’s own buff restores health. Reset and removal do not count.",
+"enabled": true,
+"events": {
+"ON_THIS_BUFF_EXPIRED": 1.0
+},
+"excludes": [],
+"family": "afterglow",
+"icd": 1.0,
+"name": "Afterglow",
+"op": "recover",
+"provides": [],
+"requires": ["buff", "duration"],
+"stats": {
+"health": 1.0,
+"mana": 0.0
+},
+"values": {
+"amount": [3.0, 4.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"area": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Enlarges all area nodes supplied by this skill and its enchantments; radius scales by square root. No damage increase.",
+"enabled": true,
+"events": {
+"PASSIVE": 1.0
+},
+"excludes": [],
+"family": "area",
+"icd": 0.0,
+"name": "Expanded Area",
+"op": "area",
+"provides": [],
+"requires": ["area"],
+"stats": {},
+"values": {
+"amount": [0.2, 0.3]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"arrival": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "At the end of your dash, damages nearby enemies. The direct pulse enables on-hit effects.",
+"enabled": true,
+"events": {
+"ON_FINISH_CAST": 1.0
+},
+"excludes": [],
+"family": "arrival",
+"icd": 0.0,
+"name": "Arrival Pulse",
+"op": "burst",
+"primary_delivery": true,
+"provides": ["area", "hit", "damage"],
+"requires": ["movement"],
+"stats": {},
+"values": {
+"amount": [15.0, 20.0],
+"radius": [2.0, 3.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"buff_received": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Receiving this skill's buff grants brief haste. Proc-created buffs cannot recursively activate this.",
+"enabled": true,
+"events": {
+"ON_BUFF_RECEIVED": 1.0
+},
+"excludes": [],
+"family": "buff_received",
+"icd": 0.0,
+"name": "Renewed Resolve",
+"op": "empower",
+"provides": ["duration"],
+"requires": ["buff"],
+"stats": {
+"damage": 0.0,
+"movement_speed": 1.0
+},
+"values": {
+"amount": [0.05, 0.08],
+"duration": [3.0, 3.0],
+"stacks": [1.0, 1.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"chain": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Two additional targets. Each hop retains 80% of the previous hit; no revisits. Pierce resolves before chain.",
+"enabled": true,
+"events": {
+"PASSIVE": 1.0
+},
+"excludes": [],
+"family": "chain",
+"icd": 0.0,
+"name": "Chain Support",
+"op": "chain",
+"provides": ["chain"],
+"requires": ["projectile"],
+"stats": {},
+"target_policy": "nearest",
+"values": {
+"amount": [2.0, 2.0],
+"delay": [0.08, 0.08],
+"range": [5.0, 6.0],
+"retention": [0.8, 0.8]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"chain_end": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Burst at the last successful contact when a chain exhausts its hops or targets. Cannot restart chaining.",
+"enabled": true,
+"events": {
+"ON_CHAIN_END": 1.0
+},
+"excludes": [],
+"family": "chain_end",
+"icd": 0.0,
+"name": "Final Discharge",
+"op": "burst",
+"provides": ["area"],
+"requires": ["chain", "damage"],
+"stats": {},
+"values": {
+"amount": [0.3, 0.4],
+"radius": [2.0, 2.5]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"chain_power": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Successful chain contacts empower later casts.",
+"enabled": true,
+"events": {
+"ON_CHAIN_HIT": 1.0
+},
+"excludes": [],
+"family": "chain_power",
+"icd": 0.0,
+"name": "Gathering Arc",
+"op": "empower",
+"provides": ["buff", "duration"],
+"requires": ["chain"],
+"stats": {
+"damage": 1.0,
+"movement_speed": 0.0
+},
+"values": {
+"amount": [0.04, 0.06],
+"duration": [4.0, 4.0],
+"stacks": [3.0, 3.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"chance_bolt": {
+"chance": 1.0,
+"chance_range": [0.2, 0.4],
+"cost_increase": 0.04,
+"description": "An eligible contact can launch a secondary bolt at a different enemy. Projectile count, Pierce and Chain apply; secondary damage cannot create more trigger effects.",
+"enabled": true,
+"events": {
+"ON_CHAIN_HIT": 20,
+"ON_ENEMY_HIT_THIS_SKILL": 80
+},
+"excludes": [],
+"family": "chance_bolt",
+"icd": 0.25,
+"name": "Splintering Contact",
+"op": "bolt",
+"provides": ["projectile"],
+"requires": ["hit", "damage"],
+"stats": {},
+"values": {
+"amount": [0.3, 0.5],
+"range": [8, 10]
+},
+"variant_weight": 1,
+"weight": 10
+},
+"chance_burst": {
+"chance": 1.0,
+"chance_range": [0.2, 0.45],
+"cost_increase": 0.04,
+"description": "An eligible direct contact can release a secondary area burst.",
+"enabled": true,
+"events": {
+"ON_CHAIN_HIT": 10,
+"ON_ENEMY_HIT_THIS_SKILL": 70,
+"ON_PROJECTILE_LANDED": 20
+},
+"excludes": [],
+"family": "chance_burst",
+"icd": 0.2,
+"name": "Volatile Contact",
+"op": "burst",
+"provides": ["area"],
+"requires": ["hit", "damage"],
+"stats": {},
+"values": {
+"amount": [0.35, 0.65],
+"radius": [2.2, 3.2]
+},
+"variant_weight": 1,
+"weight": 10
+},
+"chance_empower": {
+"chance": 1.0,
+"chance_range": [0.2, 0.4],
+"cost_increase": 0.04,
+"description": "An eligible contact can grant a stacking skill-power or movement buff.",
+"enabled": true,
+"events": {
+"ON_CHAIN_HIT": 20,
+"ON_ENEMY_HIT_THIS_SKILL": 80
+},
+"excludes": [],
+"family": "chance_empower",
+"icd": 0.3,
+"name": "Surge of Momentum",
+"op": "empower",
+"provides": ["buff", "duration"],
+"requires": ["hit", "damage"],
+"stats": {
+"damage": 2,
+"movement_speed": 1
+},
+"values": {
+"amount": [0.08, 0.15],
+"duration": [3, 5],
+"stacks": [2, 2]
+},
+"variant_weight": 1,
+"weight": 10
+},
+"chance_field": {
+"chance": 1.0,
+"chance_range": [0.15, 0.3],
+"cost_increase": 0.04,
+"description": "An eligible contact can leave a damaging field. Each field is bounded by the global field limit.",
+"enabled": true,
+"events": {
+"ON_ENEMY_HIT_THIS_SKILL": 70,
+"ON_PROJECTILE_LANDED": 30
+},
+"excludes": [],
+"family": "chance_field",
+"icd": 1.0,
+"name": "Scorched Ground",
+"op": "field",
+"provides": ["area", "duration"],
+"requires": ["hit", "damage"],
+"stats": {},
+"values": {
+"amount": [0.1, 0.16],
+"duration": [3, 4],
+"interval": [0.6, 0.8],
+"radius": [2.5, 3.5]
+},
+"variant_weight": 1,
+"weight": 10
+},
+"chance_heal_pulse": {
+"chance": 1.0,
+"chance_range": [0.25, 0.5],
+"cost_increase": 0.04,
+"description": "Healing can send a pulse to other registered allies. The original recipient is excluded.",
+"enabled": true,
+"events": {
+"ON_ALLY_HIT": 1
+},
+"excludes": [],
+"family": "chance_heal_pulse",
+"icd": 0.5,
+"name": "Restorative Echo",
+"op": "burst",
+"provides": ["area"],
+"requires": ["heal"],
+&"response": "heal",
+"stats": {},
+"values": {
+"amount": [0.25, 0.45],
+"radius": [3, 4]
+},
+"variant_weight": 1,
+"weight": 10
+},
+"chance_leech": {
+"chance": 1.0,
+"chance_range": [0.2, 0.4],
+"cost_increase": 0.04,
+"description": "A successful roll restores a fraction of actual contact damage over time.",
+"enabled": true,
+"events": {
+"ON_CRITICAL_HIT": 20,
+"ON_ENEMY_HIT_THIS_SKILL": 80
+},
+"excludes": [],
+"family": "chance_leech",
+"icd": 0.0,
+"name": "Siphoning Opportunity",
+"op": "leech",
+"provides": [],
+"requires": ["hit", "damage"],
+"stats": {
+"health": 2,
+"mana": 1
+},
+"values": {
+"amount": [0.08, 0.14],
+"duration": [2, 3]
+},
+"variant_weight": 1,
+"weight": 10
+},
+"chance_recover": {
+"chance": 1.0,
+"chance_range": [0.2, 0.45],
+"cost_increase": 0.04,
+"description": "An eligible event can restore the rolled resource. Shares the recovery allowance for the cast.",
+"enabled": true,
+"events": {
+"ON_CHAIN_HIT": 20,
+"ON_ENEMY_HIT_THIS_SKILL": 60,
+"ON_KILL": 20
+},
+"excludes": [],
+"family": "chance_recover",
+"icd": 0.3,
+"name": "Fortunate Recovery",
+"op": "recover",
+"provides": [],
+"requires": ["hit", "damage"],
+"stats": {
+"health": 1,
+"mana": 1
+},
+"values": {
+"amount": [3, 6]
+},
+"variant_weight": 1,
+"weight": 10
+},
+"chance_weaken": {
+"chance": 1.0,
+"chance_range": [0.2, 0.45],
+"cost_increase": 0.04,
+"description": "On a successful chance roll, reduce the enemy stat saved on this enchantment.",
+"enabled": true,
+"events": {
+"ON_CHAIN_HIT": 20,
+"ON_ENEMY_HIT_THIS_SKILL": 80
+},
+"excludes": [],
+"family": "chance_weaken",
+"icd": 0.0,
+"name": "Disrupting Contact",
+"op": "weaken",
+"provides": [],
+"requires": ["hit", "damage"],
+"stats": {
+"armor": 1,
+"attack_speed": 1,
+"movement_speed": 1,
+"outgoing_damage": 1
+},
+"values": {
+"amount": [0.1, 0.18],
+"duration": [4, 6],
+"stacks": [2, 2]
+},
+"variant_weight": 1,
+"weight": 10
+},
+"critical": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "A critical direct hit restores mana, once per cast.",
+"enabled": true,
+"events": {
+"ON_CRITICAL_HIT": 1.0
+},
+"excludes": [],
+"family": "critical",
+"icd": 0.0,
+"name": "Critical Renewal",
+"op": "recover",
+"provides": [],
+"requires": ["hit"],
+"stats": {
+"health": 0.0,
+"mana": 1.0
+},
+"values": {
+"amount": [3.0, 4.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"duration": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Extends this skill's timed buffs, debuffs and fields.",
+"enabled": true,
+"events": {
+"PASSIVE": 1.0
+},
+"excludes": [],
+"family": "duration",
+"icd": 0.0,
+"name": "Lingering Effects",
+"op": "duration",
+"provides": [],
+"requires": ["duration"],
+"stats": {},
+"values": {
+"amount": [0.2, 0.3]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"echo": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Repeats the skill once at reduced power. The echo cannot repeat itself.",
+"enabled": true,
+"events": {
+"PASSIVE": 1.0
+},
+"excludes": ["channel"],
+"family": "echo",
+"icd": 0.0,
+"name": "Echo",
+"op": "echo",
+"provides": [],
+"requires": ["damage"],
+"stats": {},
+"values": {
+"amount": [0.5, 0.6]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"efficiency": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Applies to the supported skill. Values are additive fractions: 0.15 = 15%.",
+"enabled": true,
+"events": {
+"PASSIVE": 1.0
+},
+"excludes": [],
+"family": "efficiency",
+"icd": 0.0,
+"name": "Mana Efficiency",
+"op": "efficiency",
+"provides": [],
+"requires": [],
+"stats": {},
+"values": {
+"amount": [0.1, 0.16]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"evasion": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "For ten seconds after casting, a successful evade releases a fixed-power burst. Each ward has its own interval.",
+"enabled": true,
+"events": {
+"ON_SUCCESSFUL_EVADE": 1.0
+},
+"excludes": [],
+"family": "evasion",
+"icd": 1.0,
+"name": "Evasion Ward",
+"op": "mantle",
+"provides": ["buff", "duration", "area"],
+"requires": [],
+"response": "fixed_damage",
+"stats": {},
+"values": {
+"amount": [6.0, 9.0],
+"duration": [10.0, 10.0],
+"radius": [2.0, 3.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"expiry": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Natural expiry of this skill's buff restores mana. Consumption, refresh, death and respec do not qualify.",
+"enabled": true,
+"events": {
+"ON_THIS_BUFF_EXPIRED": 1.0
+},
+"excludes": [],
+"family": "expiry",
+"icd": 0.0,
+"name": "Afterglow",
+"op": "recover",
+"provides": [],
+"requires": ["duration"],
+"stats": {
+"health": 0.0,
+"mana": 1.0
+},
+"values": {
+"amount": [2.0, 3.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"exploit": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Increased damage against enemies already weakened before this hit.",
+"enabled": true,
+"events": {
+"PASSIVE": 1.0
+},
+"excludes": [],
+"family": "exploit",
+"icd": 0.0,
+"name": "Exploit Weakness",
+"op": "exploit",
+"provides": [],
+"requires": ["damage"],
+"stats": {},
+"values": {
+"amount": [0.12, 0.18]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"field": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Projectile enemy contacts leave a damaging field. Ticks are not hits.",
+"enabled": true,
+"events": {
+"ON_PROJECTILE_LANDED": 1.0
+},
+"excludes": [],
+"family": "impact_area",
+"icd": 0.0,
+"name": "Lingering Field",
+"op": "field",
+"provides": ["area", "duration"],
+"requires": ["projectile", "damage"],
+"stats": {},
+"values": {
+"amount": [0.12, 0.18],
+"duration": [3.0, 3.0],
+"interval": [0.75, 0.75],
+"radius": [2.0, 2.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"guarded": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "While this ward is active, successful blocks emit a fixed-power burst. The interval is shared across mantles.",
+"enabled": true,
+"events": {
+"ON_BLOCK": 1.0
+},
+"excludes": [],
+"family": "mantle",
+"icd": 1.0,
+"name": "Guarded Mantle",
+"op": "mantle",
+"provides": ["duration", "area"],
+"requires": ["block"],
+"response": "fixed_damage",
+"stats": {},
+"values": {
+"amount": [12.0, 16.0],
+"duration": [10.0, 10.0],
+"radius": [2.0, 2.0]
+},
+"variant_weight": 1.0,
+"weight": 18.0
+},
+"haste": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Successful casts grant movement speed. Recasting refreshes the same buff.",
+"enabled": true,
+"events": {
+"ON_FINISH_CAST": 1.0
+},
+"excludes": [],
+"family": "haste",
+"icd": 0.0,
+"name": "Follow Through",
+"op": "empower",
+"provides": ["buff", "duration"],
+"requires": [],
+"stats": {
+"damage": 0.0,
+"movement_speed": 1.0
+},
+"values": {
+"amount": [0.08, 0.12],
+"duration": [3.0, 4.0],
+"stacks": [1.0, 1.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"healing_burst": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Restores nearby friendly recipients, excluding the original recipient.",
+"enabled": true,
+"events": {
+"ON_ALLY_HIT": 1.0
+},
+"excludes": [],
+"family": "healing_burst",
+"icd": 0.0,
+"name": "Healing Burst",
+"op": "burst",
+"provides": ["area"],
+"requires": ["heal"],
+"response": "heal",
+"stats": {},
+"values": {
+"amount": [0.2, 0.3],
+"radius": [3.0, 4.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"impact": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Direct hits create a secondary enemy burst. It cannot re-trigger on-hit enchantments.",
+"enabled": true,
+"events": {
+"ON_ENEMY_HIT_THIS_SKILL": 1.0
+},
+"excludes": [],
+"family": "impact_area",
+"icd": 0.0,
+"name": "Impact Burst",
+"op": "burst",
+"provides": ["area"],
+"requires": ["hit", "damage"],
+"stats": {},
+"values": {
+"amount": [0.25, 0.35],
+"radius": [1.8, 2.2]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"kill": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "A kill credited to this skill restores health.",
+"enabled": true,
+"events": {
+"ON_KILL": 1.0
+},
+"excludes": [],
+"family": "kill",
+"icd": 0.0,
+"name": "Victorious Recovery",
+"op": "recover",
+"provides": [],
+"requires": ["damage"],
+"stats": {
+"health": 1.0,
+"mana": 0.0
+},
+"values": {
+"amount": [4.0, 6.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"last_stand": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "For ten seconds after casting, death releases one fixed-power burst. Cannot heal, revive or recurse.",
+"enabled": true,
+"events": {
+"ON_DEATH": 1.0
+},
+"excludes": [],
+"family": "last_stand",
+"icd": 1.0,
+"name": "Last Stand",
+"op": "mantle",
+"provides": ["buff", "duration", "area"],
+"requires": [],
+"response": "fixed_damage",
+"stats": {},
+"values": {
+"amount": [18.0, 24.0],
+"duration": [10.0, 10.0],
+"radius": [3.0, 4.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"launch": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Each paid emission builds next-emission damage. Extra projectiles do not multiply stacks.",
+"enabled": true,
+"events": {
+"ON_PROJECTILE_LAUNCHED": 1.0
+},
+"excludes": [],
+"family": "launch",
+"icd": 0.0,
+"name": "Launch Rhythm",
+"op": "empower",
+"provides": ["buff", "duration"],
+"requires": ["projectile"],
+"stats": {
+"damage": 1.0,
+"movement_speed": 0.0
+},
+"values": {
+"amount": [0.06, 0.08],
+"duration": [3.0, 3.0],
+"stacks": [3.0, 3.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"leech": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Recover a fraction of actual hit damage over two seconds; shares the per-cast recovery budget.",
+"enabled": true,
+"events": {
+"ON_ENEMY_HIT_THIS_SKILL": 1.0
+},
+"excludes": [],
+"family": "leech",
+"icd": 0.0,
+"name": "Siphoning Hits",
+"op": "leech",
+"provides": [],
+"requires": ["hit", "damage"],
+"stats": {
+"health": 1.0,
+"mana": 0.0
+},
+"values": {
+"amount": [0.03, 0.05],
+"duration": [2.0, 2.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"mantle": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Finishing a cast grants a mantle. Its rolled incoming-hit event releases a burst; secondary damage cannot trigger retaliation.",
+"enabled": true,
+"events": {
+"ON_HIT_TAKEN": 60.0,
+"ON_MELEE_DAMAGE_RECEIVED": 25.0,
+"ON_PROJECTILE_DAMAGE_RECEIVED": 15.0
+},
+"excludes": [],
+"family": "mantle",
+"icd": 1.0,
+"name": "Reactive Mantle",
+"op": "mantle",
+"provides": ["buff", "duration", "area"],
+"requires": ["damage"],
+"stats": {},
+"values": {
+"amount": [0.25, 0.35],
+"duration": [10.0, 10.0],
+"radius": [2.0, 2.0]
+},
+"variant_weight": 1.0,
+"weight": 18.0
+},
+"mending": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "After healing, grant a ward that restores health when its holder takes an enemy hit.",
+"enabled": true,
+"events": {
+"ON_HIT_TAKEN": 1.0
+},
+"excludes": [],
+"family": "mantle",
+"icd": 1.0,
+"name": "Mending Ward",
+"op": "mantle",
+"provides": ["buff", "duration"],
+"requires": ["heal"],
+"response": "heal",
+"stats": {},
+"values": {
+"amount": [0.15, 0.2],
+"duration": [10.0, 10.0],
+"radius": [0.0, 0.0]
+},
+"variant_weight": 1.0,
+"weight": 18.0
+},
+"momentum": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Each distinct enemy grants skill damage for future casts. Max five stacks, once per enemy per cast.",
+"enabled": true,
+"events": {
+"ON_CHAIN_HIT": 0.4,
+"ON_ENEMY_HIT_THIS_SKILL": 1.0
+},
+"excludes": [],
+"family": "momentum",
+"icd": 0.0,
+"name": "Crowd Momentum",
+"op": "empower",
+"provides": ["buff", "duration"],
+"requires": ["hit", "damage"],
+"stats": {
+"damage": 1.0,
+"movement_speed": 0.0
+},
+"values": {
+"amount": [0.04, 0.05],
+"duration": [4.0, 4.0],
+"stacks": [5.0, 5.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"opening": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "A short power buff for this skill, including the triggering cast. Damage increases healing and dash distance when appropriate.",
+"enabled": true,
+"events": {
+"ON_BEGIN_CAST": 1.0
+},
+"excludes": [],
+"family": "opening",
+"icd": 1.0,
+"name": "Opening Focus",
+"op": "empower",
+"provides": ["buff", "duration"],
+"requires": [],
+"stats": {
+"damage": 1.0,
+"movement_speed": 0.0
+},
+"values": {
+"amount": [0.06, 0.1],
+"duration": [4.0, 5.0],
+"stacks": [1.0, 1.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"overflow": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Converts overhealing into a temporary barrier capped at 15% maximum health.",
+"enabled": true,
+"events": {
+"ON_ALLY_HIT": 1.0
+},
+"excludes": [],
+"family": "overflow",
+"icd": 0.0,
+"name": "Overflow Barrier",
+"op": "barrier",
+"provides": ["buff", "duration"],
+"requires": ["heal"],
+"stats": {},
+"values": {
+"amount": [0.2, 0.25],
+"duration": [4.0, 5.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"pierce": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Continues through enemies along the original shot direction before any chain hops.",
+"enabled": true,
+"events": {
+"PASSIVE": 1.0
+},
+"excludes": [],
+"family": "pierce",
+"icd": 0.0,
+"name": "Piercing Delivery",
+"op": "pierce",
+"provides": [],
+"requires": ["projectile"],
+"stats": {},
+"values": {
+"amount": [1.0, 2.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"power": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Applies to the supported skill. Values are additive fractions: 0.15 = 15%.",
+"enabled": true,
+"events": {
+"PASSIVE": 1.0
+},
+"excludes": [],
+"family": "power",
+"icd": 0.0,
+"name": "Focused Power",
+"op": "power",
+"provides": [],
+"requires": [],
+"stats": {},
+"values": {
+"amount": [0.12, 0.18]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"projectiles": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Adds a projectile aimed at a different enemy. Shared per-cast trigger budget.",
+"enabled": true,
+"events": {
+"PASSIVE": 1.0
+},
+"excludes": [],
+"family": "projectiles",
+"icd": 0.0,
+"name": "Twin Delivery",
+"op": "projectiles",
+"provides": [],
+"requires": ["projectile"],
+"stats": {},
+"values": {
+"amount": [1.0, 1.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"pulse": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Receiving a new buff from this skill restores its rolled resource. Refreshing the buff does not count.",
+"enabled": true,
+"events": {
+"ON_BUFF_RECEIVED": 1.0
+},
+"excludes": [],
+"family": "pulse",
+"icd": 1.0,
+"name": "Restorative Pulse",
+"op": "recover",
+"provides": [],
+"requires": ["buff"],
+"stats": {
+"health": 1.0,
+"mana": 1.0
+},
+"values": {
+"amount": [1.0, 2.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"range": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Applies to the supported skill. Values are additive fractions: 0.15 = 15%.",
+"enabled": true,
+"events": {
+"PASSIVE": 1.0
+},
+"excludes": [],
+"family": "range",
+"icd": 0.0,
+"name": "Extended Reach",
+"op": "range",
+"provides": [],
+"requires": ["range"],
+"stats": {},
+"values": {
+"amount": [0.15, 0.25]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"reclaim": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Finishing the skill restores a little mana; one recovery budget per cast.",
+"enabled": true,
+"events": {
+"ON_FINISH_CAST": 1.0
+},
+"excludes": [],
+"family": "reclaim",
+"icd": 1.0,
+"name": "Reclaim",
+"op": "recover",
+"provides": [],
+"requires": [],
+"stats": {
+"health": 0.0,
+"mana": 1.0
+},
+"values": {
+"amount": [1.0, 2.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"recovery": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Restores mana on a qualifying direct hit, once per cast.",
+"enabled": true,
+"events": {
+"ON_CHAIN_HIT": 0.5,
+"ON_ENEMY_HIT_THIS_SKILL": 1.0
+},
+"excludes": [],
+"family": "recovery",
+"icd": 0.5,
+"name": "Mana Return",
+"op": "recover",
+"provides": [],
+"requires": ["hit"],
+"stats": {
+"health": 0.0,
+"mana": 1.0
+},
+"values": {
+"amount": [2.0, 3.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"renew": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Finishing the skill restores health, bounded by the recovery budget.",
+"enabled": true,
+"events": {
+"ON_FINISH_CAST": 1.0
+},
+"excludes": [],
+"family": "renew",
+"icd": 1.0,
+"name": "Renewal",
+"op": "recover",
+"provides": [],
+"requires": [],
+"stats": {
+"health": 1.0,
+"mana": 0.0
+},
+"values": {
+"amount": [2.0, 3.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"stride": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "When this skill’s buff expires naturally, gain short movement speed. Cannot renew itself.",
+"enabled": true,
+"events": {
+"ON_THIS_BUFF_EXPIRED": 1.0
+},
+"excludes": [],
+"family": "stride",
+"icd": 1.0,
+"name": "Lingering Stride",
+"op": "empower",
+"provides": ["buff", "duration"],
+"requires": ["buff", "duration"],
+"stats": {
+"damage": 0.0,
+"movement_speed": 1.0
+},
+"values": {
+"amount": [0.06, 0.1],
+"duration": [3.0, 4.0],
+"stacks": [1.0, 1.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"tempo": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Applies to the supported skill. Values are additive fractions: 0.15 = 15%.",
+"enabled": true,
+"events": {
+"PASSIVE": 1.0
+},
+"excludes": [],
+"family": "tempo",
+"icd": 0.0,
+"name": "Quick Recovery",
+"op": "tempo",
+"provides": [],
+"requires": [],
+"stats": {},
+"values": {
+"amount": [0.1, 0.15]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+},
+"weakening": {
+"chance": 1.0,
+"cost_increase": 0.0,
+"description": "Reduces the rolled enemy stat; up to three stacks, strongest source group applies.",
+"enabled": true,
+"events": {
+"ON_ENEMY_HIT_THIS_SKILL": 1.0
+},
+"excludes": [],
+"family": "weakening",
+"icd": 0.0,
+"name": "On-hit Weakening",
+"op": "weaken",
+"provides": ["duration"],
+"requires": ["hit", "damage"],
+"stats": {
+"armor": 40.0,
+"attack_speed": 15.0,
+"movement_speed": 20.0,
+"outgoing_damage": 25.0
+},
+"values": {
+"amount": [0.04, 0.07],
+"duration": [4.0, 5.0],
+"stacks": [3.0, 3.0]
+},
+"variant_weight": 1.0,
+"weight": 10.0
+}
+},
+"rules": {
+"barrier_cap": 0.15,
+"channel_speed": 0.5,
+"channel_turn_degrees": 360.0,
+"critical_chance": 0.08,
+"critical_multiplier": 1.5,
+"event_budget": 48.0,
+"max_chain_hops": 5.0,
+"max_fields": 24.0,
+"max_projectile_instances": 32.0,
+"max_projectiles": 5.0,
+"max_scheduled": 64.0,
+"max_secondary_depth": 2.0,
+"max_statuses": 128.0,
+"own_buff_cap": 0.5,
+"recovery_per_cast": 12.0,
+"weakening_cap": 0.4
+},
+"skills": {
+"barrage": {
+"acquisition_weight": 10.0,
+"angle": 85.0,
+"cooldown": 1.0,
+"cost": 4.0,
+"enabled": true,
+"icon": "cast",
+"interval": 0.3,
+"name": "Ember Barrage",
+"power": 9.0,
+"radius": 3.0,
+"range": 20.0,
+"role": "cast",
+"speed": 24.0,
+"tags": ["hit", "projectile", "channel", "damage", "spell", "range"],
+"type": "channel_projectiles"
+},
+"blade": {
+"acquisition_weight": 10.0,
+"angle": 85.0,
+"cooldown": 2.0,
+"cost": 10.0,
+"enabled": true,
+"icon": "melee",
+"interval": 0.5,
+"name": "Spectral Blade",
+"power": 25.0,
+"radius": 3.0,
+"range": 14.0,
+"role": "melee",
+"speed": 24.0,
+"tags": ["hit", "projectile", "damage", "melee", "range"],
+"type": "melee_projectile"
+},
+"block": {
+"acquisition_weight": 10.0,
+"angle": 85.0,
+"cooldown": 7.0,
+"cost": 12.0,
+"enabled": true,
+"icon": "block",
+"interval": 0.5,
+"name": "Iron Guard",
+"power": 0.55,
+"radius": 3.0,
+"range": 14.0,
+"role": "defense",
+"speed": 24.0,
+"tags": ["buff", "duration", "effect", "block"],
+"type": "cast_effect"
+},
+"burst": {
+"acquisition_weight": 10.0,
+"angle": 85.0,
+"cooldown": 4.0,
+"cost": 22.0,
+"enabled": true,
+"icon": "cast",
+"interval": 0.5,
+"name": "Volatile Orb",
+"power": 22.0,
+"radius": 3.0,
+"range": 20.0,
+"role": "cast",
+"speed": 24.0,
+"tags": ["hit", "projectile", "area", "damage", "spell", "range"],
+"type": "cast_projectile_area"
+},
+"cast": {
+"acquisition_weight": 10.0,
+"angle": 85.0,
+"cooldown": 2.5,
+"cost": 15.0,
+"enabled": true,
+"icon": "cast",
+"interval": 0.5,
+"name": "Ember Bolt",
+"power": 30.0,
+"radius": 3.0,
+"range": 14.0,
+"role": "cast",
+"speed": 24.0,
+"tags": ["hit", "projectile", "damage", "spell", "range"],
+"type": "cast_projectile"
+},
+"flame": {
+"acquisition_weight": 10.0,
+"angle": 85.0,
+"cooldown": 4.0,
+"cost": 18.0,
+"enabled": true,
+"icon": "cast",
+"interval": 0.5,
+"name": "Flame Fan",
+"power": 24.0,
+"radius": 3.0,
+"range": 7.0,
+"role": "cast",
+"speed": 24.0,
+"tags": ["hit", "area", "cone", "damage", "spell", "range"],
+"type": "cast_cone"
+},
+"melee": {
+"acquisition_weight": 10.0,
+"angle": 85.0,
+"cooldown": 0.8,
+"cost": 4.0,
+"enabled": true,
+"icon": "melee",
+"interval": 0.5,
+"name": "Iron Cleave",
+"power": 22.0,
+"radius": 3.0,
+"range": 3.2,
+"role": "melee",
+"speed": 24.0,
+"tags": ["hit", "cone", "area", "damage", "melee", "range"],
+"type": "melee_cone"
+},
+"meteor": {
+"acquisition_weight": 10.0,
+"angle": 85.0,
+"cooldown": 5.0,
+"cost": 25.0,
+"enabled": true,
+"icon": "cast",
+"interval": 0.5,
+"name": "Astral Fall",
+"power": 36.0,
+"radius": 4.0,
+"range": 20.0,
+"role": "cast",
+"speed": 24.0,
+"tags": ["hit", "area", "damage", "spell", "range"],
+"type": "cast_area_target"
+},
+"move": {
+"acquisition_weight": 10.0,
+"angle": 85.0,
+"cooldown": 4.0,
+"cost": 9.0,
+"enabled": true,
+"icon": "move",
+"interval": 0.5,
+"name": "Wayfarer's Step",
+"power": 0.0,
+"radius": 3.0,
+"range": 6.0,
+"role": "movement",
+"speed": 24.0,
+"tags": ["movement", "range"],
+"type": "dash"
+},
+"nova": {
+"acquisition_weight": 10.0,
+"angle": 85.0,
+"cooldown": 5.0,
+"cost": 22.0,
+"enabled": true,
+"icon": "cast",
+"interval": 0.5,
+"name": "Frost Nova",
+"power": 27.0,
+"radius": 5.0,
+"range": 5.0,
+"role": "cast",
+"speed": 24.0,
+"tags": ["hit", "area", "damage", "spell", "range"],
+"type": "cast_area_self"
+},
+"ray": {
+"acquisition_weight": 10.0,
+"angle": 85.0,
+"cooldown": 1.0,
+"cost": 5.0,
+"enabled": true,
+"icon": "cast",
+"interval": 0.35,
+"name": "Arcane Ray",
+"power": 11.0,
+"radius": 3.0,
+"range": 18.0,
+"role": "cast",
+"speed": 24.0,
+"tags": ["hit", "ray", "channel", "damage", "spell", "range"],
+"type": "channel_ray"
+},
+"support": {
+"acquisition_weight": 10.0,
+"angle": 85.0,
+"cooldown": 9.0,
+"cost": 24.0,
+"enabled": true,
+"icon": "support",
+"interval": 0.5,
+"name": "Restoring Light",
+"power": 38.0,
+"radius": 3.0,
+"range": 14.0,
+"role": "support",
+"speed": 24.0,
+"tags": ["heal", "effect"],
+"type": "cast_effect"
+},
+"whirl": {
+"acquisition_weight": 10.0,
+"angle": 85.0,
+"cooldown": 3.0,
+"cost": 12.0,
+"enabled": true,
+"icon": "melee",
+"interval": 0.5,
+"name": "Whirlwind",
+"power": 20.0,
+"radius": 3.5,
+"range": 4.0,
+"role": "melee",
+"speed": 24.0,
+"tags": ["hit", "area", "damage", "melee", "range"],
+"type": "melee_area"
+}
+},
+"version": 1.0
+}
