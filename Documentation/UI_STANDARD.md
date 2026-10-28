@@ -10,9 +10,12 @@ The implementation uses original Godot-drawn frames; reference screenshots are n
   shortcuts at the bottom center.
 - The skill bar has **no frame**: the tiles sit on the world with only their own
   dark tile backgrounds. Do not re-register it as a floating window.
-- There is no minimap. `M` opens a full-screen, opaque map drawn from the world
-  data (zones, roads, ponds, landmarks, sealed waygate, player heading, clock).
-  The map blocks gameplay input while open and closes with `M` or `Esc`.
+- There is no minimap. `M` opens a full-screen, opaque, square **painted map**
+  built from the same height/colour grids as the terrain: hillshade, 4 m
+  contours, canopy density from real tree positions, ponds, roads, landmarks and
+  the sealed waygate. Side panels hold regions, legend, compass and a 50 m scale
+  bar. Zone outlines are never traced. The map blocks gameplay input while open
+  and closes with `M` or `Esc`.
 - Chat is a bottom-left panel with World / Local / Party / Guild tabs,
   timestamps and a line input. Typing must not move the character.
 - Inventory follows the reference paperdoll: 21 equipment slots on the left, a nine-column bag on the right, and All / Equip / Supplies / Crafting / Quest tabs. Hover shows attributes and durability; double-click or right-click a bag item to equip it, and click worn equipment to remove it. Bottom controls repair, sort, and discard (with a second confirmation click). Wood and iron appear as live crafting stacks.

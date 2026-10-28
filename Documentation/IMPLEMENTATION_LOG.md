@@ -192,3 +192,69 @@ the project folder instead.
 
 **Risk / follow-up.** Logging is file I/O, so it is buffered and capped at 8 MB
 per session. Keep heavy per-frame data out of it; use markers and events.
+
+## 2026-10-28 - Forest biome, terrain mountains and painted map
+
+**Intent.** The first 3D pass still read as five green blobs on a lawn: cone
+mountains floated at the edge, props hovered or sank, the grass looked like
+spikes, the trees were short and blobby, and the map was traced zone outlines.
+This pass makes Map I a real forest continent: larger, physically varied,
+grounded, ringed by mountains that are part of the terrain, and mapped from the
+land itself.
+
+**Changed.**
+- The world is now 296 m across (`BOUNDS` 148, `TERRAIN_EXTENT` 224,
+  `TERRAIN_SEGMENTS` 288). Zone centres, radii, spawns, roads, ponds, resources
+  and tour coordinates were scaled x2.
+- Mountains are a rising terrain rim: `RIM_START` 160, crest at `RIM_END` 200,
+  `RIM_HEIGHT` 32, driven by `_ridge` plus a high-frequency `_ridge_detail`, then
+  falling away at 206-223 so the square mesh edge hides behind the crest. The
+  old `DistantCrag`, `DistantSnow` and `FarPine` cone props are gone; a 900-
+  attempt pine belt at 140-170 m covers the foothills.
+- Terrain relief is gentle rolling forest (`_hills` 3.1, `_detail` 0.62), and
+  each zone has its own `elevation`, `relief`, `tree_count`, `rock_count` and
+  `grass_count` (vale 0.0, thornwood 0.9, fen -1.6, arch 3.0, sanctum 4.2).
+  Rock colour starts at 11 m and alpine stone at 34 m.
+- Vegetation: 760 outskirt trees and 7000 outskirt grass tufts continue the
+  forest past the zone blobs to the rim. Grass is a three-card alpha-scissor
+  tuft using `grass_blades.png`, 1900-8500 per zone. Bushes are a five-puff
+  clustered mesh. Rocks are smaller and sunk (`at.y -= size.y*0.16`), logs use
+  the absolute ground height, and both keep two road cells clear.
+- Trees were rebuilt in Blender: smooth-shaded foliage, many small clumps
+  instead of a few giant spheres, oak ~11 m, birch ~11.5 m, pine ~11.8 m, dead
+  ~10 m; in-game scale 0.92-1.34 and 0.22 m sunk.
+- The Broken Arch and Crownless Sanctum were moved to their scaled coordinates
+  and added to `_sites`, so their pads are flat and tree-free.
+- `map_texture()` now paints the map from the cached terrain height/colour
+  grids: hillshade, 4 m contours, a blurred canopy-density mask built from real
+  tree positions, trunk stipple, ponds and roads. `scripts/world_map.gd` draws it
+  as a square with regions, legend, compass and a 50 m scale bar; zone polygons
+  and outlines are gone.
+- Camera far plane 420 and shadow distance 150. The screenshot tour gained a
+  tenth frame (`10_frontier`) and several framings were adjusted.
+- `tests/test_world.gd` now asserts gentle-but-real relief (2-24 m), the terrain
+  rim, `BOUNDS >= 140`, a painted map texture and the absence of crag props.
+
+**Why this way.** Terrain height is one pure function, so the rim, collision,
+rock colour and prop placement cannot disagree. The map is rendered from the
+same grids instead of tracing zone blobs, which was the original complaint. An
+outskirt vegetation pass was preferred over enlarging the zone radii because the
+zones must keep their level bands and identities while the forest still reaches
+the mountains.
+
+**Verified.**
+- Parse gate `tests/_parse.gd`: `failures=0`.
+- `tests/test_world.gd`, `test_combat_effects.gd`, `test_progression.gd` and
+  `test_skill_panel.gd` pass with exit code 0.
+- The 10-frame `--screenshot` tour was inspected repeatedly at 1600x900: camp,
+  vale road, thornwood, fen, broken arch, sanctum, waygate, world map, night
+  camp and frontier. Fixed during review: floating and sunken props, boulders in
+  the road, an empty outer lawn, a tree inside the rim camera, map zone traces,
+  and the sanctum/arch standing in the forest.
+- `world_ready` logs about 2.5 s of build time with ~2,000 trees and ~31,000
+  grass tufts.
+
+**Risk / follow-up.** Build time grew from 0.4 s to about 2.5 s; if it becomes
+annoying, the grass placement rejection loops are the first thing to optimise.
+The 640 px map texture is generated lazily on first open and cached, so the first
+`M` press can hitch. The waygate is still decorative.

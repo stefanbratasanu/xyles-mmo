@@ -45,9 +45,18 @@ file is the shorter contract used during implementation.
 
 - **Map I - The Ashen Frontier** is one continent of five uneven zones of roughly
   equal area. Emberfall Vale is the central starting zone; the others ring it.
-- Zone shapes are wavy blobs, not circles. One zone table in
-  `scripts/world_builder.gd` drives the terrain, the ground colour, enemy levels,
-  the HUD region label and the world map.
+- The playable square is **296 m across** (`BOUNDS` 148). Zone shapes are wavy
+  blobs, not circles. One zone table in `scripts/world_builder.gd` drives the
+  terrain, the ground colour, elevation, vegetation density, enemy levels, the
+  HUD region label and the world map.
+- The **mountain rim is terrain, not props**: past 160 m the shared height field
+  rises into a ridged range (crest at 200 m, `RIM_HEIGHT` 32) and falls away
+  again behind the crest. There are no separate mountain meshes, so collision,
+  rock colour and the horizon always agree.
+- Each zone is physically different: the fen sits low and wet, the Broken Arch
+  and Crownless Sanctum sit on high ground, and tree, rock and grass density
+  differ per zone. The forest also continues past the zone blobs to the
+  foothills; the world is never a bare lawn between regions.
 
 | Zone | Levels | Identity |
 |---|---|---|
@@ -68,8 +77,11 @@ file is the shorter contract used during implementation.
 - The day/night cycle is automatic: one in-game day lasts 15 real minutes and
   starts at 08:15 on day 1. The HUD clock shows the time, day and phase
   (Dawn / Day / Dusk / Night).
-- There is **no minimap**. `M` opens a full-screen map drawn from the same zone,
-  road, pond and landmark data as the world. North is up (-Z).
+- There is **no minimap**. `M` opens a full-screen, square **painted map**
+  rendered from the same height and colour grids as the terrain: hillshade,
+  contours every 4 m, forest canopy from real tree positions, ponds, roads and
+  landmarks, with side panels for regions, legend, compass and a 50 m scale bar.
+  Zone outlines are never traced. North is up (-Z).
 
 
 ## 3. Combat and feedback

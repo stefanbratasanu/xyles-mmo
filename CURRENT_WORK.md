@@ -5,21 +5,41 @@ Branch: `main`
 
 ## Current state
 
-Map I is playable as a real 3D continent. The old flat baked arena and the
+Map I is playable as a real 3D forest continent. The old flat baked arena and the
 minimap are gone; the world is built at runtime from one zone table, the game has
-a day/night cycle, MMO chat and a full-screen map, and the HUD has been
-re-laid-out around a bare skill bar.
+a day/night cycle, MMO chat and a full-screen painted map, and the HUD has been
+re-laid-out around a bare skill bar. The world is about 296 m across, ringed by
+mountains that are part of the same height field, and the forest runs from the
+starting camp all the way to the foothills.
 
 ## Completed in this pass
 
 - **World:** five uneven zones (Emberfall Vale 1-3, Thornwood 4-6, Ashen Fen 7-9,
-  The Broken Arch 10-12, Crownless Sanctum 13-15), rolling height-field terrain
-  with collision, a branched 34-edge road network, fen ponds, a camp, ruins, a
-  sanctum and a sealed waygate. All of it lives in `scripts/world_builder.gd`.
+  The Broken Arch 10-12, Crownless Sanctum 13-15) in a 296 m square
+  (`BOUNDS` 148). Rolling height-field terrain with collision, a branched
+  34-edge road network, fen ponds, a camp, ruins, a sanctum and a sealed
+  waygate. All of it lives in `scripts/world_builder.gd`.
+- **Mountains:** the square edge of the world rises into a real ridge
+  (`RIM_START` 160, crest at `RIM_END` 200, `RIM_HEIGHT` 32) built from two
+  ridged-noise fields, then falls away again at 206-223 so the mesh edge hides
+  behind the crest. No separate cone/crag props remain; rock and alpine colour
+  climb with altitude, and a pine belt covers the 140-170 m foothills.
+- **Biomes:** each zone now has its own `elevation`, `relief`, `tree_count`,
+  `rock_count` and `grass_count`, so the fen is a wet lowland, the arch and
+  sanctum sit on high ground, and the colour/vegetation change is physical, not
+  only painted on the map.
+- **Vegetation:** taller Blender trees (oak ~11 m, birch ~11.5 m, pine ~11.8 m,
+  dead ~10 m) with smooth-shaded crowns; a 760-tree outskirt pass and 7000
+  outskirt grass tufts continue the forest past the zone blobs to the rim; grass
+  is a three-card alpha-scissor tuft (`grass_blades.png`) in the thousands per
+  zone; bushes are five-puff shrubs; rocks and logs are smaller, sunk into the
+  ground and kept two road cells clear.
 - **Day/night:** a 15-minute in-game day starting at 08:15 day 1, with a clock
   and phase (Dawn / Day / Dusk / Night) in the HUD.
-- **Map:** no minimap. `M` opens a full-screen map generated from the same zone,
-  road, pond and landmark data, with the player heading, clock and legend.
+- **Map:** no minimap. `M` opens a square, painted map rendered from the same
+  height and colour grids as the terrain: hillshade, 4 m contours, canopy
+  density from real tree positions, trunk stipple, ponds and roads, with side
+  panels for regions, legend, compass and a 50 m scale bar. No zone outlines.
 - **Chat:** bottom-left World / Local / Party / Guild panel with timestamps;
   `Enter` focuses the input and typing does not move the character.
 - **HUD:** bare five-slot skill bar with no frame, clock/menu top right, quest
@@ -28,8 +48,8 @@ re-laid-out around a bare skill bar.
   trees, softer sunlight shadows, dimmer pools, rebuilt tents and a smaller
   dormant portal.
 - **Diagnostics:** `scripts/game_log.gd`, `Documentation/DEBUGGING.md`,
-  `Documentation/IMPLEMENTATION_LOG.md`, `--screenshot` tour (9 frames incl. the
-  map and night), `F10` marker, `F9` log folder, `F12` screenshot.
+  `Documentation/IMPLEMENTATION_LOG.md`, `--screenshot` tour (10 frames incl.
+  the map, night and frontier), `F10` marker, `F9` log folder, `F12` screenshot.
 - **Remote watch:** `scripts/dev/check_remote_changes.ps1` reports commits from
   another PC, flags risky edits and appends a report to the implementation log.
   It never edits code; the user must approve any follow-up.
@@ -39,11 +59,13 @@ re-laid-out around a bare skill bar.
 ## Verification done
 
 - Headless import and script parse gate: no script or parse errors.
-- `tests/test_world.gd`: zones, terrain, collision, waygate, roads, ponds,
-  day/night, map, chat and log all pass.
+- `tests/test_world.gd`: zones, gentle-but-real terrain relief, terrain rim,
+  terrain collision, world bounds, waygate, roads, ponds, day/night, painted map
+  texture, no crag props, chat and log all pass.
 - `test_progression.gd`, `test_combat_effects.gd`, `test_skill_panel.gd` pass.
 - `--screenshot` tour inspected at 1600x900; visual defects found in review were
-  fixed and re-checked.
+  fixed and re-checked (floating props, road boulders, empty outskirts, rim
+  framing, map traces).
 - Remote-change script tested against the real remote (clean) and a simulated
   external run (report + exit code 2).
 
@@ -66,5 +88,6 @@ re-laid-out around a bare skill bar.
   that do not have it. This is an editor warning only and does not affect play.
 - A headless quit can report 2 leaked ObjectDB instances at exit; tests still
   exit 0 and gameplay is unaffected. Investigate only if the count grows.
-- The world rebuild costs about 0.4 s at startup; it is logged as
+- The world rebuild costs about 2.5 s at startup (terrain, ~2,000 trees and
+  ~31,000 grass tufts); it is logged as
   `[WORLD] world_ready {"build_ms": ...}`.
