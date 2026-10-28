@@ -24,6 +24,9 @@ var audio: Node
 var combat_effects: Node3D
 var target: CharacterBody3D
 var enemies: Array[CharacterBody3D] = []
+## Alternate wolves and boars along the normal spawn list so Map I always has
+## both species without relying on random rolls.
+var normal_spawn_index: int = 0
 var cooldowns: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
 var support_time: float = 0.0
 var block_time: float = 0.0
@@ -37,6 +40,10 @@ var camera_distance: float = 20.0
 var camera_sensitivity: float = 0.0055
 var camera_reverse_vertical: bool = true
 var master_volume: float = 1.0
+## Graphics toggles from Settings. Persisted under [graphics] and applied to the
+## WorldEnvironment live so the player sees the change before closing the menu.
+var glow_enabled: bool = true
+var ssao_enabled: bool = true
 var camera_focus := Vector3.ZERO
 var region_name: String = "EMBERFALL VALE"
 var context_hint: String = ""
@@ -89,6 +96,8 @@ func _ready() -> void:
 		add_child(world)
 	if world.get_child_count() == 0:
 		world.build()
+	if world.has_method("apply_graphics_settings"):
+		world.apply_graphics_settings(glow_enabled, ssao_enabled)
 	game_log.world("world_ready", {
 		"build_ms": Time.get_ticks_msec() - world_started,
 		"children": world.get_child_count(),
@@ -101,7 +110,7 @@ func _ready() -> void:
 		player.name = "Player"
 		add_child(player)
 	player.game = self
-	var spawn_at: Vector3 = world.player_spawn + Vector3(2.0, 0.0, 1.5)
+	var spawn_at: Vector3 = world.player_spawn + Vector3(0.4, 0.0, 0.6)
 	player.position = Vector3(spawn_at.x, world.height_at(spawn_at.x, spawn_at.z) + 0.15, spawn_at.z)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	camera_pivot = get_node_or_null("CameraOrbit") as Node3D
@@ -339,6 +348,8 @@ func _load_settings() -> void:
 	camera_reverse_vertical = bool(config.get_value("camera", "reverse_vertical", true))
 	camera_sensitivity = clampf(float(config.get_value("camera", "sensitivity", camera_sensitivity)), 0.001, 0.015)
 	master_volume = clampf(float(config.get_value("audio", "master_volume", master_volume)), 0.0, 1.0)
+	glow_enabled = bool(config.get_value("graphics", "glow", glow_enabled))
+	ssao_enabled = bool(config.get_value("graphics", "ambient_occlusion", ssao_enabled))
 	_load_debug_keys(config)
 
 func _load_debug_keys(config: ConfigFile) -> void:
@@ -358,6 +369,8 @@ func save_settings() -> void:
 	config.set_value("camera", "reverse_vertical", camera_reverse_vertical)
 	config.set_value("camera", "sensitivity", camera_sensitivity)
 	config.set_value("audio", "master_volume", master_volume)
+	config.set_value("graphics", "glow", glow_enabled)
+	config.set_value("graphics", "ambient_occlusion", ssao_enabled)
 	for action: String in debug_keys:
 		config.set_value("debug_keys", action, debug_keys[action])
 	config.save(SETTINGS_PATH)
@@ -393,9 +406,32 @@ func reset_settings() -> void:
 	camera_reverse_vertical = true
 	camera_sensitivity = 0.0055
 	master_volume = 1.0
+	glow_enabled = true
+	ssao_enabled = true
 	if is_instance_valid(audio):
 		audio.set_master_volume(master_volume)
+	_apply_graphics_settings()
 	save_settings()
+
+
+func _apply_graphics_settings() -> void:
+	if is_instance_valid(world) and world.has_method("apply_graphics_settings"):
+		world.apply_graphics_settings(glow_enabled, ssao_enabled)
+
+
+func set_glow_enabled(enabled: bool) -> void:
+	glow_enabled = enabled
+	_apply_graphics_settings()
+	save_settings()
+	game_log.ui("graphics_option", {"option": "glow", "enabled": enabled})
+
+
+func set_ssao_enabled(enabled: bool) -> void:
+	ssao_enabled = enabled
+	_apply_graphics_settings()
+	save_settings()
+	game_log.ui("graphics_option", {"option": "ambient_occlusion", "enabled": enabled})
+
 
 func _update_camera(delta: float) -> void:
 	camera_focus = camera_focus.lerp(player.global_position + Vector3.UP * 1.0, minf(delta * 7.0, 1.0))
@@ -526,7 +562,7 @@ func _player_died() -> void:
 	_on_notice("You have fallen. Equipment durability lost. Returning to Emberfall in 4 seconds.")
 	audio.cue("death")
 	await get_tree().create_timer(4.0).timeout
-	player.position = world.player_spawn + Vector3(2, 0.2, 1)
+	player.position = world.player_spawn + Vector3(0.4, 0.2, 0.6)
 	player.revive_animation()
 	state.restore()
 	player.invulnerable_time = 3.0
@@ -535,11 +571,19 @@ func _player_died() -> void:
 	_on_notice("Reawakened at Emberfall. Repair at the forge [I]. Dropped gear remains where you fell.")
 	_save_journey()
 
-func _spawn_enemy(kind: String, at: Vector3, training_level: int = 0) -> CharacterBody3D:
+func _spawn_enemy(kind: String, at: Vector3, training_level: int = 0, species: String = "") -> CharacterBody3D:
 	var enemy := EnemyScript.new()
 	enemy.game = self
 	enemy.kind = kind
-	enemy.display_name = "Briarwolf" if kind == "normal" else ("Oathbound Guardian" if kind == "quest" else "The Hollow Regent")
+	if kind == "normal":
+		if species.is_empty():
+			species = "boar" if normal_spawn_index % 2 == 1 else "wolf"
+			normal_spawn_index += 1
+		enemy.species = species
+		enemy.display_name = "Ridge Boar" if species == "boar" else "Briarwolf"
+	else:
+		enemy.species = "guardian"
+		enemy.display_name = "Oathbound Guardian" if kind == "quest" else "The Hollow Regent"
 	enemy.home = at
 	var zone: Dictionary = world.zone_at(at)
 	var scaling_zone := zone.duplicate()
@@ -548,6 +592,7 @@ func _spawn_enemy(kind: String, at: Vector3, training_level: int = 0) -> Charact
 		scaling_zone["level_max"] = training_level
 		enemy.set_meta("training_minion", true)
 		enemy.display_name = "Training Briarwolf"
+		enemy.species = "wolf"
 	enemy.configure_zone(scaling_zone)
 	add_child(enemy)
 	enemy.position = at + Vector3.UP * 0.15
@@ -574,7 +619,7 @@ func spawn_training_minions(count: int, level: int) -> int:
 		at.x = clampf(at.x, -world.BOUNDS + 1.0, world.BOUNDS - 1.0)
 		at.z = clampf(at.z, -world.BOUNDS + 1.0, world.BOUNDS - 1.0)
 		at.y = world.height_at(at.x, at.z)
-		_spawn_enemy("normal", at, clampi(level, 1, 100))
+		_spawn_enemy("normal", at, clampi(level, 1, 100), "wolf")
 	game_log.gameplay("training_minions_spawned", {"count": amount, "level": clampi(level, 1, 100)})
 	return amount
 
@@ -604,7 +649,7 @@ func enemy_defeated(enemy: CharacterBody3D) -> void:
 		target = null
 	enemies.erase(enemy)
 	if enemy.kind == "normal":
-		respawns.append({"kind": "normal", "position": enemy.home, "timer": 28.0})
+		respawns.append({"kind": "normal", "position": enemy.home, "timer": 28.0, "species": enemy.species})
 	elif enemy.kind == "boss":
 		boss_respawn = 180.0
 		respawns.append({"kind": "boss", "position": enemy.home, "timer": 180.0})
@@ -615,7 +660,7 @@ func _process_respawns(delta: float) -> void:
 	for index in range(respawns.size() - 1, -1, -1):
 		respawns[index]["timer"] = float(respawns[index]["timer"]) - delta
 		if float(respawns[index]["timer"]) <= 0:
-			_spawn_enemy(str(respawns[index]["kind"]), respawns[index]["position"])
+			_spawn_enemy(str(respawns[index]["kind"]), respawns[index]["position"], 0, str(respawns[index].get("species", "")))
 			respawns.remove_at(index)
 
 func _on_state_changed() -> void:

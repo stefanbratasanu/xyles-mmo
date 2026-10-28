@@ -168,7 +168,15 @@ $allFiles = @($external | ForEach-Object { $_.Files } | Sort-Object -Unique)
 $generatedMeta = @($allFiles | Where-Object { $_ -like "*.uid" -or $_ -like "*.import" })
 $sourceFiles = @($allFiles | Where-Object { $_ -notlike "*.uid" -and $_ -notlike "*.import" })
 
-foreach ($file in $sourceFiles) {
+foreach ($rawFile in $sourceFiles) {
+    # git renders renames as "old => new" or "dir/{old => new}/file". Use the
+    # destination path; braces and arrows are illegal characters to Path APIs.
+    $file = $rawFile
+    if ($file -match '\{(.*?) => (.*?)\}') {
+        $file = $file -replace '\{(.*?) => (.*?)\}', '$2'
+    } elseif ($file -match ' => ') {
+        $file = ($file -split ' => ')[-1]
+    }
     if ($file -like "addons/*" -and $file -notlike "addons/effekseer/*") {
         $flags.Add("New or changed addon outside addons/effekseer: ``$file``. Review before running.")
     }

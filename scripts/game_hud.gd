@@ -791,7 +791,7 @@ func _render_forge() -> void:
 
 func _render_settings() -> void:
 	overlay_title.text = "Settings"
-	overlay_subtitle.text = "Tune camera handling and audio. Changes apply immediately and save when you close the menu."
+	overlay_subtitle.text = "Tune camera handling, graphics and audio. Changes apply immediately and save when you close the menu."
 	var camera_card: PanelContainer = _panel(Color("121f25"))
 	overlay_content.add_child(camera_card)
 	var camera_column: VBoxContainer = _column(camera_card, 20, 16)
@@ -824,6 +824,28 @@ func _render_settings() -> void:
 	sensitivity_row.add_child(sensitivity_value)
 	sensitivity_slider.value_changed.connect(_set_camera_sensitivity.bind(sensitivity_value))
 	sensitivity_slider.drag_ended.connect(_commit_settings)
+
+	var graphics_card: PanelContainer = _panel(Color("121f25"))
+	overlay_content.add_child(graphics_card)
+	var graphics_column: VBoxContainer = _column(graphics_card, 20, 16)
+	graphics_column.add_child(_label("GRAPHICS", 11, GOLD))
+	var glow_check: CheckButton = CheckButton.new()
+	glow_check.text = "Glow on fire, lanterns and runes"
+	glow_check.button_pressed = bool(game.glow_enabled)
+	glow_check.focus_mode = Control.FOCUS_NONE
+	glow_check.add_theme_color_override("font_color", TEXT)
+	glow_check.add_theme_font_size_override("font_size", 13)
+	glow_check.toggled.connect(_set_glow_enabled)
+	graphics_column.add_child(glow_check)
+	var ao_check: CheckButton = CheckButton.new()
+	ao_check.text = "Ambient occlusion (contact shadows)"
+	ao_check.button_pressed = bool(game.ssao_enabled)
+	ao_check.focus_mode = Control.FOCUS_NONE
+	ao_check.add_theme_color_override("font_color", TEXT)
+	ao_check.add_theme_font_size_override("font_size", 13)
+	ao_check.toggled.connect(_set_ssao_enabled)
+	graphics_column.add_child(ao_check)
+	graphics_column.add_child(_label("TURN BOTH OFF ON A SLOW GPU", 9, MUTED))
 
 	var audio_card: PanelContainer = _panel(Color("121f25"))
 	overlay_content.add_child(audio_card)
@@ -1072,6 +1094,14 @@ func _activate_skill(index: int) -> void:
 func _set_camera_reverse_vertical(enabled: bool) -> void:
 	game.camera_reverse_vertical = enabled
 	game.save_settings()
+
+
+func _set_glow_enabled(enabled: bool) -> void:
+	game.set_glow_enabled(enabled)
+
+
+func _set_ssao_enabled(enabled: bool) -> void:
+	game.set_ssao_enabled(enabled)
 
 
 func _set_camera_sensitivity(value: float, readout: Label) -> void:

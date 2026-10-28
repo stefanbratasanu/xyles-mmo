@@ -19,7 +19,7 @@ import os
 import random
 
 import bpy
-from mathutils import Vector, noise
+from mathutils import Matrix, Vector, noise
 
 OUT_DIR = os.path.dirname(os.path.abspath(__file__))
 random.seed(20261028)
@@ -116,23 +116,97 @@ def ico(name, center, radius, scale, mat, subdivision=1, lumpy=0.08):
     return smooth(obj)
 
 
+def card_mesh(name, cards, mat):
+    """Builds the bush foliage as alpha-card quads with UVs and a leaf tint.
+
+    The runtime swaps this surface for `leaves_card`, so the cards must carry a
+    0..1 UV square and a per-card vertex colour just like the tree canopies.
+    """
+    verts = []
+    uvs = []
+    faces = []
+    tints = []
+    for center, half_right, half_up in cards:
+        if half_right.length < 0.01 or half_up.length < 0.01:
+            continue
+        p0 = center - half_right - half_up
+        p1 = center + half_right - half_up
+        p2 = center + half_right + half_up
+        p3 = center - half_right + half_up
+        base = len(verts)
+        verts.extend([p0, p1, p2, p3])
+        faces.append((base, base + 1, base + 2, base + 3))
+        uvs.extend([(0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0)])
+        shade = random.uniform(0.80, 1.04)
+        tints.append((
+            shade * random.uniform(0.94, 1.04),
+            shade * random.uniform(0.98, 1.06),
+            shade * random.uniform(0.86, 0.98),
+            1.0,
+        ))
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(verts, [], faces)
+    uv_layer = mesh.uv_layers.new(name="UVMap")
+    for loop in mesh.loops:
+        uv_layer.data[loop.index].uv = uvs[loop.vertex_index]
+    color_layer = mesh.color_attributes.new(name="Col", type="FLOAT_COLOR", domain="CORNER")
+    for loop in mesh.loops:
+        color_layer.data[loop.index].color = tints[loop.index // 4]
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(obj)
+    assign(obj, mat)
+    return obj
+
+
+def bush_cards(clusters):
+    """Three cards per cluster: two horizontal and two vertical, randomly yawed."""
+    cards = []
+    for center, size, outward in clusters:
+        half_w = size * 0.5 * random.uniform(0.92, 1.10)
+        half_h = size * 0.5 * random.uniform(0.86, 1.06)
+        for blade in range(2):
+            yaw = random.uniform(0.0, math.tau)
+            tangent = Vector((math.cos(yaw), math.sin(yaw), 0.0))
+            across = Vector((-math.sin(yaw), math.cos(yaw), 0.0))
+            tilt = Vector((0.0, 0.0, random.uniform(-0.18, 0.18)))
+            offset = Vector((random.uniform(-0.05, 0.05),
+                             random.uniform(-0.05, 0.05),
+                             random.uniform(-0.04, 0.04)))
+            cards.append((center + offset,
+                          tangent * half_w + tilt * half_w,
+                          across * half_h))
+        flat = Vector((outward.x, outward.y, 0.0))
+        if flat.length < 0.01:
+            flat = Vector((1.0, 0.0, 0.0))
+        flat.normalize()
+        across = Vector((-flat.y, flat.x, 0.0))
+        for blade in range(2):
+            yaw = random.uniform(-0.55, 0.55)
+            tangent = Matrix.Rotation(yaw, 4, Vector((0.0, 0.0, 1.0))) @ across
+            lean = Vector((flat.x, flat.y, 0.0)) * random.uniform(-0.22, 0.22)
+            cards.append((center,
+                          tangent * half_w,
+                          (Vector((0.0, 0.0, 1.0)) + lean) * half_h))
+    return cards
+
+
 def build_bush():
     bark = material("Twig", (0.24, 0.19, 0.12), 0.96)
-    leaves = material("Leaves", (0.19, 0.33, 0.15), 0.90)
-    parts = []
-    for index in range(5):
-        angle = math.tau * float(index) / 5.0 + random.uniform(-0.3, 0.3)
-        reach = random.uniform(0.25, 0.55)
+    leaves = material("BushLeafCards", (0.20, 0.36, 0.16), 0.90)
+    twigs = []
+    for index in range(6):
+        angle = math.tau * float(index) / 6.0 + random.uniform(-0.3, 0.3)
+        reach = random.uniform(0.24, 0.48)
         base = Vector((0.0, 0.0, 0.0))
         tip = Vector((
             math.cos(angle) * reach,
             math.sin(angle) * reach,
-            random.uniform(0.30, 0.62),
+            random.uniform(0.28, 0.58),
         ))
         bpy.ops.mesh.primitive_cone_add(
             vertices=5,
             radius1=0.045,
-            radius2=0.014,
+            radius2=0.012,
             depth=(tip - base).length,
             location=(base + tip) * 0.5,
         )
@@ -141,23 +215,29 @@ def build_bush():
         twig.rotation_quaternion = (tip - base).to_track_quat("Z", "Y")
         bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
         assign(twig, bark)
-        parts.append(twig)
-    clumps = [
-        ((0.0, 0.0, 0.62), 0.42, (1.15, 1.0, 0.78)),
-        ((0.34, 0.12, 0.48), 0.30, (1.1, 0.95, 0.75)),
-        ((-0.30, 0.16, 0.46), 0.31, (1.1, 0.95, 0.78)),
-        ((0.08, -0.34, 0.44), 0.29, (1.0, 1.1, 0.75)),
-        ((-0.10, 0.30, 0.74), 0.26, (1.0, 1.0, 0.80)),
-        ((0.18, 0.02, 0.90), 0.24, (1.0, 1.0, 0.82)),
+        twigs.append(twig)
+    bark_obj = join(twigs, "BushTwigs")
+    # Seven overlapping leaf clusters, including two low ones that hide the root
+    # so the shrub is foliage all the way down instead of a ball on sticks.
+    clusters = [
+        (Vector((0.00, 0.00, 0.62)), 0.66, Vector((0.0, 0.0, 1.0))),
+        (Vector((0.30, 0.10, 0.52)), 0.54, Vector((0.8, 0.2, 0.4))),
+        (Vector((-0.28, 0.13, 0.50)), 0.55, Vector((-0.8, 0.2, 0.4))),
+        (Vector((0.06, -0.30, 0.46)), 0.50, Vector((0.1, -0.9, 0.4))),
+        (Vector((-0.05, 0.28, 0.56)), 0.48, Vector((-0.1, 0.9, 0.4))),
+        (Vector((0.18, -0.02, 0.82)), 0.46, Vector((0.5, 0.0, 0.8))),
+        (Vector((-0.17, -0.10, 0.78)), 0.44, Vector((-0.5, -0.2, 0.8))),
     ]
-    for index, (center, radius, scale) in enumerate(clumps):
-        parts.append(
-            ico("BushLeaf%02d" % index, center, radius, scale, leaves,
-                subdivision=1, lumpy=0.12)
-        )
-    # Foliage must be the strongest silhouette: join twigs first, then leaves so
-    # the flat base clamp still sees the twig roots.
-    joined = join(parts, "Bush")
+    foliage = card_mesh("BushLeaves", bush_cards(clusters), leaves)
+    # Join with the twigs active so surface 0 stays bark and surface 1 stays
+    # foliage, matching the tree contract used by world_builder.gd.
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj in (bark_obj, foliage):
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = bark_obj
+    bpy.ops.object.join()
+    joined = bpy.context.object
+    joined.name = "Bush"
     ground_flat(joined)
     return joined
 

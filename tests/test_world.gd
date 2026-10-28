@@ -3,7 +3,7 @@ extends SceneTree
 ## Verifies the Map I world contract: five zones with distinct level bands,
 ## finite rolling terrain, the sealed waygate inside the hardest zone, a branched
 ## road network, the day/night cycle, the full-screen map, MMO chat channels, the
-## runtime log, carved wading ponds and committed enemy attacks.
+## runtime log, carved wading ponds, forest families and committed enemy attacks.
 ##
 ## Run:
 ##   .\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/test_world.gd
@@ -25,6 +25,7 @@ func _run() -> void:
 	assert(world != null, "world builder did not run")
 
 	_test_zones()
+	_test_forest_families()
 	_test_terrain()
 	_test_water()
 	_test_waygate()
@@ -34,10 +35,15 @@ func _run() -> void:
 	_test_chat()
 	_test_log()
 	_test_enemy_ai()
+	_test_creatures()
+	_test_road_lamps()
+	_test_ground_cover()
+	_test_camp()
+	_test_sky()
 
 	game.queue_free()
 	await process_frame
-	print("PASS: 5 zones, finite terrain, sanctum waygate, branched roads, day/night, map, chat, runtime log, enemy AI")
+	print("PASS: 5 zones, forest families, finite terrain, sanctum waygate, branched roads, day/night, map, chat, runtime log, committed enemy attacks, modelled creatures, road lamps, ground cover, camp, moving sky, glow and ambient occlusion")
 	quit()
 
 
@@ -69,6 +75,45 @@ func _test_zones() -> void:
 		min_distance = minf(min_distance, distance)
 		max_distance = maxf(max_distance, distance)
 	assert(max_distance - min_distance > 1.5, "zone boundary is a perfect circle")
+
+
+## Conifer regions must not grow broadleaf trees and the two woods must not grow
+## pines. This is a design rule, not a random roll: it is baked into the zone
+## tables and inherited by the outskirt forest.
+func _test_forest_families() -> void:
+	var by_id: Dictionary = {}
+	for zone: Dictionary in world.zones:
+		by_id[str(zone["id"])] = zone["trees"]
+	for id: String in ["vale", "thornwood"]:
+		var mix: Dictionary = by_id[id]
+		assert(mix.has("oak") and mix.has("birch"), "%s needs oak and birch" % id)
+		assert(not mix.has("pine") and not mix.has("dead"), "%s must not mix conifers or dead trees" % id)
+	for id: String in ["arch", "sanctum"]:
+		var mix: Dictionary = by_id[id]
+		assert(mix.size() == 1 and mix.has("pine"), "%s must be pine only, got %s" % [id, mix])
+	var fen: Dictionary = by_id["fen"]
+	assert(fen.has("dead") and fen.has("pine") and fen.size() == 2,
+		"the fen must be dead trees plus pines, got %s" % fen)
+	# Outskirts pick their family from the nearest region, so a pine ridge does
+	# not gain an oak at its foot just because the point is outside the blob.
+	for step: int in range(48):
+		var angle: float = TAU * float(step) / 48.0
+		var point: Vector2 = Vector2(cos(angle), sin(angle)) * (float(world.BOUNDS) - 6.0)
+		var nearest: Dictionary = world.zones[0]
+		var best: float = INF
+		for zone: Dictionary in world.zones:
+			var distance: float = point.distance_to(zone["center"]) - float(zone["radius"])
+			if distance < best:
+				best = distance
+				nearest = zone
+		var kind: String = str(world.call("_outskirt_tree", point))
+		var mix: Dictionary = nearest["trees"]
+		if float(mix.get("pine", 0.0)) >= 0.5 and not mix.has("dead"):
+			assert(kind == "pine", "outskirt near %s grew a %s" % [nearest["name"], kind])
+		elif mix.has("dead"):
+			assert(kind == "dead" or kind == "pine", "fen outskirt grew a %s" % kind)
+		else:
+			assert(kind == "oak" or kind == "birch", "wood outskirt grew a %s" % kind)
 
 
 func _test_terrain() -> void:
@@ -384,3 +429,232 @@ func _test_enemy_ai() -> void:
 	boss._physics_process(0.02)
 	assert(boss.slam_active, "an engaged boss did not start its slam")
 	assert(boss.telegraph != null, "the slam has no red telegraph")
+	# --- Committed bite: stepping off the locked point dodges the wolf. ---
+	game.player.global_position = Vector3(0.0, 2.0, 16.0)
+	wolf.global_position = game.player.global_position + Vector3(1.0, 0.0, 0.0)
+	wolf.home = wolf.global_position
+	wolf.aggro = true
+	wolf.attack_timer = 0.0
+	wolf.species = "wolf"
+	wolf._physics_process(0.02)
+	assert(wolf.winding_up and wolf.attack_type == "bite", "wolf did not commit to a bite")
+	var wolf_point: Vector3 = wolf.locked_point
+	game.player.global_position = wolf_point + Vector3(0.0, 0.0, 3.0)
+	var hp_after_wolf_dodge: float = game.state.hp
+	for step: int in range(60):
+		wolf._physics_process(0.02)
+	assert(not wolf.winding_up, "wolf never finished its committed bite")
+	assert(is_equal_approx(game.state.hp, hp_after_wolf_dodge),
+		"the wolf hit a player who had left the locked point")
+	# --- Boar charge: the lane is committed, so a sidestep is a clean dodge. ---
+	var boar = null
+	for candidate in game.enemies:
+		if candidate.kind == "normal" and candidate.species == "boar":
+			boar = candidate
+			break
+	assert(boar != null, "Map I normal spawns contain no boar")
+	game.player.global_position = Vector3(0.0, 2.0, 16.0)
+	boar.global_position = game.player.global_position + Vector3(4.0, 0.0, 0.0)
+	boar.home = boar.global_position
+	boar.aggro = true
+	boar.attack_timer = 0.0
+	boar.charge_active = false
+	boar._physics_process(0.02)
+	assert(boar.winding_up and boar.attack_type == "charge", "boar did not commit to a charge")
+	var charge_point: Vector3 = boar.locked_point
+	game.player.global_position = charge_point + Vector3(0.0, 0.0, 5.0)
+	var hp_after_charge_dodge: float = game.state.hp
+	for step: int in range(80):
+		boar._physics_process(0.02)
+	assert(not boar.charge_active, "the boar never ended its charge")
+	assert(is_equal_approx(game.state.hp, hp_after_charge_dodge),
+		"the boar charge hit a player who sidestepped the lane")
+	# --- Every normal in Map I is a wolf or a boar, and both species exist. ---
+	var species_seen: Dictionary = {}
+	for candidate in game.enemies:
+		if candidate.kind != "normal":
+			continue
+		assert(candidate.species == "wolf" or candidate.species == "boar",
+			"normal spawn has unknown species '%s'" % candidate.species)
+		species_seen[candidate.species] = true
+	assert(species_seen.has("wolf") and species_seen.has("boar"),
+		"Map I normals must contain both wolves and boars")
+
+
+func _test_creatures() -> void:
+	# The wolf and boar are modelled in Blender, not built from primitives. A
+	# bare GLB would still load, so assert the detail that makes them read as
+	# animals: real geometry, emissive eyes and the runtime alpha-cut fur cards
+	# (the GLB itself exports blended transparency, which the runtime replaces).
+	for entry: Array in [["wolf.glb", "build_wolf", 9000], ["boar.glb", "build_boar", 8000]]:
+		var visual: Node3D = load("res://scripts/actor_visual.gd").new()
+		root.add_child(visual)
+		visual.call(str(entry[1]))
+		var triangles: int = 0
+		var cards: int = 0
+		var eyes: int = 0
+		for node: Node in visual.find_children("*", "MeshInstance3D", true, false):
+			var instance := node as MeshInstance3D
+			if instance.mesh == null:
+				continue
+			triangles += instance.mesh.get_faces().size() / 3
+			for surface: int in range(instance.mesh.get_surface_count()):
+				var material: Material = instance.get_surface_override_material(surface)
+				if material == null:
+					material = instance.mesh.surface_get_material(surface)
+				if material is BaseMaterial3D:
+					var base := material as BaseMaterial3D
+					if base.resource_name == "FurCard":
+						cards += 1
+					if base.emission_enabled:
+						eyes += 1
+		assert(triangles >= int(entry[2]),
+			"%s is still the primitive fallback (%d triangles)" % [entry[0], triangles])
+		assert(cards > 0, "%s has no runtime fur-card material" % entry[0])
+		assert(eyes > 0, "%s has no emissive eye material" % entry[0])
+		visual.queue_free()
+
+
+func _test_road_lamps() -> void:
+	var lamps: Array[Vector3] = world.road_lamps
+	assert(not lamps.is_empty(), "no road lamps were placed")
+	assert(lamps.size() <= 13, "too many road lamps: %d" % lamps.size())
+	var verge_min: float = world.ROAD_WIDTH * 0.5 + 0.4
+	for index: int in range(lamps.size()):
+		var lamp: Vector3 = lamps[index]
+		var distance: float = world._road_distance(Vector2(lamp.x, lamp.z))
+		assert(distance > verge_min, "a road lamp stands on the road ribbon")
+		assert(distance < verge_min + 4.5, "a road lamp is adrift in the field")
+		for other: int in range(index + 1, lamps.size()):
+			assert(lamp.distance_to(lamps[other]) >= 44.0,
+				"road lamps are packed closer than 44 m")
+	# Lamps must actually light the night; a mesh with no omni light is scenery.
+	var lamp_lights: int = 0
+	for light: OmniLight3D in world._night_lights:
+		for lamp: Vector3 in lamps:
+			if light.global_position.distance_to(lamp) < 3.5:
+				lamp_lights += 1
+				break
+	assert(lamp_lights >= lamps.size(), "some road lamps have no light source")
+
+
+func _test_ground_cover() -> void:
+	var grass := world.get_node_or_null("MeadowGrass") as MultiMeshInstance3D
+	assert(grass != null and grass.multimesh != null, "meadow grass was not built")
+	assert(grass.multimesh.instance_count > 2000, "the meadow grass is too sparse")
+	var grass_material: Material = grass.multimesh.mesh.surface_get_material(0)
+	assert(grass_material is ShaderMaterial, "grass is not using the blade shader")
+	var shader := (grass_material as ShaderMaterial).shader
+	assert(shader != null and shader.code.contains("alpha_to_coverage"),
+		"grass shader lost its anti-aliased coverage path")
+	# No blade on the road ribbon: sample the whole field rather than trusting
+	# the placement loop that wrote it.
+	assert(world.grass_points.size() == grass.multimesh.instance_count,
+		"the grass audit trail does not match the drawn tufts")
+	var step: int = maxi(1, world.grass_points.size() / 500)
+	for index: int in range(0, world.grass_points.size(), step):
+		var point: Vector2 = world.grass_points[index]
+		assert(not world._on_road(point, 0.05),
+			"grass grows on the road at (%.1f, %.1f)" % [point.x, point.y])
+	var brush := world.get_node_or_null("Underbrush") as MultiMeshInstance3D
+	assert(brush != null and brush.multimesh != null, "the underbrush was not built")
+	assert(brush.multimesh.instance_count > 400, "the underbrush is too sparse")
+	assert(brush.multimesh.mesh.get_surface_count() >= 2,
+		"bushes have no separate foliage surface")
+	var leaves: Material = brush.multimesh.mesh.surface_get_material(1)
+	assert(leaves is StandardMaterial3D and (leaves as StandardMaterial3D).albedo_texture != null,
+		"bush foliage has no alpha-card texture")
+
+
+func _test_camp() -> void:
+	var camp: Node3D = world.get_node_or_null("SurvivorCamp")
+	assert(camp != null, "the starting camp was not built")
+	# Godot gives repeated sibling names opaque "@Node3D@12" names, so match
+	# structures (a tent canopy, a log seat) instead of node names.
+	var tents: Array[Node] = []
+	var logs: int = 0
+	var beds: int = 0
+	for child: Node in camp.get_children():
+		if child is MeshInstance3D:
+			continue
+		if child.get_node_or_null("TentCanopy") != null:
+			tents.append(child)
+		elif child.get_node_or_null("LogSeat") != null:
+			logs += 1
+	assert(tents.size() == 4, "expected four walk-in tents, found %d" % tents.size())
+	for tent: Node in tents:
+		var tent_beds := tent.find_children("GroundBed*", "Node3D", true, false)
+		assert(tent_beds.size() == 1, "a walk-in tent has no ground bed")
+		beds += tent_beds.size()
+	assert(beds == 4, "the camp does not have four beds")
+	assert(logs == 2, "expected two log seats by the fire, found %d" % logs)
+	assert(camp.find_children("Flame", "Node3D", true, false).size() > 0,
+		"the campfire has no flame")
+	var body := camp.get_node_or_null("CampFenceBody") as StaticBody3D
+	assert(body != null, "the camp fence has no collision body")
+	# A gate is only a gate if the fence leaves a hole where the road enters.
+	var centre := Vector2(world.camp_position.x, world.camp_position.z)
+	var gates: Array[float] = []
+	for polyline: PackedVector2Array in world.roads:
+		if polyline.size() < 2:
+			continue
+		var start: Vector2 = polyline[0]
+		var direction: Vector2 = polyline[1] - polyline[0]
+		if start.distance_to(centre) > 2.0:
+			start = polyline[polyline.size() - 1]
+			direction = polyline[polyline.size() - 2] - start
+			if start.distance_to(centre) > 2.0:
+				continue
+		if direction.length() < 0.01:
+			continue
+		gates.append(atan2(direction.y, direction.x))
+	assert(gates.size() >= 3, "the camp does not open onto at least three roads")
+	var segments: int = 0
+	for child: Node in body.get_children():
+		var collision := child as CollisionShape3D
+		if collision == null:
+			continue
+		segments += 1
+		var offset := Vector2(collision.position.x, collision.position.z)
+		if offset.length() < 4.0:
+			continue
+		var angle := atan2(offset.y, offset.x)
+		for gate: float in gates:
+			assert(absf(angle_difference(angle, gate)) > 0.12,
+				"a fence segment blocks a camp gate")
+	assert(segments >= gates.size() * 2,
+		"the fence has too few segments to enclose the camp")
+
+
+func _test_sky() -> void:
+	assert(world._environment != null, "the environment was not built")
+	var environment := world._environment as Environment
+	var sky := environment.sky as Sky
+	assert(sky != null, "the environment has no sky")
+	assert(sky.process_mode == Sky.PROCESS_MODE_REALTIME,
+		"the moving cloud deck needs a realtime sky")
+	var material := world._sky_material as ShaderMaterial
+	assert(material != null and material.shader != null,
+		"the frontier sky shader is missing")
+	assert(material.shader.code.contains("cloud"),
+		"the sky shader has no cloud layer")
+	# Glow is what makes the fire, lanterns, runes and eyes read at night, and
+	# SSAO grounds props and actors. Both must default on and be live-togglable.
+	assert(environment.glow_enabled, "glow should be enabled by default")
+	assert(environment.ssao_enabled, "ambient occlusion should be enabled by default")
+	assert(game.glow_enabled and game.ssao_enabled,
+		"the graphics settings should default to on")
+	assert(environment.glow_blend_mode == Environment.GLOW_BLEND_MODE_SCREEN,
+		"glow should screen-blend so it only adds light")
+	assert(environment.glow_hdr_threshold >= 1.0,
+		"glow should only catch light sources above the HDR threshold")
+	for level: int in [2, 3, 4]:
+		assert(environment.get_glow_level(level) > 0.0,
+			"glow level %d should contribute to the halo" % level)
+	world.apply_graphics_settings(false, false)
+	assert(not environment.glow_enabled, "disabling glow did not reach the environment")
+	assert(not environment.ssao_enabled, "disabling occlusion did not reach the environment")
+	world.apply_graphics_settings(true, true)
+	assert(environment.glow_enabled and environment.ssao_enabled,
+		"re-enabling graphics effects did not reach the environment")
+

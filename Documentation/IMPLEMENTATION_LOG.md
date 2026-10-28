@@ -360,3 +360,184 @@ The 640 px map texture is generated lazily on first open and cached, so the firs
 **Verified.** Integration test passed under Direct3D 12 and its 1600×900 layout was inspected. Skill runtime, skill panel, combat effects and world tests passed. Runtime diagnostics recorded key changes and debug actions without game errors. Headless sandbox runs reported user-log/certificate access errors and the known ObjectDB exit warning.
 
 **Risk / follow-up.** Shortcuts operate outside the debug window whenever gameplay input is available. Rebinding accepts unused single physical keys only; modifier combinations and existing gameplay bindings are rejected. Window positions and bindings are saved separately.
+
+## 2026-10-28 - Creature, forest, camp, lamp and sky presentation pass
+
+**Intent.** Make Map I read as a believable action game rather than a prototype:
+enemies that commit to attacks the player can dodge, animals with real eyes and
+fur, forest and camp set dressing that holds up close, and a sky and ground that
+are not noisy or flat.
+
+**Changed.**
+- `scripts/enemy.gd` adds `species` and world-space committed attacks. A wolf
+  locks a point and bites it; a boar locks a point, gores it and can charge down a
+  straight lane; the boss slams a locked circle. Damage tests the locked point,
+  so a sidestep or a step back is a real miss. Map I normals alternate wolf and
+  boar and keep their species on respawn; there are no AoE or cone attacks on
+  normals.
+- `assets/models/creatures/generate_creatures.py` and
+  `make_creature_textures.py` rebuild the wolf and boar: UV-unwrapped pelt atlases
+  (isotropic fibre noise, per-pixel strands, neutral palettes), three nested eye
+  spheres (dark socket, offset amber iris, black pupil) with low emission instead
+  of glowing headlights, nostrils, inner ears, three-claw paws or cloven hooves,
+  tusks, a bristle ridge and two side rows on the boar, a deeper wolf muzzle and
+  brow, and a four-section bushy wolf tail. Fur is a dense alpha-card tuft
+  (`fur_card.png`) placed as crossed quads; `scripts/actor_visual.gd` overrides
+  the GLB's blended material with the project's alpha-scissor + alpha-to-coverage
+  material and tints the cards per species. The old opaque cone tufts read as
+  porcupine quills and were removed.
+- `assets/models/trees/generate_trees.py` now exports one continuous lofted trunk
+  with roots and limbs and dense alpha-scissor leaf/needle cards; conifers carry
+  the same foliage mass as broadleaf crowns. Zone tree tables are single-family:
+  vale/thornwood oak+birch, fen dead+pine, arch/sanctum pine only, outskirts
+  inherit the nearest zone family.
+- `bush.glb` was rebuilt with card foliage (surface 0 bark, surface 1 leaves) and
+  the loader assigns the leaf-card material to surface 1.
+- `shaders/grass.gdshader` uses alpha-to-coverage plus world-space wind, with 4x
+  MSAA and TAA/debanding in `project.godot`. Grass, flowers and bushes reject
+  the road with exact `_road_distance()` / `_on_road()` tests.
+- `scripts/world_builder.gd` rebuilds the camp: a fenced ring whose gates are
+  cut where roads enter, four walk-in tents with ground beds, a stone-ringed fire
+  pit with a live flame, two log seats, forge/anvil, banners and a road sign, with
+  the player spawn inside the ring. Road lamps are sparse medieval poles on the
+  verge (13 max, 44 m apart, camp roads first) and reject positions near any
+  branch; they are dimmed to 20% in daylight. The sky shader scrolls 3D noise
+  clouds with the clock and runs a realtime radiance update.
+- `tests/test_world.gd` adds checks for modelled creatures (triangle count,
+  emissive eye material, runtime fur-card override), road lamps off the ribbon
+  and off other roads with matching lights, grass off the road and the coverage
+  shader, bush foliage surfaces, camp tents/beds/seats/gates/fire, and the
+  realtime moving sky. `world.grass_points` is a small audit array used because
+  a MultiMesh does not return transforms under the headless driver.
+- Probe scripts and probe screenshots used during authoring were deleted.
+
+**Verified.** Headless import and a 300-frame Direct3D 12 launch reported no
+script or parse errors. `test_progression.gd`, `test_combat_effects.gd`,
+`test_skill_panel.gd` and `test_world.gd` pass with exit code 0; the world
+test reports the new creature, lamp, ground-cover, camp and sky assertions. The
+11-frame `--screenshot` tour was inspected at 1600x900, including the day and
+night camp frames.
+
+**Risk / follow-up.** The two creature meshes are roughly 13.6k and 14.9k
+triangles; a large pack of boars costs more than the old primitives, so watch the
+frame time in crowded fights. Fur cards are alpha-tested and depend on the
+runtime override: if a future glTF export drops the card material or renames it,
+`_apply_fur_cards` warns and the creatures lose their coat. The lamp guard now
+checks the whole road network, which moved four lamps off intersecting ribbons
+and kept 12 of the 13 allowed. Grass placement stores 31k points for the test;
+that is about 250 KB and can be dropped if the headless driver ever exposes
+MultiMesh transforms. Map II is still unbuilt.
+
+## 2026-10-28 23:59 - Remote changes from another machine (automatic)
+
+**Source.** `origin/main` moved from `69acc1bc` to `c544b2cd`. Local HEAD is `69acc1bc`.
+
+**Commits not authored on this PC** (local identity: `d.alin_09@yahoo.com`):
+
+- `c544b2cd` 2026-10-28T21:48:56+02:00 **Stefan Bratasanu** - merges (35 files, +1117/-45) [not in local HEAD]
+
+**Files touched by the external commits:**
+
+- `.gitignore`
+- `{editor_plugins => addons}/skill_distribution/plugin.cfg`
+- `{editor_plugins => addons}/skill_distribution/plugin.gd`
+- `addons/effekseer/bin/windows/~libeffekseer.x86_64.dll~RF633b90.TMP`
+- `CURRENT_WORK.md`
+- `Documentation/IMPLEMENTATION_LOG.md`
+- `Documentation/PROJECT_DOCUMENTATION.txt`
+- `Documentation/SKILL_SYSTEM_IMPLEMENTED.md`
+- `Documentation/UI_STANDARD.md`
+- `GAME_RULES.md`
+- `project.godot`
+- `resources/skills/skill_catalog.tres`
+- `scripts/character_select.gd`
+- `scripts/character_store.gd`
+- `scripts/editor/skill_distribution_window.gd`
+- `scripts/enemy.gd`
+- `scripts/game_hud.gd`
+- `scripts/game_state.gd`
+- `scripts/main.gd`
+- `scripts/skill_panel.gd`
+- `scripts/skills/skill_catalog.gd`
+- `scripts/world_builder.gd`
+- `tests/test_characters.gd`
+- `tests/test_distribution_editor.gd`
+- `tests/test_enemy_telegraphs.gd`
+- `tests/test_progression.gd`
+- `tests/test_skill_catalog.gd`
+- `tests/test_skill_panel.gd`
+- `tests/test_training_minions.gd`
+- `tests/test_world.gd`
+- Generated Godot metadata: 5 `.uid`/`.import` file(s) (regenerate with a headless import)
+
+**Flags.**
+
+- New or changed addon outside addons/effekseer: `addons/skill_distribution/plugin.cfg`. Review before running.
+- New or changed addon outside addons/effekseer: `addons/skill_distribution/plugin.gd`. Review before running.
+- Core file changed: `project.godot`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/enemy.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/game_hud.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/game_state.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/main.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/world_builder.gd`. Re-run the game and the tests before trusting it.
+- Hard failure calls on 11 added line(s).
+
+**Proposed actions (not applied).**
+
+- **Re-verify:** launch the game, run the tests, and re-read the changed core files against `GAME_RULES.md`.
+- **Ask first:** review the addon/executable diff with the user before it is allowed to run.
+- Nothing was changed automatically. Confirm each action with the user before editing or reverting.
+
+**Status.** Awaiting the user's decision. This report did not modify any game code.
+
+
+## 2026-10-29 - Glow and ambient occlusion in Settings → Graphics
+
+**Intent.** Make the authored emissive sources actually read as light, ground
+props and actors with contact shadow, and let a slower machine switch both
+effects off without touching the world build.
+
+**Changed.**
+- `scripts/world_builder.gd`: `_create_atmosphere()` now configures glow —
+  screen blend, `glow_hdr_threshold` 1.0, `glow_hdr_scale` 2.0, intensity 0.9,
+  strength 1.0, bloom 0.0, and levels 2-5 at 0.35 / 0.60 / 0.55 / 0.30 (level 1
+  and 6 off). Screen blend only adds light, so the frame is never tinted or
+  darkened, and the 1.0 threshold keeps ordinary sunlit stone out while the
+  emissive fire (1.6-2.4), lanterns, runes and eyes cross it. The existing SSAO
+  values are kept (radius 1.5, intensity 1.5, power 1.4, detail 0.5, light
+  affect 0.12) but now read the `ssao_enabled` flag. New public `glow_enabled` /
+  `ssao_enabled` fields and `apply_graphics_settings()` let a live toggle reach
+  the `Environment` without rebuilding the scene.
+- `scripts/main.gd`: `glow_enabled` / `ssao_enabled` fields, loaded and saved
+  under `[graphics]` (`glow`, `ambient_occlusion`) in `saves/settings.cfg`,
+  applied after the world build, restored by `reset_settings()`, and exposed
+  through `set_glow_enabled()` / `set_ssao_enabled()` which apply, save and write
+  a `graphics_option` UI log event.
+- `scripts/game_hud.gd`: the Settings overlay gains a **GRAPHICS** card between
+  Camera and Audio with two CheckButtons in the existing style: "Glow on fire,
+  lanterns and runes" and "Ambient occlusion (contact shadows)", plus a low-end
+  GPU hint. Both apply immediately.
+- `tests/test_world.gd`: asserts both effects default on (world and game),
+  screen blend, a threshold at or above 1.0, non-zero levels 2-4, and that
+  `apply_graphics_settings(false, false)` / `(true, true)` reach the live
+  environment.
+- `saves/settings.cfg` now carries the `[graphics]` section.
+
+**Verified.** `test_world.gd` passes with the new assertions. A temporary probe
+(removed afterwards) instantiated the game, toggled both options off, confirmed
+the live `Environment` flags, confirmed the `[graphics]` values in
+`saves/settings.cfg`, then confirmed `reset_settings()` restored and re-applied
+them. A 300-frame Direct3D 12 launch reported no script or parse errors.
+`test_progression.gd` (one known transient save-cache failure on the first run,
+passing on rerun), `test_combat_effects.gd` and `test_skill_panel.gd` pass. The
+11-frame `--screenshot` tour was inspected: the night camp fire carries a soft
+halo and lights the tents, and the daytime camp frame shows no haze or tint.
+
+**Risk / follow-up.** Glow and SSAO cost GPU time; both are opt-out for that
+reason. The emissive authors still have to keep light materials above the 1.0
+HDR threshold — dimming a lantern below it silently drops its glow. Fluid
+simulation and the fog hand-off are unchanged. The remote `origin/main` commit
+reported in the automatic section above still needs the user's decision before a
+merge; this pass did not touch that work.
+
+

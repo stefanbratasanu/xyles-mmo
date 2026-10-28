@@ -38,8 +38,11 @@ const ROAD_TEXTURE := preload("res://assets/textures/terrain_road.png")
 const BARK_TEXTURE := preload("res://assets/textures/bark.png")
 const LEAF_TEXTURE := preload("res://assets/textures/leaves.png")
 const NEEDLE_TEXTURE := preload("res://assets/textures/needles.png")
+## Alpha cards drawn by assets/models/trees/make_foliage_textures.py.
+const LEAF_CARD_TEXTURE := preload("res://assets/textures/leaf_card.png")
+const NEEDLE_CARD_TEXTURE := preload("res://assets/textures/needle_card.png")
 
-var player_spawn: Vector3 = Vector3(-32.0, 0.0, 35.0)
+var player_spawn: Vector3 = Vector3(-33.4, 0.0, 32.4)
 var camp_position: Vector3 = Vector3(-36.0, 0.0, 32.0)
 var quest_spawn: Vector3 = Vector3(60.0, 0.0, -52.0)
 var boss_spawn: Vector3 = Vector3(-48.0, 0.0, -88.0)
@@ -65,7 +68,7 @@ var zones: Array[Dictionary] = [
 		"radius": 68.0, "phase": 0.4, "elevation": 0.0, "relief": 0.95,
 		"tree_count": 320, "rock_count": 10, "grass_count": 7000,
 		"ground": Color("7c8a53"), "accent": Color("c7a96b"),
-		"trees": {"oak": 0.50, "birch": 0.35, "pine": 0.15},
+		"trees": {"oak": 0.58, "birch": 0.42},
 		"description": "Rolling meadow and the survivor camp. Safe for new wayfarers.",
 	},
 	{
@@ -74,7 +77,7 @@ var zones: Array[Dictionary] = [
 		"radius": 66.0, "phase": 2.2, "elevation": 0.9, "relief": 1.15,
 		"tree_count": 384, "rock_count": 14, "grass_count": 8500,
 		"ground": Color("445f37"), "accent": Color("8a6a4a"),
-		"trees": {"oak": 0.45, "birch": 0.35, "pine": 0.20},
+		"trees": {"oak": 0.54, "birch": 0.46},
 		"description": "Dense oak and birch. The canopy keeps the ground dark.",
 	},
 	{
@@ -83,7 +86,7 @@ var zones: Array[Dictionary] = [
 		"radius": 64.0, "phase": 4.1, "elevation": -1.6, "relief": 0.32,
 		"tree_count": 192, "rock_count": 8, "grass_count": 1900,
 		"ground": Color("55665b"), "accent": Color("7f9a86"),
-		"trees": {"dead": 0.62, "pine": 0.24, "birch": 0.14},
+		"trees": {"dead": 0.62, "pine": 0.38},
 		"description": "Shallow black ponds and dead trees. Movement is exposed.",
 	},
 	{
@@ -92,7 +95,7 @@ var zones: Array[Dictionary] = [
 		"radius": 64.0, "phase": 1.1, "elevation": 3.0, "relief": 1.30,
 		"tree_count": 264, "rock_count": 30, "grass_count": 3800,
 		"ground": Color("857a5c"), "accent": Color("b09a6c"),
-		"trees": {"pine": 0.72, "oak": 0.28},
+		"trees": {"pine": 1.0},
 		"description": "High stone terraces, broken columns and cold pines.",
 	},
 	{
@@ -101,7 +104,7 @@ var zones: Array[Dictionary] = [
 		"radius": 74.0, "phase": 5.3, "elevation": 4.2, "relief": 1.05,
 		"tree_count": 232, "rock_count": 26, "grass_count": 3200,
 		"ground": Color("3f5257"), "accent": Color("79a79b"),
-		"trees": {"pine": 0.68, "oak": 0.32},
+		"trees": {"pine": 1.0},
 		"description": "The highest ground. The dormant waygate stands in its corner.",
 	},
 ]
@@ -109,6 +112,11 @@ var zones: Array[Dictionary] = [
 var roads: Array[PackedVector2Array] = []
 var time_of_day: float = 8.25
 var day_number: int = 1
+## Graphics options surfaced in Settings. They live on the world so the initial
+## build and a live toggle share one application path, and so a test can assert
+## exactly what the environment received.
+var glow_enabled: bool = true
+var ssao_enabled: bool = true
 
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _hills: FastNoiseLite
@@ -121,6 +129,10 @@ var _terrain_colors: PackedColorArray = PackedColorArray()
 var _terrain_grid_size: int = 0
 var _map_cache: ImageTexture
 var _tree_points: Array[Vector2] = []
+## Every point a grass tuft was placed at. The test driver runs headless, where a
+## MultiMesh does not hand its transforms back from the rendering server, so the
+## road-exclusion check reads this audit trail instead.
+var grass_points: PackedVector2Array = PackedVector2Array()
 var _tree_base: Dictionary = {}
 var _prop_meshes: Dictionary = {}
 var _sites: Array[Dictionary] = []
@@ -129,10 +141,12 @@ var _road_cells: Dictionary = {}
 var _materials: Dictionary = {}
 var _sun: DirectionalLight3D
 var _environment: Environment
-var _sky_material: ProceduralSkyMaterial
+var _sky_material: ShaderMaterial
 var _portal_material: StandardMaterial3D
 var _portal_ring: MeshInstance3D
 var _flames: Array[Node3D] = []
+var _night_lights: Array[OmniLight3D] = []
+var road_lamps: Array[Vector3] = []
 var _elapsed: float = 0.0
 var _prepared: bool = false
 var _phase_name: String = "Day"
@@ -150,7 +164,10 @@ func build() -> void:
 	_road_cells.clear()
 	_materials.clear()
 	_flames.clear()
+	_night_lights.clear()
+	road_lamps.clear()
 	_tree_points.clear()
+	grass_points.clear()
 	_tree_base.clear()
 	_prop_meshes.clear()
 	_init_noise()
@@ -165,6 +182,7 @@ func build() -> void:
 	_create_roads()
 	_create_water()
 	_create_camp()
+	_create_road_lamps()
 	_create_broken_arch()
 	_create_sanctum()
 	_create_waygate()
@@ -316,7 +334,7 @@ func _pond_shore_radius(pond: Dictionary, angle: float) -> float:
 
 
 func _finalize_spawns() -> void:
-	player_spawn = _ground(-32.0, 35.0)
+	player_spawn = _ground(-33.4, 32.4)
 	camp_position = _ground(-36.0, 32.0)
 	quest_spawn = _ground(60.0, -52.0)
 	boss_spawn = _ground(-48.0, -88.0)
@@ -626,9 +644,16 @@ func _create_materials() -> void:
 	_material("wood_light", Color("796044"))
 	_material("iron", Color("333e40"))
 	_material("copper", Color("ad8554"), 0.55)
-	_material("cloth", Color("c4ad80"))
-	_material("cloth_dark", Color("8f8465"))
-	_material("banner", Color("365352"))
+	# Cloth is double sided: the bigger tents are walk-in shelters now, so the
+	# player must see canvas from the inside as well as from the road.
+	var cloth: StandardMaterial3D = _material("cloth", Color("c4ad80"))
+	cloth.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var cloth_dark: StandardMaterial3D = _material("cloth_dark", Color("8f8465"))
+	cloth_dark.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var banner: StandardMaterial3D = _material("banner", Color("365352"))
+	banner.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_material("straw", Color("b49a63"))
+	_material("ash", Color("3c3b36"))
 	_material("grass", Color("6e7848"))
 	_material("coal", Color("1d2826"))
 	_material("fire", Color("ffb45f"), 0.0, Color("ff8c32"), 1.6)
@@ -667,6 +692,11 @@ func _create_materials() -> void:
 	_materials["bark_dead"] = dead_bark
 	_materials["leaves"] = _textured(LEAF_TEXTURE, 0.92)
 	_materials["needles"] = _textured(NEEDLE_TEXTURE, 0.95)
+	# Tree surfaces 1 are alpha cards, not solid puffs. Scissor transparency keeps
+	# them in the opaque pass (no sorting artefacts), double sided so the canopy
+	# never disappears from below, and backlit so thin leaves pick up sky light.
+	_materials["leaves_card"] = _card_material(LEAF_CARD_TEXTURE, Color(1.22, 1.26, 1.10))
+	_materials["needles_card"] = _card_material(NEEDLE_CARD_TEXTURE, Color(1.30, 1.42, 1.20))
 	# The needle atlas is deliberately dark; a bright albedo keeps pine crowns from
 	# collapsing into black silhouettes under the overcast sky.
 	_materials["needles"].albedo_color = Color(1.25, 1.34, 1.16)
@@ -707,20 +737,43 @@ func _textured(texture: Texture2D, roughness: float) -> StandardMaterial3D:
 	return material
 
 
+## Alpha-scissor foliage card. Scissor (not alpha blend) keeps the canopy in the
+## opaque pass, so leaves never sort in front of each other or the player.
+func _card_material(texture: Texture2D, tint: Color) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_texture = texture
+	material.albedo_color = tint
+	material.roughness = 0.90
+	material.vertex_color_use_as_albedo = true
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	material.alpha_scissor_threshold = 0.32
+	# Alpha-to-coverage makes 4x MSAA smooth the card edges without the blur
+	# alpha blending would introduce. Godot falls back to scissor if MSAA is off.
+	material.alpha_antialiasing_mode = BaseMaterial3D.ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE
+	material.alpha_antialiasing_edge = 0.55
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	material.texture_repeat = true
+	material.diffuse_mode = BaseMaterial3D.DIFFUSE_LAMBERT_WRAP
+	material.backlight_enabled = true
+	material.backlight = Color(0.58, 0.72, 0.42)
+	return material
+
+
 func _create_atmosphere() -> void:
 	var world := WorldEnvironment.new()
 	world.name = "FrontierAtmosphere"
 	_environment = Environment.new()
 	_environment.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
-	_sky_material = ProceduralSkyMaterial.new()
-	_sky_material.sky_top_color = Color("3c6f98")
-	_sky_material.sky_horizon_color = Color("c3c9ac")
-	_sky_material.ground_bottom_color = Color("24342c")
-	_sky_material.ground_horizon_color = Color("8f9b83")
-	_sky_material.sun_angle_max = 9.0
-	_sky_material.sun_curve = 0.18
+	_sky_material = ShaderMaterial.new()
+	_sky_material.shader = preload("res://shaders/frontier_sky.gdshader")
 	sky.sky_material = _sky_material
+	# The cloud deck scrolls with TIME, so the radiance map has to follow it.
+	# 256 px is the only cubemap size a realtime sky accepts; it is plenty for
+	# the soft ambient bounce and much cheaper than a full-resolution sky update.
+	sky.process_mode = Sky.PROCESS_MODE_REALTIME
+	sky.radiance_size = Sky.RADIANCE_SIZE_256
 	_environment.sky = sky
 	_environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	_environment.ambient_light_sky_contribution = 1.0
@@ -734,12 +787,29 @@ func _create_atmosphere() -> void:
 	_environment.fog_density = 0.0032
 	_environment.fog_sky_affect = 0.35
 	_environment.fog_aerial_perspective = 0.35
-	_environment.ssao_enabled = true
+	_environment.ssao_enabled = ssao_enabled
 	_environment.ssao_radius = 1.5
 	_environment.ssao_intensity = 1.5
 	_environment.ssao_power = 1.4
 	_environment.ssao_detail = 0.5
 	_environment.ssao_light_affect = 0.12
+	# Glow is the payoff for the emissive fire, lanterns, runes and eyes. Screen
+	# blending only adds light and never darkens or tints the base frame, and the
+	# 1.0 HDR threshold keeps ordinary sunlit stone out of the effect. Levels 3-5
+	# give the tight core a wide, soft halo instead of a hard cut-out.
+	_environment.glow_enabled = glow_enabled
+	_environment.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+	_environment.glow_hdr_threshold = 1.0
+	_environment.glow_hdr_scale = 2.0
+	_environment.glow_intensity = 0.9
+	_environment.glow_strength = 1.0
+	_environment.glow_bloom = 0.0
+	_environment.set_glow_level(1, 0.0)
+	_environment.set_glow_level(2, 0.35)
+	_environment.set_glow_level(3, 0.6)
+	_environment.set_glow_level(4, 0.55)
+	_environment.set_glow_level(5, 0.3)
+	_environment.set_glow_level(6, 0.0)
 	world.environment = _environment
 	add_child(world)
 
@@ -761,6 +831,18 @@ func _create_atmosphere() -> void:
 	_sun.shadow_bias = 0.04
 	_sun.shadow_normal_bias = 1.2
 	add_child(_sun)
+
+
+## Applies the Graphics options from Settings without a world rebuild. Both
+## effects are per-scene Environment flags, so toggling them is immediate and
+## costs nothing until the next frame.
+func apply_graphics_settings(use_glow: bool, use_ssao: bool) -> void:
+	glow_enabled = use_glow
+	ssao_enabled = use_ssao
+	if _environment == null:
+		return
+	_environment.glow_enabled = glow_enabled
+	_environment.ssao_enabled = ssao_enabled
 
 
 func _apply_time_of_day() -> void:
@@ -786,13 +868,34 @@ func _apply_time_of_day() -> void:
 	var night_horizon := Color("243a4d")
 	var dusk_top := Color("3b4a5c")
 	var dusk_horizon := Color("d08a5a")
-	_sky_material.sky_top_color = night_top.lerp(day_top, daylight).lerp(dusk_top, dusk * 0.6)
-	_sky_material.sky_horizon_color = night_horizon.lerp(day_horizon, daylight).lerp(dusk_horizon, dusk * 0.8)
-	_sky_material.ground_bottom_color = Color("0d1512").lerp(Color("3f4a34"), daylight)
-	_sky_material.ground_horizon_color = Color("1d2a2a").lerp(Color("8f9b83"), daylight).lerp(Color("a67d58"), dusk * 0.5)
+	_sky_material.set_shader_parameter("top_color",
+		night_top.lerp(day_top, daylight).lerp(dusk_top, dusk * 0.6))
+	_sky_material.set_shader_parameter("horizon_color",
+		night_horizon.lerp(day_horizon, daylight).lerp(dusk_horizon, dusk * 0.8))
+	_sky_material.set_shader_parameter("ground_bottom_color",
+		Color("0d1512").lerp(Color("3f4a34"), daylight))
+	_sky_material.set_shader_parameter("ground_horizon_color",
+		Color("1d2a2a").lerp(Color("8f9b83"), daylight).lerp(Color("a67d58"), dusk * 0.5))
+	# Clouds keep their shape at night but lose almost all their light; at dusk
+	# their undersides catch the same orange the horizon does.
+	var cloud_lit := Color("69707c").lerp(Color("f1efe4"), daylight)
+	cloud_lit = cloud_lit.lerp(Color("e8ad7c"), dusk * 0.65)
+	_sky_material.set_shader_parameter("cloud_color", cloud_lit)
+	_sky_material.set_shader_parameter("cloud_shadow",
+		Color("222836").lerp(Color("7b8696"), daylight))
+	_sky_material.set_shader_parameter("sun_tint", _sun.light_color)
+	_sky_material.set_shader_parameter("sun_glow", clampf(daylight * 1.15 + dusk * 0.65, 0.0, 1.3))
+	_sky_material.set_shader_parameter("night_amount", 1.0 - daylight)
 	_environment.ambient_light_energy = lerpf(0.15, 0.48, daylight) + dusk * 0.05
 	_environment.fog_light_color = Color("1c2b3a").lerp(Color("8a9c8d"), daylight).lerp(Color("b78a63"), dusk * 0.55)
 	_environment.fog_density = lerpf(0.0058, 0.0029, daylight)
+	# Street lamps and braziers keep burning through the day but are only worth
+	# their fill rate after dusk, so they fade to a faint ember at noon.
+	for light: OmniLight3D in _night_lights:
+		if not is_instance_valid(light):
+			continue
+		var base_energy: float = float(light.get_meta("night_energy", light.light_energy))
+		light.light_energy = base_energy * lerpf(1.0, 0.20, daylight)
 
 
 func _create_terrain() -> void:
@@ -1059,8 +1162,14 @@ func _create_roads() -> void:
 
 
 func _mark_road_cells(polyline: PackedVector2Array) -> void:
+	# Stamp a 3 x 3 block per sample. A single cell per node left diagonal
+	# stretches of a 3.7 m ribbon unmatched, so ground cover could still appear
+	# on the road between two samples.
 	for point: Vector2 in polyline:
-		_road_cells[Vector2i(int(floor(point.x / 2.5)), int(floor(point.y / 2.5)))] = true
+		var cell := Vector2i(int(floor(point.x / 2.5)), int(floor(point.y / 2.5)))
+		for dx: int in range(-1, 2):
+			for dz: int in range(-1, 2):
+				_road_cells[Vector2i(cell.x + dx, cell.y + dz)] = true
 
 
 func _near_road(x: float, z: float, radius_cells: int = 0) -> bool:
@@ -1071,6 +1180,123 @@ func _near_road(x: float, z: float, radius_cells: int = 0) -> bool:
 			if _road_cells.has(Vector2i(cx + dx, cz + dz)):
 				return true
 	return false
+
+
+## Exact distance from a point to the nearest road centreline. The cell grid is
+## only a broad phase; grass, flowers and bushes use this so no blade grows on
+## the ribbon, including the diagonal edges the old cell test missed.
+func _road_distance(point: Vector2) -> float:
+	var best: float = 1.0e9
+	for polyline: PackedVector2Array in roads:
+		var count: int = polyline.size()
+		for index: int in range(count - 1):
+			var a: Vector2 = polyline[index]
+			var b: Vector2 = polyline[index + 1]
+			var segment: Vector2 = b - a
+			var length_squared: float = segment.length_squared()
+			var t: float = 0.0
+			if length_squared > 0.0001:
+				t = clampf((point - a).dot(segment) / length_squared, 0.0, 1.0)
+			var delta: Vector2 = point - (a + segment * t)
+			var distance_squared: float = delta.length_squared()
+			if distance_squared < best:
+				best = distance_squared
+	return sqrt(best)
+
+
+## True when a ground-cover point sits on the road surface itself. The coarse
+## test is a cheap reject for the overwhelming majority of candidates.
+func _on_road(point: Vector2, padding: float = 0.35) -> bool:
+	if not _near_road(point.x, point.y, 1):
+		return false
+	return _road_distance(point) < ROAD_WIDTH * 0.5 + padding
+
+
+func _polyline_point(polyline: PackedVector2Array, lengths: PackedFloat32Array, t: float) -> Vector2:
+	if polyline.size() < 2:
+		return polyline[0] if polyline.size() == 1 else Vector2.ZERO
+	var total: float = lengths[lengths.size() - 1]
+	var target: float = clampf(t, 0.0, 1.0) * total
+	for index: int in range(1, polyline.size()):
+		if lengths[index] >= target:
+			var span: float = lengths[index] - lengths[index - 1]
+			var local: float = 0.0 if span < 0.001 else (target - lengths[index - 1]) / span
+			return polyline[index - 1].lerp(polyline[index], local)
+	return polyline[polyline.size() - 1]
+
+
+## Sparse medieval lamps along the roads. They stand on the verge, never on the
+## ribbon, and only along the routes closest to camp first, so the player meets a
+## few pools of light instead of a lit runway.
+func _create_road_lamps() -> void:
+	_reseed(9113)
+	var candidates: Array[Dictionary] = []
+	for road_index: int in range(roads.size()):
+		var polyline: PackedVector2Array = roads[road_index]
+		if polyline.size() < 4:
+			continue
+		var lengths := PackedFloat32Array()
+		lengths.resize(polyline.size())
+		var total: float = 0.0
+		for index: int in range(1, polyline.size()):
+			total += polyline[index].distance_to(polyline[index - 1])
+			lengths[index] = total
+		if total < 24.0:
+			continue
+		var midpoint: Vector2 = _polyline_point(polyline, lengths, 0.5)
+		var camp_point := Vector2(camp_position.x, camp_position.z)
+		candidates.append({
+			"road": polyline,
+			"lengths": lengths,
+			"total": total,
+			"distance": midpoint.distance_to(camp_point),
+			"index": road_index,
+		})
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["distance"]) < float(b["distance"]))
+	var limit: int = 13
+	var minimum_gap: float = 44.0
+	for candidate: Dictionary in candidates:
+		if road_lamps.size() >= limit:
+			break
+		var polyline: PackedVector2Array = candidate["road"]
+		var lengths: PackedFloat32Array = candidate["lengths"]
+		for slot: int in range(2):
+			if road_lamps.size() >= limit:
+				break
+			var t: float = 0.34 if slot == 0 else 0.68
+			var at: Vector2 = _polyline_point(polyline, lengths, t)
+			var ahead: Vector2 = _polyline_point(polyline, lengths, minf(t + 0.04, 1.0))
+			var behind: Vector2 = _polyline_point(polyline, lengths, maxf(t - 0.04, 0.0))
+			var tangent: Vector2 = ahead - behind
+			if tangent.length() < 0.01:
+				continue
+			tangent = tangent.normalized()
+			var side := Vector2(-tangent.y, tangent.x)
+			var sign_value: float = 1.0 if (int(candidate["index"]) + slot) % 2 == 0 else -1.0
+			var verge: Vector2 = at + side * sign_value * (ROAD_WIDTH * 0.5 + 1.35)
+			if absf(verge.x) > BOUNDS - 7.0 or absf(verge.y) > BOUNDS - 7.0:
+				continue
+			# Branched roads pass close to one another. A verge on one route can
+			# sit in the middle of another, so re-check against the whole network
+			# rather than only the road this candidate belongs to.
+			if _road_distance(verge) < ROAD_WIDTH * 0.5 + 0.9:
+				continue
+			if _in_pond(verge, 0.8) or _near_site(verge, 2.0):
+				continue
+			var ground: Vector3 = _ground(verge.x, verge.y)
+			if ground.y > 24.0:
+				continue
+			var spaced: bool = true
+			for existing: Vector3 in road_lamps:
+				if existing.distance_to(ground) < minimum_gap:
+					spaced = false
+					break
+			if not spaced:
+				continue
+			var inward: Vector2 = -side * sign_value
+			_road_lamp(self, ground, atan2(-inward.y, inward.x))
+			road_lamps.append(ground)
 
 
 func _near_site(p: Vector2, padding: float) -> bool:
@@ -1294,6 +1520,34 @@ func _zone_ground_near(point: Vector2) -> Color:
 	return color
 
 
+## Outskirts inherit the nearest region's forest family. A pine ridge therefore
+## never grows oaks at its foot, and a broadleaf wood never grows a stray
+## conifer. Mixing inside a region is allowed by that region's own `trees` table,
+## but the conifer regions list pines only.
+func _outskirt_tree(point: Vector2) -> String:
+	var best: float = 1.0e9
+	var family: String = "broadleaf"
+	for zone: Dictionary in zones:
+		var distance: float = point.distance_to(zone["center"]) - float(zone["radius"])
+		if distance >= best:
+			continue
+		best = distance
+		var mix: Dictionary = zone["trees"]
+		var pine: float = float(mix.get("pine", 0.0))
+		var broadleaf: float = float(mix.get("oak", 0.0)) + float(mix.get("birch", 0.0))
+		if pine >= 0.5 and pine >= broadleaf:
+			family = "conifer"
+		elif float(mix.get("dead", 0.0)) >= 0.5:
+			family = "fen"
+		else:
+			family = "broadleaf"
+	if family == "conifer":
+		return "pine"
+	if family == "fen":
+		return "dead" if _rng.randf() < 0.55 else "pine"
+	return "oak" if _rng.randf() < 0.55 else "birch"
+
+
 func _create_vegetation() -> void:
 	_reseed(9917)
 	var transforms: Dictionary = {"oak": [], "birch": [], "pine": [], "dead": []}
@@ -1341,7 +1595,7 @@ func _create_vegetation() -> void:
 		# Rock and scree above the treeline stay bare.
 		if at.y > 26.0:
 			continue
-		var kind: String = "pine" if _rng.randf() < 0.62 else ("oak" if _rng.randf() < 0.55 else "birch")
+		var kind: String = _outskirt_tree(point)
 		var scale_value: float = _rng.randf_range(0.86, 1.24)
 		var basis: Basis = Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale_value)
 		at.y -= 0.05
@@ -1388,7 +1642,7 @@ func _load_tree_mesh(kind: String) -> Mesh:
 		bark_key = "bark_dead"
 	mesh.surface_set_material(0, _materials[bark_key])
 	if mesh.get_surface_count() > 1:
-		mesh.surface_set_material(1, _materials["needles"] if kind == "pine" else _materials["leaves"])
+		mesh.surface_set_material(1, _materials["needles_card"] if kind == "pine" else _materials["leaves_card"])
 	return mesh
 
 
@@ -1434,22 +1688,48 @@ func _create_multimesh(node_name: String, mesh: Mesh, entries: Array, shadows: b
 
 
 func _grass_tuft_mesh() -> ArrayMesh:
-	# Three crossed alpha cards. The atlas supplies many thin, curved blades, so
-	# the silhouette stays grassy from every angle instead of reading as a cone.
+	# Four upright crossed cards carry the silhouette; three nearly horizontal
+	# rosettes fill the top-down view, where a vertical card is only a thin line.
+	# That is what made the old grass read as scattered specks from the game camera.
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
-	var width := 1.12
-	var height_value := 0.72
-	for quad: int in range(3):
-		var angle: float = TAU * float(quad) / 3.0
+	var width := 1.04
+	var height_value := 0.70
+	for quad: int in range(4):
+		var angle: float = TAU * float(quad) / 4.0 + 0.22
 		var side := Vector2(cos(angle), sin(angle)) * width * 0.5
 		var base: int = vertices.size()
 		vertices.append(Vector3(-side.x, 0.0, -side.y))
 		vertices.append(Vector3(side.x, 0.0, side.y))
 		vertices.append(Vector3(side.x, height_value, side.y))
 		vertices.append(Vector3(-side.x, height_value, -side.y))
+		for point_index: int in range(4):
+			normals.append(Vector3(-side.y, 0.0, side.x).normalized())
+		uvs.append(Vector2(0.0, 1.0))
+		uvs.append(Vector2(1.0, 1.0))
+		uvs.append(Vector2(1.0, 0.0))
+		uvs.append(Vector2(0.0, 0.0))
+		indices.append_array([base, base + 1, base + 2, base, base + 2, base + 3])
+	# Rosettes sit at three heights so the top-down camera sees overlapping
+	# patches instead of a single flat decal.
+	var rosettes := [
+		{"y": 0.16, "size": 1.04, "angle": 0.0},
+		{"y": 0.31, "size": 0.84, "angle": 1.12},
+		{"y": 0.46, "size": 0.62, "angle": 2.26},
+	]
+	for rosette: Dictionary in rosettes:
+		var y: float = float(rosette["y"])
+		var half: float = float(rosette["size"]) * 0.5
+		var angle: float = float(rosette["angle"])
+		var along := Vector2(cos(angle), sin(angle)) * half
+		var across := Vector2(-sin(angle), cos(angle)) * half
+		var base: int = vertices.size()
+		vertices.append(Vector3(-along.x - across.x, y - 0.05, -along.y - across.y))
+		vertices.append(Vector3(along.x - across.x, y + 0.07, along.y - across.y))
+		vertices.append(Vector3(along.x + across.x, y - 0.03, along.y + across.y))
+		vertices.append(Vector3(-along.x + across.x, y + 0.09, -along.y + across.y))
 		for point_index: int in range(4):
 			normals.append(Vector3.UP)
 		uvs.append(Vector2(0.0, 1.0))
@@ -1471,14 +1751,9 @@ func _grass_tuft_mesh() -> ArrayMesh:
 func _create_grass() -> void:
 	_reseed(3311)
 	var mesh := _grass_tuft_mesh()
-	var material := StandardMaterial3D.new()
-	material.albedo_texture = GRASS_BLADES
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-	material.alpha_scissor_threshold = 0.42
-	material.vertex_color_use_as_albedo = true
-	material.roughness = 0.95
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	var material := ShaderMaterial.new()
+	material.shader = preload("res://shaders/grass.gdshader")
+	material.set_shader_parameter("grass_texture", GRASS_BLADES)
 	mesh.surface_set_material(0, material)
 	var entries: Array = []
 	var tints: Array[Color] = []
@@ -1494,7 +1769,7 @@ func _create_grass() -> void:
 			var point: Vector2 = center + Vector2(cos(angle), sin(angle)) * sqrt(_rng.randf()) * radius * 0.94
 			if absf(point.x) > BOUNDS - 2.0 or absf(point.y) > BOUNDS - 2.0:
 				continue
-			if _near_road(point.x, point.y, 0) or _near_site(point, 1.4) or _in_pond(point, 0.1):
+			if _on_road(point, 0.40) or _near_site(point, 1.4) or _in_pond(point, 0.1):
 				continue
 			var scale_value: float = _rng.randf_range(0.82, 1.38)
 			var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(
@@ -1505,6 +1780,7 @@ func _create_grass() -> void:
 			var tint: Color = (zone["ground"] as Color).lightened(_rng.randf_range(0.40, 0.58))
 			tint = tint.lerp(Color("b9bd8c"), _rng.randf_range(0.06, 0.30))
 			tints.append(tint)
+			grass_points.append(point)
 			placed += 1
 	# Same for the meadow: grass has to reach the foothills, not stop at an
 	# invisible zone boundary.
@@ -1520,7 +1796,7 @@ func _create_grass() -> void:
 			continue
 		if _inside_any_zone(point, 0.92):
 			continue
-		if _near_road(point.x, point.y, 0) or _near_site(point, 1.4) or _in_pond(point, 0.1):
+		if _on_road(point, 0.40) or _near_site(point, 1.4) or _in_pond(point, 0.1):
 			continue
 		var at: Vector3 = _ground(point.x, point.y)
 		if at.y > 24.0:
@@ -1533,6 +1809,7 @@ func _create_grass() -> void:
 		var tint: Color = _zone_ground_near(point).lightened(_rng.randf_range(0.40, 0.58))
 		tint = tint.lerp(Color("b9bd8c"), _rng.randf_range(0.06, 0.30))
 		tints.append(tint)
+		grass_points.append(point)
 		outskirt_placed += 1
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
@@ -1604,7 +1881,7 @@ func _create_flowers() -> void:
 			var point: Vector2 = center + Vector2(cos(angle), sin(angle)) * sqrt(_rng.randf()) * radius * 0.9
 			if absf(point.x) > BOUNDS - 4.0 or absf(point.y) > BOUNDS - 4.0:
 				continue
-			if _near_road(point.x, point.y, 0) or _near_site(point, 2.0) or _in_pond(point, 0.0):
+			if _on_road(point, 0.30) or _near_site(point, 2.0) or _in_pond(point, 0.0):
 				continue
 			var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * _rng.randf_range(0.75, 1.35))
 			entries.append(Transform3D(basis, _ground(point.x, point.y)))
@@ -1627,10 +1904,13 @@ func _create_flowers() -> void:
 
 func _create_bushes() -> void:
 	_reseed(6653)
-	var mesh := _load_prop_mesh("bush.glb", "leaves")
+	var mesh := _load_prop_mesh("bush.glb", "bark")
 	if mesh == null:
 		return
-	_materials["leaves"].vertex_color_use_as_albedo = true
+	# Surface 0 is bark, surface 1 is the alpha-card foliage, same contract as
+	# the trees. The old single-surface bush was a handful of smooth green balls.
+	if mesh.get_surface_count() > 1:
+		mesh.surface_set_material(1, _materials["leaves_card"])
 	var entries: Array = []
 	var colors: Array[Color] = []
 	for zone: Dictionary in zones:
@@ -1644,7 +1924,7 @@ func _create_bushes() -> void:
 			var point: Vector2 = center + Vector2(cos(angle), sin(angle)) * sqrt(_rng.randf()) * radius * 0.92
 			if absf(point.x) > BOUNDS - 3.0 or absf(point.y) > BOUNDS - 3.0:
 				continue
-			if _near_road(point.x, point.y, 0) or _near_site(point, 5.0) or _in_pond(point, 0.0):
+			if _on_road(point, 0.85) or _near_site(point, 5.0) or _in_pond(point, 0.0):
 				continue
 			var scale_value: float = _rng.randf_range(0.72, 1.45)
 			var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(
@@ -1665,7 +1945,7 @@ func _create_bushes() -> void:
 			_rng.randf_range(-BOUNDS + 4.0, BOUNDS - 4.0))
 		if maxf(absf(point.x), absf(point.y)) < 58.0 or _inside_any_zone(point, 0.9):
 			continue
-		if _near_road(point.x, point.y, 0) or _near_site(point, 5.0) or _in_pond(point, 0.0):
+		if _on_road(point, 0.85) or _near_site(point, 5.0) or _in_pond(point, 0.0):
 			continue
 		var at := _ground_lowest(point.x, point.y, 0.45)
 		if at.y > 24.0:
@@ -1826,9 +2106,13 @@ func _strut(parent: Node3D, from: Vector3, to: Vector3, radius: float, material_
 	var direction := to - from
 	if direction.length_squared() < 0.0001:
 		direction = Vector3.UP * 0.001
+	var normalized := direction.normalized()
+	var up := Vector3.UP
+	if absf(normalized.dot(Vector3.UP)) > 0.98:
+		up = Vector3.BACK
 	var instance := _add_mesh(parent, node_name, _cylinder_mesh(radius, direction.length(), 5), material_key)
 	instance.position = (from + to) * 0.5
-	instance.basis = Basis.looking_at(direction.normalized(), Vector3.UP) * Basis(Vector3.RIGHT, -PI * 0.5)
+	instance.basis = Basis.looking_at(normalized, up) * Basis(Vector3.RIGHT, -PI * 0.5)
 	return instance
 
 
@@ -1900,7 +2184,7 @@ func _create_stones() -> void:
 			var point := Vector2(
 				_rng.randf_range(-BOUNDS + 2.0, BOUNDS - 2.0),
 				_rng.randf_range(-BOUNDS + 2.0, BOUNDS - 2.0))
-			if _near_road(point.x, point.y, 0) or _near_site(point, 3.0) or _in_pond(point, 0.05):
+			if _on_road(point, 0.15) or _near_site(point, 3.0) or _in_pond(point, 0.05):
 				continue
 			var at := _ground_lowest(point.x, point.y, 0.3)
 			if at.y > 30.0:
@@ -1924,6 +2208,15 @@ func _light(parent: Node3D, at: Vector3, color: Color, energy: float, range_valu
 	light_node.shadow_enabled = false
 	parent.add_child(light_node)
 	return light_node
+
+
+## A lamp or brazier light that follows the day/night cycle. The authored
+## energy is remembered so `_apply_time_of_day` can dim it without drifting.
+func _night_light(parent: Node3D, at: Vector3, color: Color, energy: float, range_value: float) -> OmniLight3D:
+	var light := _light(parent, at, color, energy, range_value)
+	light.set_meta("night_energy", energy)
+	_night_lights.append(light)
+	return light
 
 
 func _text(parent: Node3D, at: Vector3, message: String, font_size: int = 72, color: Color = Color.WHITE, face_camera: bool = false) -> Label3D:
@@ -1967,32 +2260,83 @@ func _flame(parent: Node3D, at: Vector3, scale_value: float = 1.0) -> void:
 
 
 func _campfire(parent: Node3D, at: Vector3) -> void:
-	for index: int in range(10):
-		var angle: float = TAU * float(index) / 10.0
-		var stone := _add_mesh(parent, "FireStone", _sphere_mesh(0.3, 6, 3), "stone")
-		stone.position = at + Vector3(cos(angle) * 1.15, 0.14, sin(angle) * 1.15)
-		stone.scale = Vector3(1.0, 0.65, 1.0)
+	# A sunken ash bed ringed by uneven field stones. The old fire floated on a
+	# perfect circle of identical rocks; variation in size and height sells it.
+	var ash := _add_mesh(parent, "FireAsh", _cylinder_mesh(0.98, 0.07, 12), "ash")
+	ash.position = at + Vector3(0.0, 0.045, 0.0)
+	for index: int in range(15):
+		var angle: float = TAU * float(index) / 15.0 + 0.12
+		var radius: float = 1.08 + (0.07 if index % 2 == 0 else -0.04)
+		var stone_size: float = 0.23 + 0.05 * float(index % 3)
+		var stone := _add_mesh(parent, "FireStone", _sphere_mesh(stone_size, 6, 3), "stone")
+		stone.position = at + Vector3(cos(angle) * radius, 0.10, sin(angle) * radius)
+		stone.scale = Vector3(1.0, 0.66, 1.0)
 		stone.rotation.y = angle
-	for index: int in range(4):
-		var angle: float = TAU * float(index) / 4.0 + 0.4
-		var log_piece := _add_mesh(parent, "FireLog", _cylinder_mesh(0.11, 1.35, 6), "wood")
-		log_piece.position = at + Vector3(0.0, 0.3, 0.0)
-		log_piece.rotation = Vector3(PI * 0.5, angle, 0.0)
-	_flame(parent, at + Vector3(0.0, 0.18, 0.0), 1.15)
-	_light(parent, at + Vector3(0.0, 1.5, 0.0), Color("ffb266"), 2.1, 13.0)
+	# Split logs lean into a teepee over a bed of embers.
+	for index: int in range(6):
+		var angle: float = TAU * float(index) / 6.0 + 0.4
+		var foot := at + Vector3(cos(angle) * 0.74, 0.10, sin(angle) * 0.74)
+		var tip := at + Vector3(cos(angle) * 0.13, 1.02, sin(angle) * 0.13)
+		_strut(parent, foot, tip, 0.082, "wood", "FireLog")
+	for index: int in range(12):
+		var angle: float = TAU * float(index) / 12.0 + 0.2
+		var radius: float = _rng.randf_range(0.18, 0.62)
+		var ember := _add_mesh(parent, "FireEmber", _sphere_mesh(0.055, 5, 3), "fire")
+		ember.position = at + Vector3(cos(angle) * radius, 0.10, sin(angle) * radius)
+		ember.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_flame(parent, at + Vector3(0.0, 0.16, 0.0), 1.42)
+	var fire_light := _light(parent, at + Vector3(0.0, 1.55, 0.0), Color("ffb266"), 2.4, 14.0)
+	fire_light.name = "CampfireLight"
 
 
+## A half-buried log beside the fire, cut flat on top so it reads as a seat.
+func _sitting_log(parent: Node3D, at: Vector3, rotation_y: float) -> void:
+	var log_node := Node3D.new()
+	log_node.name = "SittingLog"
+	log_node.position = at
+	log_node.rotation.y = rotation_y
+	parent.add_child(log_node)
+	var trunk := _add_mesh(log_node, "LogSeat", _cylinder_mesh(0.31, 2.5, 9), "wood")
+	trunk.rotation.z = PI * 0.5
+	trunk.position.y = 0.28
+	for end: float in [-1.0, 1.0]:
+		var face := _add_mesh(log_node, "LogEnd", _cylinder_mesh(0.315, 0.035, 9), "wood_light")
+		face.rotation.z = PI * 0.5
+		face.position = Vector3(end * 1.25, 0.28, 0.0)
+	# Two wedge chocks stop the seat from reading as a floating pipe.
+	for side: float in [-1.0, 1.0]:
+		var chock := _add_mesh(log_node, "LogChock", _box_mesh(Vector3(0.34, 0.16, 0.5)), "wood")
+		chock.position = Vector3(side * 0.86, 0.08, 0.0)
+		chock.rotation.z = side * 0.12
+
+
+func _ground_bed(tent: Node3D, at: Vector3, rotation_y: float) -> void:
+	var bed := Node3D.new()
+	bed.name = "GroundBed"
+	bed.position = at
+	bed.rotation.y = rotation_y
+	tent.add_child(bed)
+	var frame := _add_mesh(bed, "BedFrame", _box_mesh(Vector3(1.06, 0.10, 2.16)), "wood_light")
+	frame.position.y = 0.05
+	var tick := _add_mesh(bed, "BedStraw", _box_mesh(Vector3(0.94, 0.16, 2.02)), "straw")
+	tick.position.y = 0.17
+	var blanket := _add_mesh(bed, "BedBlanket", _box_mesh(Vector3(0.98, 0.07, 1.30)), "cloth_dark")
+	blanket.position = Vector3(0.0, 0.28, 0.35)
+	var pillow := _add_mesh(bed, "BedPillow", _box_mesh(Vector3(0.58, 0.16, 0.34)), "cloth")
+	pillow.position = Vector3(0.0, 0.30, -0.74)
+
+
+## Walk-in A-frame. The front is open; both sloped sides and the rear wall are
+## solid, so the player can step inside and stand beside a proper ground bed.
 func _tent(parent: Node3D, at: Vector3, rotation_y: float, cloth_key: String = "cloth") -> void:
 	var tent := Node3D.new()
 	tent.name = "Tent"
 	tent.position = at
 	tent.rotation.y = rotation_y
 	parent.add_child(tent)
-	# A triangular prism is a real A-frame silhouette; thin tilted boxes read as
-	# benches from the default camera angle.
-	var width: float = 2.5
-	var height_value: float = 1.75
-	var depth: float = 3.0
+	var width: float = 4.0
+	var height_value: float = 2.7
+	var depth: float = 5.6
 	var canopy := PrismMesh.new()
 	canopy.size = Vector3(width, height_value, depth)
 	canopy.left_to_right = 0.5
@@ -2003,9 +2347,17 @@ func _tent(parent: Node3D, at: Vector3, rotation_y: float, cloth_key: String = "
 	back.left_to_right = 0.5
 	var rear := _add_mesh(tent, "TentBack", back, cloth_key)
 	rear.position = Vector3(0.0, height_value * 0.5, -depth * 0.5 + 0.06)
-	# Ridge pole and seam strips break up the two large canvas slopes so the
-	# shelter never reads as a blank wall from the side.
-	var ridge := _add_mesh(tent, "TentRidge", _cylinder_mesh(0.07, depth + 0.45, 6), "wood")
+	# A rigid floor cloth and a pegged skirt hide the ground seam on the blend
+	# slope beyond the flattened camp pad.
+	var floor_cloth := _add_mesh(tent, "TentFloor", _box_mesh(Vector3(width * 0.92, 0.04, depth * 0.92)), "cloth_dark")
+	floor_cloth.position = Vector3(0.0, 0.02, 0.0)
+	for side: float in [-1.0, 1.0]:
+		var skirt := _add_mesh(tent, "TentSkirt", _box_mesh(Vector3(0.05, 0.44, depth)), cloth_key)
+		skirt.position = Vector3(side * width * 0.5, -0.18, 0.0)
+	var back_skirt := _add_mesh(tent, "TentBackSkirt", _box_mesh(Vector3(width, 0.44, 0.05)), cloth_key)
+	back_skirt.position = Vector3(0.0, -0.18, -depth * 0.5)
+	# Ridge pole and seam strips break up the two large canvas slopes.
+	var ridge := _add_mesh(tent, "TentRidge", _cylinder_mesh(0.07, depth + 0.55, 6), "wood")
 	ridge.rotation.x = PI * 0.5
 	ridge.position = Vector3(0.0, height_value + 0.02, 0.0)
 	var slope: float = sqrt(pow(width * 0.5, 2.0) + pow(height_value, 2.0))
@@ -2014,17 +2366,43 @@ func _tent(parent: Node3D, at: Vector3, rotation_y: float, cloth_key: String = "
 		var seam := _add_mesh(tent, "TentSeam", _box_mesh(Vector3(slope * 0.94, 0.05, depth + 0.02)), "cloth_dark")
 		seam.position = Vector3(side * width * 0.25, height_value * 0.5, 0.0)
 		seam.rotation.z = -side * slope_angle
-		# Guy ropes pulled to pegs fore and aft: the clearest tent tell from any angle.
+		# Guy ropes pulled to pegs fore and aft.
 		for end: float in [-1.0, 1.0]:
-			_strut(tent, Vector3(0.0, height_value, end * depth * 0.5), Vector3(side * (width * 0.5 + 0.95), 0.02, end * (depth * 0.5 + 0.8)), 0.012, "cloth_dark", "GuyRope")
+			_strut(tent, Vector3(0.0, height_value, end * depth * 0.5), Vector3(side * (width * 0.5 + 1.15), 0.02, end * (depth * 0.5 + 0.95)), 0.014, "cloth_dark", "GuyRope")
 		# A-frame legs at the mouth.
-		_strut(tent, Vector3(side * width * 0.5, 0.0, depth * 0.5 + 0.02), Vector3(0.0, height_value + 0.02, depth * 0.5 + 0.02), 0.05, "wood", "TentLeg")
+		_strut(tent, Vector3(side * width * 0.5, 0.0, depth * 0.5 + 0.02), Vector3(0.0, height_value + 0.02, depth * 0.5 + 0.02), 0.055, "wood", "TentLeg")
 	# One curtain tied open so the entrance reads as a way in, not a wall.
-	var curtain := _add_mesh(tent, "TentCurtain", _box_mesh(Vector3(0.85, 1.55, 0.05)), cloth_key)
-	curtain.position = Vector3(-0.62, 0.78, depth * 0.5 + 0.03)
-	curtain.rotation.y = 0.22
-	var bedroll := _add_mesh(tent, "Bedroll", _box_mesh(Vector3(0.8, 0.13, 1.9)), "cloth_dark")
-	bedroll.position = Vector3(0.0, 0.07, 0.1)
+	var curtain := _add_mesh(tent, "TentCurtain", _box_mesh(Vector3(1.35, 2.35, 0.05)), cloth_key)
+	curtain.position = Vector3(-1.12, 1.18, depth * 0.5 + 0.03)
+	curtain.rotation.y = 0.2
+	# Two ground beds at the back, one on either side, leave a clear aisle from
+	# the entrance to the fire pit.
+	_ground_bed(tent, Vector3(-0.98, 0.0, -0.55), 0.0)
+	_ground_bed(tent, Vector3(0.98, 0.0, -0.55), 0.0)
+	# A candle-lantern hanging from the ridge gives the interior a warm glow.
+	var lantern := _add_mesh(tent, "TentLantern", _sphere_mesh(0.09, 6, 3), "fire")
+	lantern.position = Vector3(0.0, 1.92, 0.35)
+	lantern.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_night_light(tent, Vector3(0.0, 1.9, 0.35), Color("ffc27a"), 0.5, 4.2)
+	# Solid cloth: sloped sides and the rear wall. The mouth stays open.
+	var walls := StaticBody3D.new()
+	walls.name = "TentWalls"
+	tent.add_child(walls)
+	for side: float in [-1.0, 1.0]:
+		var wall := CollisionShape3D.new()
+		var wall_shape := BoxShape3D.new()
+		wall_shape.size = Vector3(slope, 0.12, depth)
+		wall.shape = wall_shape
+		wall.position = Vector3(side * width * 0.25, height_value * 0.5, 0.0)
+		wall.rotation.z = -side * slope_angle
+		walls.add_child(wall)
+	var rear_wall := CollisionShape3D.new()
+	var rear_shape := BoxShape3D.new()
+	rear_shape.size = Vector3(width * 0.86, height_value * 0.86, 0.12)
+	rear_wall.shape = rear_shape
+	rear_wall.position = Vector3(0.0, height_value * 0.43, -depth * 0.5 + 0.09)
+	walls.add_child(rear_wall)
+
 
 
 func _banner(parent: Node3D, at: Vector3, rotation_y: float, cloth_key: String = "banner") -> void:
@@ -2053,7 +2431,54 @@ func _lamp(parent: Node3D, at: Vector3) -> void:
 	var glow := _add_mesh(parent, "LampGlow", _sphere_mesh(0.13, 6, 3), "fire")
 	glow.position = at + Vector3(0.5, 2.18, 0.0)
 	glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_light(parent, at + Vector3(0.5, 2.1, 0.0), Color("ffc27a"), 0.9, 7.0)
+	_night_light(parent, at + Vector3(0.5, 2.1, 0.0), Color("ffc27a"), 0.9, 7.0)
+
+
+## Medieval verge lamp: stone footing, iron post, one arm reaching over the road
+## and a bar-caged lantern. Few and far apart, so each one reads as a waypoint.
+func _road_lamp(parent: Node3D, at: Vector3, rotation_y: float) -> void:
+	var lamp := Node3D.new()
+	lamp.name = "RoadLamp"
+	lamp.position = at
+	lamp.rotation.y = rotation_y
+	parent.add_child(lamp)
+	var footing := _add_mesh(lamp, "LampFooting", _cylinder_mesh(0.25, 0.30, 8), "stone")
+	footing.position.y = 0.15
+	var pole := _add_mesh(lamp, "LampPole", _cylinder_mesh(0.075, 3.15, 8), "iron")
+	pole.position.y = 1.72
+	for collar_y: float in [0.42, 1.62, 2.72]:
+		var collar := _add_mesh(lamp, "LampCollar", _cylinder_mesh(0.115, 0.07, 8), "iron")
+		collar.position.y = collar_y
+	var arm := _add_mesh(lamp, "LampArm", _box_mesh(Vector3(0.98, 0.08, 0.08)), "iron")
+	arm.position = Vector3(0.40, 3.24, 0.0)
+	_strut(lamp, Vector3(0.02, 2.62, 0.0), Vector3(0.64, 3.20, 0.0), 0.028, "iron", "LampBrace")
+	var hook := _add_mesh(lamp, "LampHook", _cylinder_mesh(0.022, 0.18, 6), "iron")
+	hook.position = Vector3(0.82, 3.14, 0.0)
+	var hood := _add_mesh(lamp, "LampHood", _cone_mesh(0.30, 0.24, 6), "iron")
+	hood.position = Vector3(0.82, 2.98, 0.0)
+	var floor_plate := _add_mesh(lamp, "LampFloor", _cylinder_mesh(0.18, 0.06, 6), "iron")
+	floor_plate.position = Vector3(0.82, 2.42, 0.0)
+	for bar: int in range(4):
+		var angle: float = TAU * float(bar) / 4.0 + PI * 0.25
+		var bar_x: float = 0.82 + cos(angle) * 0.155
+		var bar_z: float = sin(angle) * 0.155
+		_strut(lamp, Vector3(bar_x, 2.45, bar_z), Vector3(bar_x, 2.87, bar_z), 0.016, "iron", "LampBar")
+	var glass := _add_mesh(lamp, "LampGlass", _sphere_mesh(0.135, 8, 4), "fire")
+	glass.position = Vector3(0.82, 2.64, 0.0)
+	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_flame(lamp, Vector3(0.82, 2.56, 0.0), 0.28)
+	_night_light(lamp, Vector3(0.82, 2.62, 0.0), Color("ffc27a"), 1.45, 11.0)
+	# The post is solid: a player cannot walk through a lamp on the verge.
+	var body := StaticBody3D.new()
+	body.name = "LampBody"
+	var collision := CollisionShape3D.new()
+	var shape := CylinderShape3D.new()
+	shape.radius = 0.22
+	shape.height = 3.3
+	collision.shape = shape
+	collision.position.y = 1.65
+	body.add_child(collision)
+	lamp.add_child(body)
 
 
 func _brazier(parent: Node3D, at: Vector3, energy: float = 1.1) -> void:
@@ -2065,7 +2490,7 @@ func _brazier(parent: Node3D, at: Vector3, energy: float = 1.1) -> void:
 	coals.position = at + Vector3(0.0, 1.1, 0.0)
 	coals.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_flame(parent, at + Vector3(0.0, 1.1, 0.0), 0.62)
-	_light(parent, at + Vector3(0.0, 1.7, 0.0), Color("ff9d55"), energy, 9.0)
+	_night_light(parent, at + Vector3(0.0, 1.7, 0.0), Color("ff9d55"), energy, 9.0)
 
 
 func _barrel(parent: Node3D, at: Vector3) -> void:
@@ -2136,49 +2561,143 @@ func _arch(parent: Node3D, at: Vector3, rotation_y: float, span: float, height_v
 	return arch
 
 
+## A low split-rail fence rings the camp and opens exactly where a trade road
+## crosses it. Each gate is centred on the road direction, so the approach is
+## never blocked and the opening reads as a real entrance rather than a gap.
+func _create_camp_fence(parent: Node3D) -> void:
+	_reseed(5519)
+	var radius: float = 13.2
+	var gate_half_width: float = 3.0
+	var gate_half: float = asin(clampf(gate_half_width / radius, 0.0, 1.0))
+	var center := Vector2(camp_position.x, camp_position.z)
+	var gate_angles: Array[float] = []
+	for polyline: PackedVector2Array in roads:
+		if polyline.size() < 2:
+			continue
+		var start: Vector2 = polyline[0]
+		var direction: Vector2 = polyline[1] - polyline[0]
+		if start.distance_to(center) > 2.0:
+			start = polyline[polyline.size() - 1]
+			direction = polyline[polyline.size() - 2] - start
+			if start.distance_to(center) > 2.0:
+				continue
+		if direction.length() < 0.01:
+			continue
+		gate_angles.append(atan2(direction.y, direction.x))
+	gate_angles.sort()
+	if gate_angles.is_empty():
+		gate_angles = [0.0]
+	var walls := StaticBody3D.new()
+	walls.name = "CampFenceBody"
+	parent.add_child(walls)
+	# Gate frames first: two tall posts and a lintel beam across the opening.
+	for angle: float in gate_angles:
+		var left := angle - gate_half
+		var right := angle + gate_half
+		_camp_fence_post(parent, left, radius, true)
+		_camp_fence_post(parent, right, radius, true)
+		var from := _camp_fence_point(left, radius) + Vector3.UP * 2.42
+		var to := _camp_fence_point(right, radius) + Vector3.UP * 2.42
+		_strut(parent, from, to, 0.075, "wood", "GateBeam")
+		_strut(parent, from, from + Vector3.DOWN * 0.62, 0.045, "wood", "GateBrace")
+		_strut(parent, to, to + Vector3.DOWN * 0.62, 0.045, "wood", "GateBrace")
+	# Then fill each arc between consecutive gates with posts and two rails.
+	for gate_index: int in range(gate_angles.size()):
+		var start_angle: float = gate_angles[gate_index] + gate_half
+		var end_angle: float = gate_angles[(gate_index + 1) % gate_angles.size()] - gate_half
+		if gate_index == gate_angles.size() - 1:
+			end_angle += TAU
+		var span: float = end_angle - start_angle
+		if span <= 0.05:
+			continue
+		var pieces: int = maxi(2, int(round(span * radius / 2.35)))
+		for piece: int in range(pieces):
+			var a0: float = start_angle + span * float(piece) / float(pieces)
+			var a1: float = start_angle + span * float(piece + 1) / float(pieces)
+			if piece > 0:
+				_camp_fence_post(parent, a0, radius, false)
+			var from := _camp_fence_point(a0, radius)
+			var to := _camp_fence_point(a1, radius)
+			for rail_height: float in [0.52, 1.02]:
+				_strut(parent, from + Vector3.UP * rail_height, to + Vector3.UP * rail_height, 0.05, "wood", "FenceRail")
+			var shape := BoxShape3D.new()
+			var segment := to - from
+			shape.size = Vector3(Vector2(segment.x, segment.z).length(), 1.16, 0.16)
+			var collision := CollisionShape3D.new()
+			collision.shape = shape
+			collision.position = (from + to) * 0.5 + Vector3.UP * 0.58
+			collision.rotation.y = atan2(-segment.z, segment.x)
+			walls.add_child(collision)
+
+
+func _camp_fence_point(angle: float, radius: float) -> Vector3:
+	var x: float = camp_position.x + cos(angle) * radius
+	var z: float = camp_position.z + sin(angle) * radius
+	return Vector3(cos(angle) * radius, height_at(x, z) - camp_position.y, sin(angle) * radius)
+
+
+func _camp_fence_post(parent: Node3D, angle: float, radius: float, tall: bool) -> void:
+	var at := _camp_fence_point(angle, radius)
+	var height_value: float = 2.34 if tall else 1.52
+	var thickness: float = 0.15 if tall else 0.10
+	var post := _add_mesh(parent, "FencePost", _cylinder_mesh(thickness, height_value, 6), "wood")
+	post.position = at + Vector3.UP * (height_value * 0.5)
+	post.rotation.y = angle
+	if tall:
+		var cap := _add_mesh(parent, "GateFinial", _cone_mesh(thickness * 1.5, 0.22, 6), "wood_light")
+		cap.position = at + Vector3.UP * (height_value + 0.11)
+
+
 func _create_camp() -> void:
 	_reseed(2203)
 	var camp := _group("SurvivorCamp", camp_position.x, camp_position.z)
+	_create_camp_fence(camp)
 	_campfire(camp, Vector3.ZERO)
-	_tent(camp, Vector3(-5.3, 0.0, -3.1), 0.55, "cloth")
-	_tent(camp, Vector3(4.9, 0.0, 2.4), -0.75, "cloth_dark")
-	_tent(camp, Vector3(-3.9, 0.0, 5.4), 2.55, "cloth_dark")
-	_tent(camp, Vector3(0.9, 0.0, -7.0), 0.1, "cloth")
-	# Forge and anvil: the blacksmith stands here.
-	_wall(camp, Vector3(3.4, 0.0, -4.6), Vector3(1.9, 1.0, 1.3), -0.16, "stone_dark")
-	var coal := _add_mesh(camp, "ForgeCoals", _box_mesh(Vector3(1.3, 0.1, 0.8)), "fire")
-	coal.position = Vector3(3.4, 1.02, -4.6)
+	# Two seats turned toward the hearth instead of an empty clearing.
+	_sitting_log(camp, Vector3(0.0, 0.0, 3.35), 0.0)
+	_sitting_log(camp, Vector3(0.0, 0.0, -3.35), 0.0)
+	# Four walk-in tents, mouths facing the fire, backs inside the fence line.
+	_tent(camp, Vector3(-6.3, 0.0, -5.5), 0.85, "cloth")
+	_tent(camp, Vector3(6.4, 0.0, -5.5), -0.85, "cloth_dark")
+	_tent(camp, Vector3(-6.3, 0.0, 5.5), 2.29, "cloth_dark")
+	_tent(camp, Vector3(6.4, 0.0, 5.5), -2.29, "cloth")
+	# Forge and anvil on the open east side of the ring; the blacksmith stands
+	# here and faces the fire. The anvil horn points back toward the hearth.
+	_wall(camp, Vector3(9.0, 0.0, -0.1), Vector3(1.9, 1.0, 1.3), -PI * 0.5, "stone_dark")
+	var coal := _add_mesh(camp, "ForgeCoals", _box_mesh(Vector3(0.8, 0.1, 1.3)), "fire")
+	coal.position = Vector3(9.0, 1.02, -0.1)
 	coal.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_light(camp, Vector3(3.4, 1.8, -4.6), Color("ff9a4d"), 1.35, 8.0)
+	_light(camp, Vector3(9.0, 1.8, -0.1), Color("ff9a4d"), 1.35, 8.0)
 	var stump := _add_mesh(camp, "AnvilStump", _cylinder_mesh(0.42, 0.62, 8), "wood")
-	stump.position = Vector3(4.9, 0.31, -3.4)
-	var anvil := _add_mesh(camp, "Anvil", _box_mesh(Vector3(0.62, 0.34, 0.34)), "iron")
-	anvil.position = Vector3(4.9, 0.79, -3.4)
+	stump.position = Vector3(9.0, 0.31, 1.8)
+	var anvil := _add_mesh(camp, "Anvil", _box_mesh(Vector3(0.34, 0.34, 0.62)), "iron")
+	anvil.position = Vector3(9.0, 0.79, 1.8)
 	var horn := _add_mesh(camp, "AnvilHorn", _cone_mesh(0.16, 0.5, 5), "iron")
-	horn.position = Vector3(5.28, 0.8, -3.4)
-	horn.rotation.z = -PI * 0.5
-	_barrel(camp, Vector3(2.6, 0.0, -5.9))
-	_barrel(camp, Vector3(3.2, 0.0, -6.3))
-	_crate(camp, Vector3(1.6, 0.0, -5.5), 0.7, 0.3)
-	_crate(camp, Vector3(1.6, 0.7, -5.5), 0.55, -0.2)
-	_banner(camp, Vector3(-7.1, 0.0, 0.4), 0.8, "banner")
-	_banner(camp, Vector3(6.6, 0.0, -1.2), -0.9, "banner")
-	_lamp(camp, Vector3(-3.4, 0.0, -0.6))
-	_lamp(camp, Vector3(3.6, 0.0, -0.4))
-	# Wayfarer sign at the eastern entrance.
-	var post := _add_mesh(camp, "SignPost", _box_mesh(Vector3(0.14, 1.9, 0.14)), "wood")
-	post.position = Vector3(2.2, 0.95, 2.6)
-	var board := _add_mesh(camp, "SignBoard", _box_mesh(Vector3(3.1, 0.68, 0.12)), "wood_light")
-	board.position = Vector3(2.2, 1.72, 2.6)
-	board.rotation.y = -0.35
-	# The label sits on the rotated board face, not inside the plank. The old
-	# offset left it buried in the board and half a line too high.
-	var sign_text := _text(camp, Vector3(2.174, 1.72, 2.670), "EMBERFALL CAMP", 34, Color("e6d6a8"))
-	sign_text.rotation.y = -0.35
+	horn.position = Vector3(8.62, 0.8, 1.8)
+	horn.rotation.z = PI * 0.5
+	_barrel(camp, Vector3(7.6, 0.0, -3.0))
+	_barrel(camp, Vector3(8.2, 0.0, -3.4))
+	_crate(camp, Vector3(6.9, 0.0, -3.1), 0.7, 0.3)
+	_crate(camp, Vector3(6.9, 0.7, -3.1), 0.55, -0.2)
+	_banner(camp, Vector3(0.0, 0.0, 10.3), PI, "banner")
+	_banner(camp, Vector3(0.0, 0.0, -10.3), 0.0, "banner")
+	_lamp(camp, Vector3(-3.4, 0.0, 2.4))
+	_lamp(camp, Vector3(3.4, 0.0, -2.4))
+	# Wayfarer sign just inside the eastern road gate, read from both sides.
+	var sign_root := Vector3(10.1, 0.0, -4.9)
+	var facing: float = atan2(-sign_root.x, -sign_root.z)
+	var post := _add_mesh(camp, "SignPost", _box_mesh(Vector3(0.16, 2.0, 0.16)), "wood")
+	post.position = sign_root + Vector3(0.0, 1.0, 0.0)
+	var board := _add_mesh(camp, "SignBoard", _box_mesh(Vector3(3.2, 0.72, 0.14)), "wood_light")
+	board.position = sign_root + Vector3(0.0, 1.82, 0.0)
+	board.rotation.y = facing
+	var face_normal := Vector3(sin(facing), 0.0, cos(facing))
+	var sign_text := _text(camp, sign_root + Vector3(0.0, 1.82, 0.0) + face_normal * 0.095, "EMBERFALL CAMP", 34, Color("e6d6a8"))
+	sign_text.rotation.y = facing
 	# A signpost is read from both directions; the second face is rotated, not
 	# mirrored, so the lettering stays legible on the road side.
-	var sign_back := _text(camp, Vector3(2.226, 1.72, 2.530), "EMBERFALL CAMP", 34, Color("e6d6a8"))
-	sign_back.rotation.y = -0.35 + PI
+	var sign_back := _text(camp, sign_root + Vector3(0.0, 1.82, 0.0) - face_normal * 0.095, "EMBERFALL CAMP", 34, Color("e6d6a8"))
+	sign_back.rotation.y = facing + PI
 
 
 func _create_broken_arch() -> void:

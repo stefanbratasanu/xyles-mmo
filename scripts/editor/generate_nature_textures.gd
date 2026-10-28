@@ -93,26 +93,52 @@ func _grass_blades() -> void:
 	rng.seed = 9107
 	var palette: Array[Color] = [
 		Color("5d7a3a"), Color("6f8c46"), Color("4d6a33"),
-		Color("7d9852"), Color("879b55"), Color("637f3f")]
-	for blade: int in range(20):
-		var base_x: float = rng.randf_range(26.0, 230.0)
-		var height: float = rng.randf_range(90.0, 244.0)
-		var lean: float = rng.randf_range(-0.62, 0.62) * height
-		var width: float = rng.randf_range(3.6, 7.0)
+		Color("7d9852"), Color("879b55"), Color("637f3f"),
+		Color("586f36"), Color("93a45c")]
+	# Tall blades: wider and more numerous than the first atlas so a tuft still
+	# reads as grass when the camera is high above it.
+	for blade: int in range(34):
+		var base_x: float = rng.randf_range(18.0, 238.0)
+		var height: float = rng.randf_range(96.0, 252.0)
+		var lean: float = rng.randf_range(-0.68, 0.68) * height
+		var width: float = rng.randf_range(4.5, 8.5)
 		var sway: float = rng.randf_range(0.0, TAU)
 		var tint: Color = palette[rng.randi_range(0, palette.size() - 1)]
 		var base_y: float = 254.0
 		for step: int in range(int(height)):
 			var t: float = float(step) / height
 			var y: float = base_y - float(step)
-			var x: float = base_x + lean * t * t + sin(t * 3.4 + sway) * 2.4
-			var half: float = maxf(width * (1.0 - t * 0.92) * 0.5, 0.42)
-			var color: Color = tint.darkened(0.28 * (1.0 - t)).lightened(0.20 * t)
+			var x: float = base_x + lean * t * t + sin(t * 3.4 + sway) * 2.6
+			var half: float = maxf(width * (1.0 - t * 0.90) * 0.5, 0.48)
+			var color: Color = tint.darkened(0.26 * (1.0 - t)).lightened(0.22 * t)
 			for px: int in range(int(floor(x - half)), int(ceil(x + half)) + 1):
 				if px < 0 or px >= size:
 					continue
 				var edge: float = clampf((half - absf(float(px) - x)) / maxf(half, 0.6), 0.0, 1.0)
-				var alpha: float = clampf(edge * 1.7, 0.0, 1.0)
+				var alpha: float = clampf(edge * 1.8, 0.0, 1.0)
+				if alpha <= 0.05:
+					continue
+				var previous: Color = image.get_pixel(px, int(y))
+				if alpha > previous.a:
+					image.set_pixel(px, int(y), Color(color.r, color.g, color.b, alpha))
+	# Short inner blades fill the root of the tuft, which used to be see-through.
+	for blade: int in range(14):
+		var base_x: float = rng.randf_range(28.0, 228.0)
+		var height: float = rng.randf_range(34.0, 92.0)
+		var lean: float = rng.randf_range(-0.55, 0.55) * height
+		var width: float = rng.randf_range(4.5, 7.5)
+		var tint: Color = palette[rng.randi_range(0, palette.size() - 1)]
+		for step: int in range(int(height)):
+			var t: float = float(step) / height
+			var y: float = 254.0 - float(step)
+			var x: float = base_x + lean * t * t
+			var half: float = maxf(width * (1.0 - t * 0.88) * 0.5, 0.46)
+			var color: Color = tint.darkened(0.30 * (1.0 - t))
+			for px: int in range(int(floor(x - half)), int(ceil(x + half)) + 1):
+				if px < 0 or px >= size:
+					continue
+				var edge: float = clampf((half - absf(float(px) - x)) / maxf(half, 0.6), 0.0, 1.0)
+				var alpha: float = clampf(edge * 1.8, 0.0, 1.0)
 				if alpha <= 0.05:
 					continue
 				var previous: Color = image.get_pixel(px, int(y))

@@ -9,6 +9,7 @@ var cloak: MeshInstance3D
 var gait: float = 0.0
 var strike: float = 0.0
 var wolf: bool = false
+var boar: bool = false
 var base_color: Color
 
 func _mat(color: Color, metal: float = 0.0, glow: float = 0.0) -> StandardMaterial3D:
@@ -105,8 +106,68 @@ func build_knight(color: Color = Color("31535b"), is_boss: bool = false) -> void
 			var branch := _cylinder(0.05, 0.008, 0.4, Vector3(side * 0.49, 2.22, -0.04), trim)
 			branch.rotation.z = side * 0.5
 
+func _fur_card_material(tint: Color) -> StandardMaterial3D:
+	# The Blender cards are exported as blended transparency, which sorts badly
+	# and drops shadows. The project's foliage uses alpha scissor + alpha to
+	# coverage, so the fur gets the same treatment and keeps solid shadowing.
+	var material := StandardMaterial3D.new()
+	material.resource_name = "FurCard"
+	material.albedo_texture = load("res://assets/textures/fur_card.png")
+	material.albedo_color = tint
+	material.roughness = 0.95
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	material.alpha_scissor_threshold = 0.34
+	material.alpha_antialiasing_mode = BaseMaterial3D.ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE
+	material.alpha_antialiasing_edge = 0.55
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	material.diffuse_mode = BaseMaterial3D.DIFFUSE_LAMBERT_WRAP
+	return material
+
+
+func _apply_fur_cards(model: Node3D, tint: Color) -> void:
+	var material := _fur_card_material(tint)
+	var replaced: int = 0
+	for node: Node in model.find_children("*", "MeshInstance3D", true, false):
+		var instance := node as MeshInstance3D
+		if instance.mesh == null:
+			continue
+		for surface: int in range(instance.mesh.get_surface_count()):
+			var current: Material = instance.get_surface_override_material(surface)
+			if current == null:
+				current = instance.mesh.surface_get_material(surface)
+			if current == null:
+				continue
+			var card := String(current.resource_name).begins_with("FurCard")
+			if not card and current is BaseMaterial3D:
+				var base := current as BaseMaterial3D
+				card = base.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED
+			if card:
+				instance.set_surface_override_material(surface, material)
+				replaced += 1
+	if replaced == 0:
+		push_warning("fur cards were not found in %s" % model.name)
+
+
+func _load_creature(file_name: String, fur_tint: Color) -> bool:
+	# The Blender-built wolf/boar carry a UV-unwrapped fur/hide texture. Keep the
+	# procedural primitive build below as a fallback so a missing or failed GLB
+	# can never leave a normal enemy invisible.
+	var packed: PackedScene = load("res://assets/models/creatures/" + file_name) as PackedScene
+	if packed == null:
+		return false
+	var model := packed.instantiate()
+	if model == null:
+		return false
+	add_child(model)
+	_apply_fur_cards(model, fur_tint)
+	return true
+
+
 func build_wolf() -> void:
 	wolf = true
+	if _load_creature("wolf.glb", Color("7b766a")):
+		return
 	var fur := _mat(Color("444a3d"))
 	var mane := _mat(Color("67735a"))
 	var black := _mat(Color("161d1b"))
@@ -130,13 +191,52 @@ func build_wolf() -> void:
 		var thorn := _cylinder(0.07, 0, 0.30, Vector3(0, 1.02, 0.5 - i * 0.18), mane)
 		thorn.rotation.x = -0.45
 
+## A low, broad-bodied ridge boar: heavy shoulder hump, short snout, paired
+## tusks and bristles down the spine. Forward is -Z, same as the wolf.
+func build_boar() -> void:
+	boar = true
+	if _load_creature("boar.glb", Color("8f6a47")):
+		return
+	var hide := _mat(Color("5a4636"))
+	var ridge := _mat(Color("725b44"))
+	var dark := _mat(Color("241d18"))
+	var tusk := _mat(Color("d8c9a4"))
+	var eye := _mat(Color("c9834a"), 0, 1.2)
+	var body := _sphere(0.62, Vector3(0, 0.82, 0.08), hide)
+	body.scale = Vector3(0.92, 0.78, 1.32)
+	var hump := _sphere(0.44, Vector3(0, 1.12, -0.18), ridge)
+	hump.scale = Vector3(0.9, 0.75, 0.9)
+	var head := _sphere(0.34, Vector3(0, 0.86, -0.78), hide)
+	head.scale = Vector3(0.95, 0.88, 1.05)
+	_box(Vector3(0.34, 0.26, 0.46), Vector3(0, 0.78, -1.06), ridge)
+	_box(Vector3(0.22, 0.14, 0.16), Vector3(0, 0.76, -1.31), dark)
+	for side in [-1.0, 1.0]:
+		var ear := _cylinder(0.10, 0.0, 0.22, Vector3(side * 0.22, 1.09, -0.74), dark)
+		ear.rotation.z = side * -0.35
+		_sphere(0.04, Vector3(side * 0.25, 0.94, -0.94), eye)
+		var tusk_mesh := _cylinder(0.045, 0.005, 0.30, Vector3(side * 0.16, 0.78, -1.22), tusk)
+		tusk_mesh.rotation.x = -1.05
+		tusk_mesh.rotation.z = side * 0.22
+		for z in [-0.44, 0.44]:
+			_box(Vector3(0.19, 0.46, 0.20), Vector3(side * 0.34, 0.30, z), dark)
+			_box(Vector3(0.22, 0.11, 0.25), Vector3(side * 0.34, 0.08, z - 0.04), dark)
+	for i in range(6):
+		var bristle := _cylinder(0.045, 0.0, 0.26, Vector3(0, 1.31 - i * 0.03, -0.34 + i * 0.15), ridge)
+		bristle.rotation.x = -0.35
+	var tail := _cylinder(0.055, 0.02, 0.34, Vector3(0, 0.92, 0.88), dark)
+	tail.rotation.x = 0.9
+
+
 func animate(delta: float, speed_value: float, attacking: bool = false) -> void:
 	gait += delta * speed_value * 2.6
 	strike = move_toward(strike, 0.0, delta * 5.5)
 	if attacking:
 		strike = 1.0
-	if wolf:
+	if wolf or boar:
 		position.y = absf(sin(gait)) * minf(speed_value * 0.03, 0.12)
+		if boar:
+			# A heavy roll in the shoulders sells the charge without a rig.
+			rotation.z = sin(gait * 0.5) * minf(speed_value * 0.018, 0.08)
 		return
 	if left_leg:
 		var angle: float = sin(gait) * minf(speed_value * 0.13, 0.6)

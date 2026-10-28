@@ -28,6 +28,22 @@ var sidestep_dir := Vector3.ZERO
 var stuck_timer: float = 0.0
 var last_position := Vector3.ZERO
 var telegraph: MeshInstance3D
+## Normal enemies are either wolves or boars. Wolves bite a single locked spot;
+## boars gore up close and charge in a straight, sidesteppable lane.
+var species: String = "wolf"
+## Every attack commits to this world point when the windup starts. Damage is
+## tested against the point and the telegraph, never against the mob's position.
+var locked_point := Vector3.ZERO
+var locked_dir := Vector3.ZERO
+var attack_type: String = "bite"
+var strike_radius: float = 0.9
+var attack_windup_total: float = 0.55
+var charge_active: bool = false
+var charge_travelled: float = 0.0
+var charge_distance: float = 0.0
+var charge_speed: float = 14.0
+var charge_hit: bool = false
+var _telegraph_mat: StandardMaterial3D
 var wander_offset: float = 0.0
 var level_min: int = 1
 var level_max: int = 3
@@ -74,7 +90,10 @@ func _ready() -> void:
 	visual = Visual.new()
 	add_child(visual)
 	if kind == "normal":
-		visual.build_wolf()
+		if species == "boar":
+			visual.build_boar()
+		else:
+			visual.build_wolf()
 	else:
 		visual.build_knight(Color("6b5041") if kind == "quest" else Color("453651"), kind == "boss")
 		visual.scale = Vector3.ONE * scale_value
@@ -194,12 +213,21 @@ func _physics_process(delta: float) -> void:
 	if game.skill_runtime != null:
 		attack_rate = maxf(0.1, 1.0 - game.skill_runtime.enemy_stat(self, "attack_speed"))
 	attack_timer -= delta * attack_rate
-	if aggro and not winding_up and not slam_active and attack_timer <= 0.0 and distance <= reach + 0.30:
+	# A boar may open with a charge from outside its bite reach; a wolf always
+	# has to close to melee distance first.
+	var can_bite: bool = distance <= reach + 0.30
+	var can_charge: bool = species == "boar" and kind == "normal" and distance <= 9.0 and distance > reach + 0.30
+	if aggro and not winding_up and not slam_active and not charge_active and attack_timer <= 0.0 and (can_bite or can_charge):
 		_begin_attack()
 	if winding_up:
 		attack_windup -= delta
+		_pulse_telegraph()
 		if attack_windup <= 0.0:
 			_finish_attack()
+	# The charge owns movement until it ends or hits something.
+	if charge_active:
+		_advance_charge(delta)
+		return
 	var direction := Vector3.ZERO
 	var wants_move := false
 	if aggro:
@@ -254,13 +282,17 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	if direction.length() > 0.05:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), delta * 7)
-	elif aggro and to_player.length() > 0.01:
+	elif aggro and not winding_up and to_player.length() > 0.01:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-to_player.x, -to_player.z), delta * 7)
 	visual.animate(delta, Vector2(velocity.x, velocity.z).length())
 
 
 func _reach() -> float:
-	return 1.8 if kind == "normal" else (2.5 if kind == "quest" else 4.0)
+	if kind == "normal":
+		return 2.15 if species == "boar" else 1.75
+	if kind == "quest":
+		return 2.5
+	return 4.0
 
 
 ## Mobs used to converge on the exact same point and stand inside each other.
@@ -283,38 +315,222 @@ func _avoid_crowd(direction: Vector3) -> Vector3:
 ## can read the swing and back out. The old code dealt damage on the frame the
 ## cooldown expired, which felt like a missing attack when the timer was already
 ## negative and the mob had drifted out of range.
+## Commit to a target location. The player's feet at this instant are the only
+## place the attack can land; stepping off that point during the windup dodges
+## the whole thing. Wolves bite the point, boars gore it or charge through it.
 func _begin_attack() -> void:
+	if not is_instance_valid(game.player):
+		return
+	var to_player: Vector3 = game.player.global_position - global_position
+	to_player.y = 0.0
+	var distance := to_player.length()
+	attack_type = "bite"
+	if species == "boar" and kind == "normal" and distance > _reach() + 0.30:
+		attack_type = "charge"
+	locked_point = game.player.global_position
+	locked_point.y = _ground_at(locked_point)
+	locked_dir = locked_point - global_position
+	locked_dir.y = 0.0
+	if locked_dir.length_squared() < 0.0001:
+		locked_dir = Vector3.FORWARD
+	locked_dir = locked_dir.normalized()
+	strike_radius = 1.05 if species == "boar" else 0.85
 	winding_up = true
-	attack_windup = 0.55 if kind == "normal" else (0.45 if kind == "quest" else 0.35)
-	attack_timer = 1.7 if kind == "normal" else (2.0 if kind == "quest" else 2.3)
+	attack_windup_total = 0.9 if attack_type == "charge" else (0.55 if kind == "normal" else (0.45 if kind == "quest" else 0.35))
+	attack_windup = attack_windup_total
+	attack_timer = 2.4 if attack_type == "charge" else (1.7 if kind == "normal" else (2.0 if kind == "quest" else 2.3))
+	# Snap the body to the committed line: no tracking during the windup.
+	visual.rotation.y = atan2(-locked_dir.x, -locked_dir.z)
 	visual.strike = 1.0
+	_build_attack_telegraph()
 
 
 func _finish_attack() -> void:
 	winding_up = false
 	visual.strike = 1.0
-	var to_player: Vector3 = game.player.global_position - global_position
-	to_player.y = 0.0
-	if to_player.length() <= _reach() + 0.55:
-		game.damage_player((7.0 if kind == "normal" else (12.0 if kind == "quest" else 18.0)) * damage_scale, self)
+	_clear_telegraph()
+	if attack_type == "charge":
+		_start_charge()
+		return
+	var offset: Vector3 = game.player.global_position - locked_point
+	offset.y = 0.0
+	if offset.length() <= strike_radius:
+		game.damage_player(_attack_damage(), self)
+		game.burst(locked_point + Vector3.UP * 0.4, Color("d3b07a"), 0.7)
+	else:
+		_miss_feedback()
+	attack_timer = 1.7 if kind == "normal" else (2.0 if kind == "quest" else 2.3)
+	_lunge_visual()
+
+
+func _attack_damage() -> float:
+	var base := 7.0
+	if species == "boar" and kind == "normal":
+		base = 8.5
+	if kind == "quest":
+		base = 12.0
+	elif kind == "boss":
+		base = 18.0
+	return base * damage_scale
+
+
+## A short forward shove so a bite reads as a body action rather than a number
+## appearing out of nowhere. The visual is rotated to `locked_dir`, so local -Z
+## is straight at the target point.
+func _lunge_visual() -> void:
+	if visual == null or kind == "boss":
+		return
+	var tween := create_tween()
+	tween.tween_property(visual, "position:z", -0.38, 0.07).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(visual, "position:z", 0.0, 0.18).set_trans(Tween.TRANS_BACK)
+
+
+func _start_charge() -> void:
+	charge_active = true
+	charge_hit = false
+	charge_travelled = 0.0
+	var flat: Vector3 = locked_point - global_position
+	flat.y = 0.0
+	charge_distance = clampf(flat.length() + 4.5, 5.0, 12.5)
+	charge_speed = 15.0
+	visual.strike = 1.0
+	game.burst(global_position + Vector3.UP * 0.2, Color("8a7052"), 0.6)
+
+
+func _advance_charge(delta: float) -> void:
+	charge_travelled += charge_speed * delta
+	velocity.x = locked_dir.x * charge_speed
+	velocity.z = locked_dir.z * charge_speed
+	if is_on_floor():
+		velocity.y = -0.6
+	else:
+		velocity.y -= 26.0 * delta
+	move_and_slide()
+	visual.rotation.y = atan2(-locked_dir.x, -locked_dir.z)
+	visual.animate(delta, charge_speed)
+	# Contact damage, once, only while the boar's body actually overlaps the
+	# player. Sidestepping the lane is a clean dodge.
+	if not charge_hit and is_instance_valid(game.player) and not game.is_dead:
+		var offset: Vector3 = game.player.global_position - global_position
+		offset.y = 0.0
+		if offset.length() <= 1.25:
+			charge_hit = true
+			game.damage_player(11.0 * damage_scale, self)
+			game.burst(global_position + Vector3.UP * 0.7, Color("c9a46a"), 0.9)
+	if charge_travelled >= charge_distance:
+		_end_charge()
+
+
+func _end_charge() -> void:
+	charge_active = false
+	charge_travelled = 0.0
+	velocity.x = 0.0
+	velocity.z = 0.0
+	attack_timer = 2.1 if kind == "normal" else 2.4
+
+
+func _miss_feedback() -> void:
+	game.floating_text(locked_point + Vector3.UP * 0.35, "miss", Color("8f9a90"))
+	game.burst(locked_point + Vector3.UP * 0.15, Color("8b856f"), 0.45)
+
+
+func _ground_at(point: Vector3) -> float:
+	if is_instance_valid(game) and game.world != null:
+		return game.world.height_at(point.x, point.z) + 0.02
+	return point.y
+
+
+## Flat ground telegraphs, always parented to the world so they stay on the
+## committed point while the creature moves. Alpha is driven by `_pulse_telegraph`.
+func _disc_telegraph(at: Vector3, radius: float, color: Color, alpha: float = 0.22) -> MeshInstance3D:
+	var node := MeshInstance3D.new()
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = radius
+	mesh.bottom_radius = radius
+	mesh.height = 0.02
+	mesh.radial_segments = 40
+	mesh.rings = 1
+	node.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(color.r, color.g, color.b, alpha)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	node.material_override = mat
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	game.add_child(node)
+	node.global_position = Vector3(at.x, at.y + 0.06, at.z)
+	return node
+
+
+func _line_telegraph(from: Vector3, to: Vector3, width: float, color: Color, alpha: float = 0.20) -> MeshInstance3D:
+	var node := MeshInstance3D.new()
+	var flat := Vector3(to.x - from.x, 0.0, to.z - from.z)
+	var length := flat.length()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(width, 0.02, maxf(length, 0.2))
+	node.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(color.r, color.g, color.b, alpha)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	node.material_override = mat
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	game.add_child(node)
+	node.global_position = Vector3((from.x + to.x) * 0.5, maxf(from.y, to.y) + 0.06, (from.z + to.z) * 0.5)
+	if length > 0.001:
+		node.rotation.y = atan2(flat.x, flat.z)
+	return node
+
+
+func _build_attack_telegraph() -> void:
+	_clear_telegraph()
+	var color := Color("cf5347")
+	if attack_type == "charge":
+		telegraph = _line_telegraph(global_position, locked_point + locked_dir * 4.5, 1.35, color, 0.20)
+	else:
+		telegraph = _disc_telegraph(locked_point, strike_radius + 0.20, color, 0.22)
+	if is_instance_valid(telegraph):
+		_telegraph_mat = telegraph.material_override as StandardMaterial3D
+
+
+func _pulse_telegraph() -> void:
+	if not is_instance_valid(telegraph) or _telegraph_mat == null:
+		return
+	var t := clampf(1.0 - attack_windup / maxf(attack_windup_total, 0.001), 0.0, 1.0)
+	_telegraph_mat.albedo_color.a = lerpf(0.18, 0.46, t)
+
+
+func _clear_telegraph() -> void:
+	if is_instance_valid(telegraph):
+		telegraph.queue_free()
+	telegraph = null
+	_telegraph_mat = null
 
 
 func _begin_slam() -> void:
 	slam_active = true
 	boss_timer = 7.0
-	telegraph = _ring(5.5, Color("d46b64"))
-	add_child(telegraph)
+	# The Regent marks the ground where the player stands, not its own feet.
+	locked_point = game.player.global_position
+	locked_point.y = _ground_at(locked_point)
+	telegraph = _disc_telegraph(locked_point, 5.5, Color("d46b64"), 0.30)
+	telegraph.scale = Vector3(0.15, 1.0, 0.15)
 	game.state.notice.emit("Hollow Regent is gathering power. Leave the red circle!")
 	var tween := create_tween()
-	tween.tween_property(telegraph, "scale", Vector3(1, 2, 1), 1.7)
+	tween.tween_property(telegraph, "scale", Vector3.ONE, 1.7)
 	tween.tween_callback(func():
 		if not dead:
-			game.burst(global_position + Vector3.UP * 0.1, Color("ba7dc4"), 5.5)
-			if game.player.global_position.distance_to(global_position) < 5.8:
+			game.burst(locked_point + Vector3.UP * 0.1, Color("ba7dc4"), 5.5)
+			var offset: Vector3 = game.player.global_position - locked_point
+			offset.y = 0.0
+			if offset.length() < 5.8:
 				game.damage_player(36.0 * damage_scale, self, "area")
 		slam_active = false
 		if is_instance_valid(telegraph):
 			telegraph.queue_free()
+			telegraph = null
 	)
 
 func take_damage(amount: float) -> void:
@@ -330,12 +546,13 @@ func take_damage(amount: float) -> void:
 	if hp <= 0:
 		dead = true
 		collision_layer = 0
+		winding_up = false
+		charge_active = false
 		game.enemy_defeated(self)
 		name_label.hide()
 		health_bar_root.hide()
 		selected_ring.hide()
-		if is_instance_valid(telegraph):
-			telegraph.queue_free()
+		_clear_telegraph()
 		var death_tween := create_tween()
 		death_tween.tween_property(visual, "rotation:z", PI * 0.45, 0.3)
 		death_tween.tween_property(self, "position:y", -2.0, 1.2).set_delay(1.0)

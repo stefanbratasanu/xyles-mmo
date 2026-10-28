@@ -1,6 +1,6 @@
 # CURRENT_WORK.md
 
-Last updated: **2026-10-28**
+Last updated: **2026-10-29**
 Branch: `main`
 
 ## Current state
@@ -71,6 +71,11 @@ starting camp all the way to the foothills.
 - **Visuals:** generated grass/bark/leaf/needle/road textures, Blender low-poly
   trees, softer sunlight shadows, dimmer pools, rebuilt tents and a smaller
   dormant portal.
+- **Post-processing:** screen-blended HDR glow on fire, lanterns, runes, the
+  portal and creature eyes, plus SSAO contact shadow. Both default on and can be
+  switched off under **Settings → Graphics**, persisted in
+  `saves/settings.cfg` under `[graphics]` and applied live to the
+  `WorldEnvironment`.
 - **Diagnostics:** `scripts/game_log.gd`, `Documentation/DEBUGGING.md`,
   `Documentation/IMPLEMENTATION_LOG.md`, `--screenshot` tour (11 frames incl.
   the pond, map, night and frontier), `F10` marker, `F9` log folder, `F12`
@@ -93,6 +98,13 @@ starting camp all the way to the foothills.
   `test_skill_secondary_review.gd`, `test_skill_chance_debug.gd`,
   `test_animation_selection.gd`, `test_distribution_editor.gd`,
   `test_spear_items.gd` and `test_window_snap.gd` pass.
+- Graphics: `test_world.gd` proves glow and SSAO default on, that glow threshold
+  and levels are set, and that a live toggle reaches the environment. A
+  throwaway probe (deleted afterwards) proved the Settings calls write
+  `[graphics]` to `saves/settings.cfg` and that `reset_settings()` restores and
+  re-applies both effects. Day and night `--screenshot` frames were inspected
+  with the effects on; the daytime frame is not hazed and the night fire carries
+  a soft halo.
 - `test_hud_snapping.gd` still fails one assertion ("Clear saved placement
   restores without drifting"). It reproduces on the pre-change HEAD in a clean
   worktree, so it is a pre-existing UI-snap bug, not part of this pass.
@@ -118,6 +130,14 @@ starting camp all the way to the foothills.
 7. Decide whether the local `modifier_list_editor` addon should be tracked or
    kept editor-only. It is currently gitignored.
 8. Map II is not built. The waygate is decorative until it is.
+9. In-game check: fight wolves and boars at gameplay distance and confirm the
+   eyes read, the fur cards hold up, and the bite/gore/charge dodge windows are
+   readable. Watch the 13.6k/14.9k-triangle creatures in a full pack.
+10. In-game check: walk the camp ring at night and confirm every gate aligns with
+    its road, tents can be entered, and the lamp pools are sparse rather than a
+    runway.
+11. In-game check: confirm no pine stands in the vale, no broadleaf in the
+    sanctum, and no cross-family tree on the outskirts.
 
 ## Known warnings
 
@@ -152,3 +172,47 @@ starting camp all the way to the foothills.
 - The debug window no longer blocks movement, combat, camera or channeling; clicking its controls stays within the window. Other panels and the map still block gameplay. Chat focus still blocks gameplay shortcuts.
 - Debug shortcuts default to F2 (invulnerability), F3 (restore health/mana) and F4 (spawn the currently selected batch and level). Click a key in the debug menu and press an unused replacement; Esc cancels. Bindings are stored in `saves/settings.cfg` and apply while gameplay is available, including with the debug window closed.
 - Verified movement, skill use, rebinding, conflict rejection, text/modal suppression and debug actions in the integration test, plus combat, skill and world tests. The Direct3D 12 layout was inspected at 1600×900.
+
+## 2026-10-28 - Creature, forest, camp, lamp and sky pass
+
+- **Enemy combat** now commits to a world-space point. `scripts/enemy.gd` adds
+  `species`, a locked point at windup start, a wolf point bite, a boar point gore
+  plus a straight committed charge, and a boss slam on a locked circle. Hit
+  tests use the locked point, so stepping off it is a real dodge. Map I normals
+  alternate wolf/boar deterministically and respawns keep the species.
+- **Creatures** were rebuilt in `assets/models/creatures/generate_creatures.py`
+  and `make_creature_textures.py`: UV-unwrapped pelt atlases with fibre noise and
+  fine strands, three-part eyes (dark socket, offset amber iris, black pupil)
+  with low emission, nostrils, inner ears, claws or cloven hooves, tusks, a
+  bristle ridge on the boar, a bushy four-section wolf tail, and alpha-card fur
+  clumps (`fur_card.png`). `scripts/actor_visual.gd` swaps the GLB's blended fur
+  material for the project's alpha-scissor + coverage material and tints the
+  cards per species. Triangle counts are about 13.6k (wolf) and 14.9k (boar).
+- **Forest** was rebuilt in `assets/models/trees/generate_trees.py`: one
+  continuous lofted trunk with roots and limbs, dense alpha-scissor leaf/needle
+  cards, and the same foliage mass on conifers. Zone families are pure
+  (vale/thornwood oak+birch, fen dead+pine, arch/sanctum pine); outskirts inherit
+  the nearest family. Bushes are card foliage (`bush.glb`, surface 1).
+- **Ground cover**: `shaders/grass.gdshader` uses alpha-to-coverage and wind;
+  grass, flowers and bushes reject the road ribbon with exact
+  `_road_distance()` / `_on_road()` tests. Grass positions are kept in
+  `world.grass_points` because a MultiMesh does not return its transforms under
+  the headless test driver.
+- **Camp**: ring fence with road-aligned gates and gate frames, four walk-in
+  tents with ground beds, a rebuilt fire pit with a live flame, two log seats,
+  forge/anvil, banners and a road sign. The player spawns inside the ring.
+- **Road lamps** are medieval poles on the verge, off the ribbon and off any
+  nearby branch, at least 44 m apart, camp roads first, 13 maximum, with omni
+  lights dimmed to 20 % in daylight.
+- **Sky and clarity**: `shaders/frontier_sky.gdshader` scrolls 3D noise clouds
+  with the day/night clock; the sky runs `PROCESS_MODE_REALTIME` at radiance
+  256. TAA, debanding and 4x MSAA removed the noise veil and smoothed the grass.
+- `tests/test_world.gd` now also checks modelled creatures (triangle count,
+  emissive eyes, runtime fur cards), ladder-free road lamps and their lights,
+  grass off the road, the grass coverage shader, bush foliage, the camp tents,
+  beds, seats, gates and fire, and the realtime moving sky.
+- Verified: headless import, all four AGENTS tests, a 300-frame normal launch
+  and the 11-frame screenshot tour, all with exit code 0 and no script errors.
+- Remaining: Map II is still unbuilt; the waygate stays decorative. In-game
+  review should confirm the new creature silhouettes and fur at combat distance
+  and the lamp spacing at night on a slower machine.

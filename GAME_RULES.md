@@ -60,9 +60,35 @@ file is the shorter contract used during implementation.
 - **Dead trees belong to the Ashen Fen only.** Every other zone uses living oak,
   birch and pine. A dead trunk in Emberfall Vale, Thornwood, the Broken Arch or
   the Sanctum is a regression.
+- **Tree families never mix.** Conifer zones (the Broken Arch, Crownless Sanctum
+  and the pine belt) contain only pines; broadleaf zones (Emberfall Vale,
+  Thornwood) contain only oak and birch; the fen's living trees are pines and its
+  dead trunks stand alone. Outskirts inherit the nearest zone family. A pine in
+  the vale or a broadleaf in the sanctum is a regression.
 - Trees, bushes and stones are original Blender GLBs. Every tree is exported
   with its pivot at the base and planted on the sampled terrain height, so roots
   and trunks are never buried or floating.
+- **A tree trunk is one continuous lofted mesh**, roots included. Do not rebuild
+  a tree by stacking cylinder segments; the seams and kinks are visible.
+- **Foliage is modelled, not painted on a cone.** Crowns and bushes use
+  alpha-scissor leaf/needle cards with per-card colour tint (surface 0 is bark,
+  surface 1 is foliage). Smooth green blobs are a regression.
+- Conifers carry as much foliage mass as broadleaf trees; a thinned pine
+  silhouette is a defect.
+- Grass uses `shaders/grass.gdshader`: alpha-to-coverage (not scissor) with 4x
+  MSAA so blade edges stay smooth, plus a slow world-space wind bend.
+- **Nothing grows on the road ribbon.** Grass, flowers and bushes test
+  `_road_distance()` / `_on_road()` before placement; tufts on the road are a
+  regression.
+- **Road lamps are medieval and sparse.** They stand on the verge, off the
+  ribbon and off any other road that branches nearby, appear only along the
+  routes nearest camp first, keep at least 44 m between them (13 maximum), and
+  burn dim by day and bright at night. A lamp on the road or a lit runway is a
+  regression.
+- **Survivor camp** is a fenced ring whose fence opens where roads enter, with a
+  gate frame at each opening. It has four walk-in tents with ground beds, one
+  central fire pit with a live flame, two log seats, the forge and anvil, banners
+  and a road sign. The player spawns inside the camp.
 - **Lakes are carved bowls, not discs laid on the ground.** The shoreline is a
   wavy 4-harmonic curve, the bank rises above the waterline and the water mesh
   runs under the bank, so the surface never clips through the terrain. Water
@@ -93,6 +119,16 @@ file is the shorter contract used during implementation.
 - The day/night cycle is automatic: one in-game day lasts 15 real minutes and
   starts at 08:15 on day 1. The HUD clock shows the time, day and phase
   (Dawn / Day / Dusk / Night).
+- **The sky moves with the clock.** Cloud noise is sampled in 3D on the view
+  direction and scrolls with time; the sky uses a realtime radiance update. A
+  static sky, or a planar cloud projection that tears at the zenith, is a
+  regression.
+- **Post-processing is a player choice.** Glow is screen-blended with a 1.0 HDR
+  threshold, so fire, lanterns, runes, the portal and creature eyes read as light
+  without hazing the whole frame. SSAO supplies contact shadow. Both default on
+  and must stay switchable under **Settings → Graphics**; the choice persists in
+  `saves/settings.cfg` under `[graphics]`. Never make a gameplay signal, damage
+  number or UI element depend on either effect.
 - There is **no minimap**. `M` opens a full-screen, square **painted map**
   rendered from the same height and colour grids as the terrain: hillshade,
   contours every 4 m, forest canopy from real tree positions, ponds, roads and
@@ -138,14 +174,29 @@ file is the shorter contract used during implementation.
 
 | Kind | Max HP | Role |
 |---|---:|---|
-| Normal (Briarwolf) | 64 | Open-world pressure |
+| Normal wolf (Briarwolf) | 64 | Open-world pressure; point bite |
+| Normal boar (Ridge Boar) | 64 | Open-world pressure; gore and charge |
 | Quest (Oathbound Guardian) | 200 | Quest stage target |
 | Boss (Hollow Regent) | 850 | World boss with telegraphed slam |
 
+- **Map I normal spawns are wolves and boars only**, alternating deterministically
+  along the spawn list. No other normal species, and no AoE or cone attacks on
+  normals. Respawns keep the species of the enemy that died.
 - Enemies aggro inside their detection radius and leash back to their home point.
-- Every attack commits: direction and reach lock at the windup start, and the
-  damage test uses the same cone as the telegraph. Enemies do not track the
+- **Every attack commits to a world-space point.** The enemy picks its target at
+  the windup start, locks that point, and tests the hit against it. The player
+  can walk or dodge out of the point and take no damage. Enemies never track the
   player through a swing.
+- A wolf bites a single locked point. A boar gores a locked point and can then
+  charge in a straight, committed lane that a sidestep avoids. The boss slam
+  lands on a circle at its locked point. Telegraph and damage always use the
+  same locked point.
+- **Creatures are modelled, not bare primitives.** Wolves and boars are
+  UV-unwrapped Blender GLBs with a textured pelt, a three-part eye (dark socket,
+  offset amber iris, black pupil), modelled extremities and alpha-card fur
+  clumps. `actor_visual.gd` replaces the GLB's blended fur material with the
+  project's alpha-scissor + coverage material at runtime; a creature with no
+  eyes or no visible fur is a regression.
 - Enemies collide with the terrain, the player and each other. They snap to the
   ground, spread out instead of stacking, and sidestep when wedged for half a
   second. Standing inside a wolf or watching it vibrate in place is a regression.
