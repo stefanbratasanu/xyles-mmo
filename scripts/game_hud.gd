@@ -34,9 +34,20 @@ var overlay_title: Label
 var overlay_subtitle: Label
 var current_panel: String = ""
 var panel_signature: String = ""
-var minimap: FrontierMap
 var hotbar: Array[Button] = []
 var heading_font: SystemFont
+var clock_label: Label
+var clock_phase: Label
+var world_map: Control
+var chat_panel: PanelContainer
+var chat_log: RichTextLabel
+var chat_input: LineEdit
+var chat_hint: Label
+var chat_tabs: Dictionary = {}
+var chat_channel: String = "World"
+var chat_messages: Dictionary = {"World": [], "Local": [], "Party": [], "Guild": []}
+var _clock_tick: float = 0.0
+const CHANNEL_COLORS := {"World": Color("9ec4b8"), "Local": Color("d7c48e"), "Party": Color("a9b6d6"), "Guild": Color("c9a9d0")}
 var skill_view: RefCounted
 var inventory_view: RefCounted
 var overlay_footer: HBoxContainer
@@ -49,37 +60,6 @@ var floating_windows: Dictionary = {}
 var default_positions: Dictionary = {}
 const LAYOUT_PATH := "res://saves/ui_layout.cfg"
 const FrameScript = preload("res://scripts/classic_frame.gd")
-
-
-class FrontierMap extends Control:
-	var owner_game: Node
-
-	func _draw() -> void:
-		var center: Vector2 = size * 0.5
-		var radius: float = minf(size.x, size.y) * 0.43
-		draw_circle(center, radius, Color("172b2c"))
-		draw_arc(center, radius, 0.0, TAU, 72, Color("69644d"), 1.0, true)
-		draw_arc(center, radius - 4.0, 0.0, TAU, 72, Color("303f3c"), 1.0, true)
-		var path: PackedVector2Array = PackedVector2Array([
-			center + Vector2(-38, 33), center + Vector2(-17, 18), center + Vector2(1, 8),
-			center + Vector2(18, -8), center + Vector2(19, -23), center + Vector2(12, -44)])
-		draw_polyline(path, Color("6d6c4b"), 7.0, true)
-		draw_polyline(path, Color("97936a"), 1.0, true)
-		for pos: Vector2 in [Vector2(-41, -17), Vector2(-22, -43), Vector2(39, 24), Vector2(47, -18), Vector2(-7, 42)]:
-			draw_circle(center + pos, 9.0, Color("253f37"))
-		for pos: Vector2 in [Vector2(-39, 34), Vector2(-34, 29), Vector2(-44, 28)]:
-			draw_rect(Rect2(center + pos, Vector2(5, 5)), Color("baa16d"))
-		draw_arc(center + Vector2(13, -44), 10.0, 0.0, TAU, 24, Color("9d7758"), 2.0, true)
-		if is_instance_valid(owner_game) and is_instance_valid(owner_game.get("player")):
-			var p: Vector3 = owner_game.player.position
-			var marker: Vector2 = center + Vector2(p.x, p.z) * 1.75
-			draw_circle(marker, 7.0, Color(0.8, 0.7, 0.42, 0.15))
-			draw_circle(marker, 3.5, Color("eee1b2"))
-			draw_arc(marker, 5.5, 0.0, TAU, 16, Color("e5cb86"), 1.0, true)
-		var line_color: Color = Color("a29c80")
-		draw_line(center + Vector2(0, -radius - 3), center + Vector2(0, -radius + 5), line_color)
-		draw_line(center + Vector2(-radius - 3, 0), center + Vector2(-radius + 5, 0), line_color)
-		draw_line(center + Vector2(radius - 5, 0), center + Vector2(radius + 3, 0), line_color)
 
 
 func setup(owner_game: Node) -> void:
@@ -103,11 +83,18 @@ func setup(owner_game: Node) -> void:
 	_build_brand()
 	_build_player()
 	_build_quest()
-	_build_navigation()
+	_build_clock()
+	_build_menu()
 	_build_hotbar()
 	_build_log()
+	_build_chat()
 	_build_toast()
 	_build_overlay()
+	world_map = preload("res://scripts/world_map.gd").new()
+	world_map.name = "WorldMap"
+	root.add_child(world_map)
+	world_map.setup(game)
+	root.move_child(world_map, root.get_child_count() - 1)
 	if game.state.has_signal("notice"):
 		game.state.notice.connect(show_notice)
 	get_viewport().size_changed.connect(_clamp_windows)
@@ -130,7 +117,16 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if panel_keys.has(key):
 		toggle_panel(str(panel_keys[key]))
 		get_viewport().set_input_as_handled()
+	elif key == KEY_M:
+		toggle_map()
+		get_viewport().set_input_as_handled()
+	elif key == KEY_ENTER or key == KEY_KP_ENTER:
+		if not is_panel_open():
+			focus_chat()
+			get_viewport().set_input_as_handled()
 	elif key == KEY_ESCAPE and is_panel_open():
+		if is_instance_valid(world_map) and world_map.visible:
+			world_map.close()
 		close_panel()
 		get_viewport().set_input_as_handled()
 	elif key == KEY_ESCAPE:
@@ -143,9 +139,13 @@ func _build_brand() -> void:
 	_place(compass, Vector2(-150, 12), Vector2(300, 40), Vector2(0.5, 0))
 	region_label = _label("EMBERFALL CAMP", 13, TEXT, true)
 	region_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# The region plate floats over bright sky and pale terrain; a shadow keeps it
+	# readable in every zone and at every hour.
+	_shadowed(region_label)
 	compass.add_child(region_label)
-	var subtitle := _label("•  ASHEN REACH  •", 9, GOLD)
+	var subtitle := _label("•  THE ASHEN FRONTIER  •", 9, GOLD)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_shadowed(subtitle)
 	compass.add_child(subtitle)
 
 
@@ -183,7 +183,7 @@ func _build_player() -> void:
 
 func _build_quest() -> void:
 	var panel: PanelContainer = _panel(Color(0.04, 0.06, 0.07, 0.83), false)
-	_place(panel, Vector2(-274, 254), Vector2(262, 145), Vector2(1, 0))
+	_place(panel, Vector2(-288, 196), Vector2(276, 140), Vector2(1, 0))
 	_register_window(panel, "quest")
 	var column: VBoxContainer = _column(panel, 14, 12)
 	column.add_child(_label("Quest Journal", 9, GOLD))
@@ -197,56 +197,197 @@ func _build_quest() -> void:
 	column.add_child(_label("[E]  INTERACT NEAR THE FORGE", 9, MUTED))
 
 
-func _build_navigation() -> void:
-	var map_box := _panel()
-	_place(map_box, Vector2(-244, 12), Vector2(232, 230), Vector2(1, 0))
-	_register_window(map_box, "map")
-	var column := _column(map_box, 8, 8)
-	var location := _label("Map — Ashen Reach", 11, TEXT)
-	location.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(location)
-	minimap = FrontierMap.new()
-	minimap.owner_game = game
-	minimap.custom_minimum_size = Vector2(210, 170)
-	minimap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_child(minimap)
-	var safe := _label("N  •  EMBERFALL CAMP", 9, GOLD)
-	safe.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(safe)
+func _build_clock() -> void:
+	var panel: PanelContainer = _panel(Color(0.04, 0.06, 0.07, 0.72), false)
+	_place(panel, Vector2(-252, 12), Vector2(240, 64), Vector2(1, 0))
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var column := _column(panel, 12, 8)
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 8)
+	column.add_child(row)
+	clock_label = _label("08:25   DAY 01", 15, TEXT, true)
+	clock_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(clock_label)
+	clock_phase = _label("DAYLIGHT", 9, GOLD)
+	row.add_child(clock_phase)
+	column.add_child(_label("[M] world map     [F10] bug marker", 9, MUTED))
+
+
+func _build_menu() -> void:
 	var menu_box := _panel()
-	_place(menu_box, Vector2(-238, -112), Vector2(226, 100), Vector2(1, 1))
+	_place(menu_box, Vector2(-252, 84), Vector2(240, 100), Vector2(1, 0))
 	_register_window(menu_box, "menu")
-	var menu_column := _column(menu_box, 8, 6)
-	menu_column.add_child(_label("Game Menu", 11, TEXT))
-	var menu := GridContainer.new()
-	menu.columns = 3
-	menu.add_theme_constant_override("h_separation", 3)
-	menu.add_theme_constant_override("v_separation", 3)
-	menu_column.add_child(menu)
+	var menu_column := _column(menu_box, 10, 8)
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 4)
+	grid.add_theme_constant_override("v_separation", 4)
+	menu_column.add_child(grid)
 	for item: Array in [["K", "Skills", "skills"], ["B", "Bestiary", "bestiary"], ["I", "Items", "inventory"], ["C", "Forge", "forge"], ["H", "Guide", "guide"], ["O", "Options", "settings"]]:
-		var btn := _button("%s [%s]" % [item[1], item[0]], 10)
-		btn.custom_minimum_size = Vector2(67, 28)
+		var btn := _button("%s [%s]" % [item[1], item[0]], 9)
+		btn.custom_minimum_size = Vector2(70, 28)
 		btn.pressed.connect(toggle_panel.bind(str(item[2])))
-		menu.add_child(btn)
+		grid.add_child(btn)
+
+
+func _build_chat() -> void:
+	chat_panel = _panel(Color(0.035, 0.045, 0.05, 0.82), false)
+	# Bottom-left: the chat takes the old journal slot so the bottom-right of the
+	# screen stays free for the system log.
+	_place(chat_panel, Vector2(12, -238), Vector2(360, 238), Vector2(0, 1))
+	chat_panel.mouse_filter = Control.MOUSE_FILTER_PASS
+	var column := _column(chat_panel, 10, 8)
+	var tabs := HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", 3)
+	column.add_child(tabs)
+	for channel: String in ["World", "Local", "Party", "Guild"]:
+		var btn := _button(channel, 9)
+		btn.custom_minimum_size = Vector2(76, 24)
+		btn.toggle_mode = true
+		btn.pressed.connect(_select_channel.bind(channel))
+		tabs.add_child(btn)
+		chat_tabs[channel] = btn
+	chat_hint = _label("[Enter] to write     ·     channel " + chat_channel, 9, MUTED)
+	column.add_child(chat_hint)
+	chat_log = RichTextLabel.new()
+	chat_log.bbcode_enabled = true
+	chat_log.scroll_following = true
+	chat_log.fit_content = false
+	chat_log.custom_minimum_size.y = 120
+	chat_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	chat_log.add_theme_color_override("default_color", MUTED)
+	chat_log.add_theme_font_size_override("normal_font_size", 11)
+	chat_log.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(chat_log)
+	chat_input = LineEdit.new()
+	chat_input.placeholder_text = "Say something in World…  [Enter] to send, [Esc] to cancel"
+	chat_input.max_length = 160
+	chat_input.custom_minimum_size.y = 26
+	chat_input.add_theme_font_size_override("font_size", 11)
+	chat_input.add_theme_stylebox_override("normal", _style(Color("141713"), Color("4d4a3d"), 1, 2, 8, 5))
+	chat_input.add_theme_stylebox_override("focus", _style(Color("181b16"), GOLD_DIM, 1, 2, 8, 5))
+	chat_input.add_theme_color_override("font_color", TEXT)
+	chat_input.add_theme_color_override("font_placeholder_color", Color("7b8075"))
+	chat_input.text_submitted.connect(_submit_chat)
+	chat_input.focus_entered.connect(_on_chat_focus.bind(true))
+	chat_input.focus_exited.connect(_on_chat_focus.bind(false))
+	column.add_child(chat_input)
+	_append_chat_line("World", "Server", "Map I is live. The sealed waygate leads to Map II, which is not built yet.")
+	_select_channel("World")
+
+
+func _select_channel(channel: String) -> void:
+	chat_channel = channel
+	for name: String in chat_tabs.keys():
+		var btn: Button = chat_tabs[name]
+		btn.button_pressed = name == channel
+		btn.add_theme_color_override("font_color", GOLD if name == channel else TEXT)
+	chat_hint.text = "[Enter] to write     ·     channel " + chat_channel
+	chat_input.placeholder_text = "Say something in %s…  [Enter] to send" % chat_channel
+	_render_chat()
+	if is_instance_valid(game) and game.get("game_log") != null:
+		game.game_log.ui("chat_channel", {"channel": channel})
+
+
+func _render_chat() -> void:
+	if not is_instance_valid(chat_log):
+		return
+	chat_log.clear()
+	var messages: Array = chat_messages.get(chat_channel, [])
+	for line: Dictionary in messages:
+		append_bbcode_line(str(line.get("channel", "")), str(line.get("author", "")), str(line.get("text", "")), str(line.get("time", "")))
+	if messages.is_empty():
+		chat_log.append_text("[color=#6d7368]No %s messages yet.[/color]" % chat_channel.to_lower())
+
+
+func append_bbcode_line(channel: String, author: String, message: String, stamp: String) -> void:
+	var color: Color = CHANNEL_COLORS.get(channel, TEXT)
+	chat_log.append_text("[color=#6f756a]%s[/color] [color=#8f978c][%s][/color] [color=#%s]%s:[/color] %s\n" % [stamp, channel, color.to_html(false), author, message])
+
+
+func _append_chat_line(channel: String, author: String, message: String) -> void:
+	if not chat_messages.has(channel):
+		channel = "World"
+	var stamp := ""
+	if is_instance_valid(game) and game.get("world") != null and game.world.get("time_of_day") != null:
+		stamp = game.world.clock_text()
+	else:
+		stamp = Time.get_time_string_from_system().substr(0, 5)
+	(chat_messages[channel] as Array).append({"channel": channel, "author": author, "text": message, "time": stamp})
+	if (chat_messages[channel] as Array).size() > 60:
+		(chat_messages[channel] as Array).pop_front()
+	if channel == chat_channel:
+		append_bbcode_line(channel, author, message, stamp)
+
+
+func _submit_chat(text: String) -> void:
+	var message := text.strip_edges()
+	chat_input.clear()
+	if message.is_empty():
+		return
+	_append_chat_line(chat_channel, "Wayfarer", message)
+	if is_instance_valid(game) and game.get("game_log") != null:
+		game.game_log.ui("chat_message", {"channel": chat_channel, "length": message.length()})
+	chat_input.release_focus()
+
+
+func _on_chat_focus(focused: bool) -> void:
+	if is_instance_valid(game):
+		game.ui_text_input = focused
+	chat_panel.modulate = Color.WHITE if focused else Color(0.94, 0.94, 0.92)
+	if not focused:
+		chat_input.release_focus()
+
+
+func focus_chat() -> void:
+	if chat_input.has_focus():
+		return
+	chat_input.grab_focus()
+	chat_input.caret_column = chat_input.text.length()
+
+
+func toggle_map() -> void:
+	if not is_instance_valid(world_map):
+		return
+	if world_map.visible:
+		world_map.close()
+		if is_instance_valid(game) and game.get("game_log") != null:
+			game.game_log.ui("world_map_closed", {})
+	else:
+		if not current_panel.is_empty():
+			close_panel()
+		world_map.open()
 
 
 func _build_hotbar() -> void:
-	var holder := _panel()
-	_place(holder, Vector2(-245, -133), Vector2(490, 121), Vector2(0.5, 1))
-	_register_window(holder, "shortcuts")
-	var column := _column(holder, 12, 7)
-	column.add_theme_constant_override("separation", 4)
-	context_text = _label("Shortcuts   •   1–5", 10, TEXT)
+	# Intentionally not a floating window: the skill bar must sit on the world
+	# with no frame around it. Only the skill tiles have a background.
+	var holder := Control.new()
+	_place(holder, Vector2(-245, -128), Vector2(490, 112), Vector2(0.5, 1))
+	holder.mouse_filter = Control.MOUSE_FILTER_PASS
+	var column := VBoxContainer.new()
+	column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	column.alignment = BoxContainer.ALIGNMENT_END
+	column.mouse_filter = Control.MOUSE_FILTER_PASS
+	column.add_theme_constant_override("separation", 5)
+	holder.add_child(column)
+	context_text = _label("Shortcuts   •   1–5", 11, Color("f0e6c8"))
 	context_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_shadowed(context_text)
 	column.add_child(context_text)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 5)
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+	row.add_theme_constant_override("separation", 6)
 	column.add_child(row)
 	var names := ["Iron Cleave", "Ember Bolt", "Iron Guard", "Dodge Roll", "Restoring Light"]
 	for i in range(5):
 		var skill := _button("", 12, true)
 		skill.custom_minimum_size = Vector2(54, 54)
+		skill.add_theme_stylebox_override("normal", _style(Color(0.05, 0.06, 0.06, 0.80), Color("6f6854"), 1, 4, 0, 0))
+		skill.add_theme_stylebox_override("hover", _style(Color(0.12, 0.13, 0.11, 0.9), GOLD, 1, 4, 0, 0))
+		skill.add_theme_stylebox_override("pressed", _style(Color(0.02, 0.03, 0.03, 0.9), GOLD, 1, 4, 0, 0))
 		skill.pressed.connect(_activate_skill.bind(i))
 		skill.tooltip_text = "%s [%d]" % [names[i], i + 1]
 		row.add_child(skill)
@@ -277,18 +418,26 @@ func _build_hotbar() -> void:
 		skill.add_child(timer_label)
 		skill.set_meta("timer_label", timer_label)
 		hotbar.append(skill)
-	progression_text = _label("", 10, GOLD)
+	progression_text = _label("", 10, Color("d8c79a"))
 	progression_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_shadowed(progression_text)
 	column.add_child(progression_text)
-	resource_text = _label("", 9, MUTED)
+	resource_text = _label("", 9, Color("cfc8b2"))
 	resource_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_shadowed(resource_text)
 	column.add_child(resource_text)
+
+
+func _shadowed(label: Label) -> void:
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	label.add_theme_constant_override("shadow_offset_x", 1)
+	label.add_theme_constant_override("shadow_offset_y", 1)
 
 
 func _build_log() -> void:
 	var panel: PanelContainer = _panel(Color(0.04, 0.06, 0.07, 0.68), false)
-	_place(panel, Vector2(12, -193), Vector2(350, 181), Vector2(0, 1))
-	_register_window(panel, "journal")
+	_place(panel, Vector2(-362, -193), Vector2(350, 181), Vector2(1, 1))
+	_register_window(panel, "system_log")
 	var column: VBoxContainer = _column(panel, 12, 10)
 	column.add_child(_label("All   |   System   |   Combat", 9, GOLD))
 	log_text = RichTextLabel.new()
@@ -409,7 +558,10 @@ func refresh() -> void:
 	for i: int in range(maxi(0, logs.size() - 3), logs.size()):
 		lines.append(str(logs[i]))
 	log_text.text = "\n".join(lines)
-	minimap.queue_redraw()
+	var world: Variant = game.get("world")
+	if is_instance_valid(world) and world.get("time_of_day") != null:
+		clock_label.text = "%s   DAY %02d" % [world.clock_text(), int(world.day_number)]
+		clock_phase.text = str(world.phase_text()).to_upper()
 	if is_panel_open():
 		var signature: String = str([s.skill_points, s.earned_skill_points, s.skills, s.bestiary, s.equipment, s.inventory, s.gold, s.wood, s.iron, _near_forge()])
 		if signature != panel_signature:
@@ -431,6 +583,8 @@ func show_notice(message: String) -> void:
 
 
 func is_panel_open() -> bool:
+	if is_instance_valid(world_map) and world_map.visible:
+		return true
 	return not current_panel.is_empty()
 
 
@@ -452,6 +606,8 @@ func close_panel() -> void:
 
 
 func _switch_panel(panel_name: String) -> void:
+	if is_instance_valid(world_map) and world_map.visible:
+		world_map.close()
 	if current_panel == "settings" and game.has_method("save_settings"):
 		game.save_settings()
 	_store_active_position()
