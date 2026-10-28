@@ -2,6 +2,10 @@
 .godot/
 /android/
 /saves/
+# Runtime diagnostics: one text log per run, never shipped or committed.
+/logs/
+# Development screenshots (F12 and --screenshot tours).
+/screenshots/
 # Effekseer is required by the game and is versioned. Other addons stay local.
 /addons/*
 !/addons/effekseer/
