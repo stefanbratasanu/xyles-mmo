@@ -2,7 +2,9 @@
 .godot/
 /android/
 /saves/
-/addons/
+# Effekseer is required by the game and is versioned. Other addons stay local.
+/addons/*
+!/addons/effekseer/
 /tools/
 /assets/animations/Ultimate Animation Collection/
 Godot_v4.7.2-stable_win64.exe
