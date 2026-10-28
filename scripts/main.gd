@@ -407,11 +407,11 @@ func _projectile(enemy: CharacterBody3D, damage: float) -> void:
 	var orb: MeshInstance3D = combat_effects.take_orb()
 	orb.position = player.position + Vector3.UP * 1.2
 	var hit_point := enemy.position + Vector3.UP * (1.0 if enemy.kind != "boss" else 2.3)
-	var flame := orb.get_node_or_null("EmberTrail") as EffekseerEmitter3D
-	if flame != null:
+	var flame := orb.get_node_or_null("EmberTrail") as Node3D
+	if flame != null and flame.has_method("play"):
 		var direction := (hit_point - orb.position).normalized()
 		flame.rotation.y = atan2(direction.z, -direction.x)
-		flame.play()
+		flame.call("play")
 	var duration: float = clampf(orb.position.distance_to(hit_point) / 24.0, 0.15, 0.8)
 	var tween := create_tween()
 	tween.tween_property(orb, "position", hit_point, duration)

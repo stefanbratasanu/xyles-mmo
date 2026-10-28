@@ -5,7 +5,9 @@ var orbs: Array[MeshInstance3D] = []
 var labels: Array[Label3D] = []
 var orb_mesh: SphereMesh
 var orb_material: StandardMaterial3D
-const EMBER_BOLT_EFFECT = preload("res://assets/effects/ember_bolt/EmberBolt.efkefc")
+const EMBER_BOLT_PATH := "res://assets/effects/ember_bolt/EmberBolt.efkefc"
+var ember_bolt_effect: Resource
+var ember_bolt_checked := false
 
 func prepare(at: Vector3) -> void:
 	var ring_mesh := TorusMesh.new()
@@ -87,6 +89,16 @@ func floating_text(at: Vector3, text_value: String, color: Color) -> void:
 		label.set_meta("busy", false)
 	)
 
+func _effekseer_available() -> bool:
+	return ClassDB.class_exists("EffekseerEmitter3D")
+
+func _get_ember_bolt_effect() -> Resource:
+	if not ember_bolt_checked:
+		ember_bolt_checked = true
+		if _effekseer_available() and ResourceLoader.exists(EMBER_BOLT_PATH):
+			ember_bolt_effect = load(EMBER_BOLT_PATH)
+	return ember_bolt_effect
+
 func _new_orb() -> MeshInstance3D:
 	var orb := MeshInstance3D.new()
 	orb.mesh = orb_mesh
@@ -97,12 +109,14 @@ func _new_orb() -> MeshInstance3D:
 	light.light_energy = 2.0
 	light.omni_range = 3.0
 	orb.add_child(light)
-	var flame := EffekseerEmitter3D.new()
-	flame.name = "EmberTrail"
-	flame.effect = EMBER_BOLT_EFFECT
-	flame.autoplay = false
-	flame.scale = Vector3.ONE * 0.6
-	orb.add_child(flame)
+	if _effekseer_available():
+		var flame := ClassDB.instantiate("EffekseerEmitter3D") as Node3D
+		if flame != null:
+			flame.name = "EmberTrail"
+			flame.set("effect", _get_ember_bolt_effect())
+			flame.set("autoplay", false)
+			flame.scale = Vector3.ONE * 0.6
+			orb.add_child(flame)
 	orb.set_meta("busy", false)
 	add_child(orb)
 	orbs.append(orb)
@@ -121,9 +135,9 @@ func take_orb() -> MeshInstance3D:
 	return extra
 
 func release_orb(orb: MeshInstance3D) -> void:
-	var flame := orb.get_node_or_null("EmberTrail") as EffekseerEmitter3D
-	if flame != null:
-		flame.stop()
+	var flame := orb.get_node_or_null("EmberTrail")
+	if flame != null and flame.has_method("stop"):
+		flame.call("stop")
 	orb.hide()
 	orb.set_meta("busy", false)
 
