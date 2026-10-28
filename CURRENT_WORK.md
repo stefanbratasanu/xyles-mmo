@@ -24,6 +24,10 @@ were dead.
 - Removed the duplicate top-centre target panel from the HUD. The enemy's
   world-space name and health bar are now the single enemy display.
 - Added `AGENTS.md`, `GAME_RULES.md`, and this file.
+- Repaired two stale test assumptions that had drifted from the content: the
+  crafting test now inspects the item it just crafted instead of a fixed
+  inventory index, and the skill-panel test expects the five skill rows plus
+  the capacity and reset controls.
 
 ## Verification done
 
@@ -33,6 +37,8 @@ were dead.
 - Smoke test confirmed the player spawns at the camp spawn point, the camera is
   current and follows the player, and movement is enabled.
 - Windowed launch produced no script or runtime errors.
+- `test_progression.gd`, `test_combat_effects.gd`, and `test_skill_panel.gd`
+  all pass.
 
 ## Next steps
 
@@ -44,8 +50,6 @@ were dead.
    appears, with no second top-centre panel.
 5. Decide whether the local `modifier_list_editor` addon should be tracked or
    kept editor-only. It is currently gitignored.
-6. Consider committing generated `.uid` / `.import` files if the team wants
-   stable resource references; otherwise keep them out of commits.
 
 ## Known warnings
 

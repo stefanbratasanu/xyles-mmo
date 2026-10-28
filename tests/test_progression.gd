@@ -79,11 +79,13 @@ func _test_crafting_and_death() -> void:
 	state.rng.seed = 7919
 	var before_wood: int = state.wood
 	_check(state.craft_sword("basic"), "Base sword must be craftable with starter resources")
-	_check(state.wood == before_wood - 100 and state.inventory[0]["modifiers"].size() == 2, "Base crafting must consume 100 wood and roll two modifiers")
+	# The inventory starts with example gear, so inspect the item just crafted
+	# instead of assuming a fixed inventory index.
+	_check(state.wood == before_wood - 100 and state.inventory.back()["modifiers"].size() == 2, "Base crafting must consume 100 wood and roll two modifiers")
 	_check(not state.craft_sword("legendary"), "High-tier crafting must reject insufficient materials")
 	state.wood = 1000
 	state.iron = 1000
-	_check(state.craft_sword("legendary") and state.inventory[1]["modifiers"].size() == 5, "Legendary crafting needs five modifiers")
+	_check(state.craft_sword("legendary") and state.inventory.back()["modifiers"].size() == 5, "Legendary crafting needs five modifiers")
 	_check(state.get_exposure_chance({"durability": 50.0}) == 0.0, "50% is not exposed")
 	_check(state.get_exposure_chance({"durability": 49.0}) > 0.0, "Below 50% must have a drop chance")
 	state.equipment[0]["durability"] = 0.0

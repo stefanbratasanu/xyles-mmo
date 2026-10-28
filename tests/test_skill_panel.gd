@@ -30,7 +30,8 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	var rows: Array = game.hud.overlay_content.get_children()
-	assert(rows.size() == 6)
+	# Five skill rows plus the slot-capacity and reset controls.
+	assert(rows.size() == 7)
 	var full_row: Control = rows[1]
 	assert(full_row.get_global_rect().end.x <= root.get_visible_rect().size.x - 48)
 	var strip: Control = full_row.get_child(2)
