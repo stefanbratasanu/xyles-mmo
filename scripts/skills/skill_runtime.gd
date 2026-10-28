@@ -84,7 +84,7 @@ func _physics_process(delta: float) -> void:
 	_tick_projectiles(delta)
 	_tick_fields()
 	if not channel_id.is_empty():
-		if game.is_dead or game.hud.is_panel_open():
+		if game.is_dead or game.hud.blocks_gameplay():
 			stop_channel()
 			return
 		channel_elapsed += delta

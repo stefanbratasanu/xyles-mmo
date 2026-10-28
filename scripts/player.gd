@@ -135,7 +135,7 @@ func _physics_process(delta: float) -> void:
 	invulnerable_time = maxf(0, invulnerable_time - delta)
 	dash_time = maxf(0, dash_time - delta)
 	var input_dir := Vector2.ZERO
-	var controls_enabled: bool = not game.hud.is_panel_open() and not game.is_dead and not bool(game.get("ui_text_input"))
+	var controls_enabled: bool = not game.hud.blocks_gameplay() and not game.is_dead and not bool(game.get("ui_text_input"))
 	if controls_enabled:
 		input_dir = Vector2(float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)), float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W)))
 	if sitting:
@@ -158,7 +158,7 @@ func _physics_process(delta: float) -> void:
 	if input_dir.length() > 0.0:
 		moving_to_click = false
 		direction = Vector3(input_dir.x, 0, input_dir.y).rotated(Vector3.UP, game.camera_yaw).normalized()
-	elif moving_to_click and not sitting and not game.hud.is_panel_open() and not game.is_dead and not bool(game.get("ui_text_input")):
+	elif moving_to_click and not sitting and not game.hud.blocks_gameplay() and not game.is_dead and not bool(game.get("ui_text_input")):
 		var offset := destination - global_position
 		offset.y = 0
 		if offset.length() > 0.3:

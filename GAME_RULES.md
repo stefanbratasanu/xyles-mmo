@@ -217,3 +217,7 @@ Visual language:
   disagrees with `game_state.gd`.
 - Verify combat changes with `tests/test_combat_effects.gd` and progression
   changes with `tests/test_progression.gd`.
+
+- Options → Debug Menu opens a draggable test popup with batch count and level sliders, an active count and a clear button. These hostile temporary enemies use normal scaling but grant no rewards, progression or respawns; the active cap is 50. The menu also restores vitals, resets cooldowns, toggles session-only invulnerability, and pauses or sets world time.
+
+- The debug window permits gameplay while open. Configurable physical-key shortcuts default to F2 for invulnerability, F3 for restoring vitals and F4 for spawning the selected training minion batch. They are disabled while chat or blocking panels have focus.
