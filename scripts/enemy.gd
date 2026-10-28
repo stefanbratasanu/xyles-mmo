@@ -21,6 +21,12 @@ var age: float = 0.0
 var aggro: bool = false
 var boss_timer: float = 5.0
 var winding_up: bool = false
+var attack_windup: float = 0.0
+var slam_active: bool = false
+var sidestep_time: float = 0.0
+var sidestep_dir := Vector3.ZERO
+var stuck_timer: float = 0.0
+var last_position := Vector3.ZERO
 var telegraph: MeshInstance3D
 var wander_offset: float = 0.0
 var level_min: int = 1
@@ -44,7 +50,17 @@ func configure_zone(zone: Dictionary) -> void:
 
 func _ready() -> void:
 	collision_layer = 4
-	collision_mask = 1
+	# 1 = terrain, 2 = player, 4 = other enemies. Without this the old mask (world
+	# only) let wolves walk straight through the player and through each other,
+	# which is what looked like clipping during a fight.
+	collision_mask = 1 | 2 | 4
+	# The terrain is a triangle mesh with real slopes. Floor snapping and a
+	# forgiving floor angle keep the mob on the ground instead of losing the
+	# surface on a crest and jittering in place.
+	floor_snap_length = 0.8
+	floor_max_angle = deg_to_rad(60.0)
+	floor_stop_on_slope = true
+	safe_margin = 0.04
 	max_hp = (64.0 if kind == "normal" else (200.0 if kind == "quest" else 850.0)) * power
 	hp = max_hp
 	var scale_value: float = 1.0 if kind == "normal" else (1.35 if kind == "quest" else 2.45)
@@ -98,6 +114,7 @@ func _ready() -> void:
 	_apply_health_ratio(1.0)
 	health_bar_root.visible = false
 	wander_offset = randf() * TAU
+	last_position = global_position
 	if kind == "boss":
 		var light := OmniLight3D.new()
 		light.light_color = Color("a68ac4")
@@ -153,48 +170,87 @@ func _physics_process(delta: float) -> void:
 	if dead or not is_instance_valid(game) or not is_instance_valid(game.player):
 		return
 	age += delta
-	attack_timer -= delta * (1.0 - game.skill_runtime.enemy_stat(self, "attack_speed")) if game.skill_runtime != null else delta
-	selected_ring.visible = game.target == self
 	_update_health_bar(delta)
+	selected_ring.visible = game.target == self
 	name_label.visible = game.target == self or kind != "normal" or aggro
 	var to_player: Vector3 = game.player.global_position - global_position
-	to_player.y = 0
+	to_player.y = 0.0
 	var distance: float = to_player.length()
 	var detection: float = 7.0 if kind == "normal" else (8.0 if kind == "quest" else 12.0)
 	var leash: float = 13.0 if kind != "boss" else 18.0
-	if distance < detection and not game.is_dead:
-		aggro = true
-	if global_position.distance_to(home) > leash or game.is_dead:
-		aggro = false
-	var direction := Vector3.ZERO
-	var reach: float = 1.8 if kind == "normal" else (2.5 if kind == "quest" else 4.0)
+	var reach: float = _reach()
 	var speed_value: float = 2.3 if kind == "normal" else (2.1 if kind == "quest" else 1.65)
+	if game.is_dead:
+		aggro = false
+	elif distance < detection:
+		aggro = true
+	elif distance > leash:
+		aggro = false
+	if aggro and global_position.distance_to(home) > leash:
+		aggro = false
+	# The attack cooldown always ticks, so stepping into reach with an expired
+	# timer attacks on the same frame instead of waiting for another branch.
+	var attack_rate: float = 1.0
+	if game.skill_runtime != null:
+		attack_rate = maxf(0.1, 1.0 - game.skill_runtime.enemy_stat(self, "attack_speed"))
+	attack_timer -= delta * attack_rate
+	if aggro and not winding_up and not slam_active and attack_timer <= 0.0 and distance <= reach + 0.30:
+		_begin_attack()
+	if winding_up:
+		attack_windup -= delta
+		if attack_windup <= 0.0:
+			_finish_attack()
+	var direction := Vector3.ZERO
+	var wants_move := false
 	if aggro:
-		if distance > reach and not winding_up:
+		if not winding_up and not slam_active and distance > reach:
 			direction = to_player.normalized()
-		elif attack_timer <= 0 and not winding_up:
-			attack_timer = 1.7 if kind != "boss" else 2.3
-			visual.strike = 1.0
-			game.damage_player((7.0 if kind == "normal" else (12.0 if kind == "quest" else 18.0)) * damage_scale, self)
-		if kind == "boss":
-			boss_timer -= delta
-			if boss_timer <= 0 and not winding_up:
-				_begin_slam()
+			wants_move = true
+	elif global_position.distance_to(home) > 1.6:
+		direction = (home - global_position).normalized()
+		speed_value = 1.5
+		wants_move = true
 	else:
-		if global_position.distance_to(home) > 1.6:
-			direction = (home - global_position).normalized()
-			speed_value = 1.5
-		else:
-			direction = Vector3(sin(age * 0.27 + wander_offset), 0, cos(age * 0.31 + wander_offset)) * 0.25
-			speed_value = 0.7
+		direction = Vector3(sin(age * 0.27 + wander_offset), 0, cos(age * 0.31 + wander_offset)) * 0.25
+		speed_value = 0.7
 		if hp < max_hp:
 			hp = minf(max_hp, hp + delta * 4.0)
-	if game.skill_runtime != null: speed_value *= 1.0 - game.skill_runtime.enemy_stat(self, "movement_speed")
+	if wants_move:
+		direction = _avoid_crowd(direction)
+	# A mob wedged on a boulder or pinned by the player used to keep pushing into
+	# the obstacle forever. After half a second without progress, sidestep.
+	var moved: float = Vector2(global_position.x - last_position.x, global_position.z - last_position.z).length()
+	if wants_move and moved < 0.02 and not winding_up:
+		stuck_timer += delta
+	else:
+		stuck_timer = 0.0
+	last_position = global_position
+	if stuck_timer > 0.5 and sidestep_time <= 0.0 and direction.length_squared() > 0.01:
+		stuck_timer = 0.0
+		sidestep_time = 0.7
+		var side := Vector3(-direction.z, 0.0, direction.x)
+		sidestep_dir = side.normalized() if randf() < 0.5 else -side.normalized()
+	if sidestep_time > 0.0:
+		sidestep_time -= delta
+		direction = (direction + sidestep_dir * 1.4).normalized()
+		wants_move = true
+	if kind == "boss":
+		boss_timer -= delta
+		# Only a boss that has actually engaged may slam. Without the aggro gate
+		# the Regent announces and detonates its circle every seven seconds from
+		# wherever it is spawned, even with the player across the map.
+		if boss_timer <= 0.0 and aggro and not winding_up and not slam_active:
+			_begin_slam()
+	if game.skill_runtime != null:
+		speed_value *= 1.0 - game.skill_runtime.enemy_stat(self, "movement_speed")
+	if not wants_move:
+		speed_value = 0.0
 	velocity.x = direction.x * speed_value
 	velocity.z = direction.z * speed_value
-	velocity.y -= delta * 20.0
 	if is_on_floor():
-		velocity.y = -0.3
+		velocity.y = -0.6
+	else:
+		velocity.y -= 26.0 * delta
 	move_and_slide()
 	if direction.length() > 0.05:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), delta * 7)
@@ -202,8 +258,49 @@ func _physics_process(delta: float) -> void:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-to_player.x, -to_player.z), delta * 7)
 	visual.animate(delta, Vector2(velocity.x, velocity.z).length())
 
-func _begin_slam() -> void:
+
+func _reach() -> float:
+	return 1.8 if kind == "normal" else (2.5 if kind == "quest" else 4.0)
+
+
+## Mobs used to converge on the exact same point and stand inside each other.
+func _avoid_crowd(direction: Vector3) -> Vector3:
+	var push := Vector3.ZERO
+	for other: CharacterBody3D in game.enemies:
+		if other == self or not is_instance_valid(other) or other.dead:
+			continue
+		var offset: Vector3 = global_position - other.global_position
+		offset.y = 0.0
+		var gap: float = offset.length()
+		if gap > 0.001 and gap < 1.5:
+			push += offset.normalized() * (1.5 - gap)
+	if push.length_squared() > 0.0001:
+		direction = (direction + push * 1.2).normalized()
+	return direction
+
+
+## Every mob now commits to a short windup before the damage lands, so the player
+## can read the swing and back out. The old code dealt damage on the frame the
+## cooldown expired, which felt like a missing attack when the timer was already
+## negative and the mob had drifted out of range.
+func _begin_attack() -> void:
 	winding_up = true
+	attack_windup = 0.55 if kind == "normal" else (0.45 if kind == "quest" else 0.35)
+	attack_timer = 1.7 if kind == "normal" else (2.0 if kind == "quest" else 2.3)
+	visual.strike = 1.0
+
+
+func _finish_attack() -> void:
+	winding_up = false
+	visual.strike = 1.0
+	var to_player: Vector3 = game.player.global_position - global_position
+	to_player.y = 0.0
+	if to_player.length() <= _reach() + 0.55:
+		game.damage_player((7.0 if kind == "normal" else (12.0 if kind == "quest" else 18.0)) * damage_scale, self)
+
+
+func _begin_slam() -> void:
+	slam_active = true
 	boss_timer = 7.0
 	telegraph = _ring(5.5, Color("d46b64"))
 	add_child(telegraph)
@@ -215,7 +312,7 @@ func _begin_slam() -> void:
 			game.burst(global_position + Vector3.UP * 0.1, Color("ba7dc4"), 5.5)
 			if game.player.global_position.distance_to(global_position) < 5.8:
 				game.damage_player(36.0 * damage_scale, self, "area")
-		winding_up = false
+		slam_active = false
 		if is_instance_valid(telegraph):
 			telegraph.queue_free()
 	)

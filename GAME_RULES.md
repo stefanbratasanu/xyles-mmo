@@ -57,12 +57,28 @@ file is the shorter contract used during implementation.
   and Crownless Sanctum sit on high ground, and tree, rock and grass density
   differ per zone. The forest also continues past the zone blobs to the
   foothills; the world is never a bare lawn between regions.
+- **Dead trees belong to the Ashen Fen only.** Every other zone uses living oak,
+  birch and pine. A dead trunk in Emberfall Vale, Thornwood, the Broken Arch or
+  the Sanctum is a regression.
+- Trees, bushes and stones are original Blender GLBs. Every tree is exported
+  with its pivot at the base and planted on the sampled terrain height, so roots
+  and trunks are never buried or floating.
+- **Lakes are carved bowls, not discs laid on the ground.** The shoreline is a
+  wavy 4-harmonic curve, the bank rises above the waterline and the water mesh
+  runs under the bank, so the surface never clips through the terrain. Water
+  depth is baked from the same analytic basin the terrain uses.
+- **Lakes are wading depth only.** The player slows in the shallows and stops at
+  waist height (`WADE_MAX_DEPTH` 0.62 m). There is no swimming and no deep-water
+  crossing.
+- **No looping noise ambience.** The old synthesized wind bed read as a constant
+  hiss and was removed. Interaction, combat and reward cues are the only audio
+  sources.
 
 | Zone | Levels | Identity |
 |---|---|---|
 | Emberfall Vale | 1-3 | Central starting vale; survivor camp and forge |
-| Thornwood | 4-6 | Dense dark pine forest |
-| Ashen Fen | 7-9 | Low wetland with standing pools |
+| Thornwood | 4-6 | Dense dark oak and birch |
+| Ashen Fen | 7-9 | Low wetland with standing pools and dead trees |
 | The Broken Arch | 10-12 | Ruined stone terrace and altar |
 | Crownless Sanctum | 13-15 | Highest ground, pillars, world boss |
 
@@ -127,12 +143,19 @@ file is the shorter contract used during implementation.
 | Boss (Hollow Regent) | 850 | World boss with telegraphed slam |
 
 - Enemies aggro inside their detection radius and leash back to their home point.
+- Every attack commits: direction and reach lock at the windup start, and the
+  damage test uses the same cone as the telegraph. Enemies do not track the
+  player through a swing.
+- Enemies collide with the terrain, the player and each other. They snap to the
+  ground, spread out instead of stacking, and sidestep when wedged for half a
+  second. Standing inside a wolf or watching it vibrate in place is a regression.
 - Enemies regenerate health while not aggroed. The health bar must reflect that
   regeneration.
 - Enemy HP and damage scale with the level band of the zone they spawn in, so a
   Briarwolf in the sanctum is not the tutorial wolf from the vale. The level band
   is shown next to the enemy name.
 - The boss telegraphs its slam with a red ring; leaving the ring avoids damage.
+  The slam only starts while the boss is engaged.
 
 ## 6. Death and recovery
 

@@ -1,6 +1,10 @@
 extends Node
-## Lightweight original synthesized ambience and interaction sounds, no downloads.
-var ambience: AudioStreamPlayer
+## Lightweight original synthesized interaction sounds, no downloads.
+##
+## There is deliberately no looping ambience bed: the old filtered-white-noise
+## "wind" read as a constant hiss on headphones. The world is quiet between
+## cues now; any future ambience has to be a real, band-limited loop with a slow
+## gust envelope, not raw noise.
 var muted: bool = false
 var master_volume: float = 1.0
 var cues: Dictionary = {}
@@ -10,29 +14,6 @@ var random := RandomNumberGenerator.new()
 
 func _ready() -> void:
 	random.seed = 803
-	ambience = AudioStreamPlayer.new()
-	add_child(ambience)
-	var data := PackedByteArray()
-	var sample_rate := 22050
-	var count := sample_rate * 8
-	data.resize(count * 2)
-	var wind := 0.0
-	for index in range(count):
-		var time: float = float(index) / sample_rate
-		wind = wind * 0.985 + random.randf_range(-1, 1) * 0.015
-		var sample: float = sin(time * TAU * 55.0) * 0.035 + sin(time * TAU * 82.5) * 0.018 + sin(time * TAU * 110.0) * 0.008
-		sample += wind * 0.19
-		var envelope: float = minf(1.0, minf(time, 8.0 - time) * 3.0)
-		data.encode_s16(index * 2, int(sample * envelope * 32767))
-	var stream := AudioStreamWAV.new()
-	stream.format = AudioStreamWAV.FORMAT_16_BITS
-	stream.mix_rate = sample_rate
-	stream.data = data
-	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
-	stream.loop_end = count
-	ambience.stream = stream
-	ambience.volume_db = -12
-	ambience.play()
 	for id in ["melee", "cast", "block", "move", "support", "reward", "death"]:
 		cues[id] = _build_cue(id)
 	for i in range(16):
@@ -95,7 +76,6 @@ func set_master_volume(value: float) -> void:
 func _apply_volume() -> void:
 	var silent: bool = muted or master_volume <= 0.0
 	var gain_db: float = linear_to_db(maxf(master_volume, 0.0001))
-	ambience.volume_db = -80.0 if silent else -12.0 + gain_db
 	for voice: AudioStreamPlayer in voices:
 		voice.volume_db = -80.0 if silent else -14.0 + gain_db
 

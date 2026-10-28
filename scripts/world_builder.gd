@@ -56,7 +56,8 @@ var normal_spawns: Array[Vector3] = [
 ## Level band and visual identity of each region. Areas are uneven but
 ## comparable; the central vale is the starting zone. `relief` scales the local
 ## rolling noise and `rocks` controls how stony the biome is, so the five regions
-## differ physically as well as in colour.
+## differ physically as well as in colour. Dead trees are the Ashen Fen's
+## signature: no other zone mixes them in, so the fen reads as the eerie place.
 var zones: Array[Dictionary] = [
 	{
 		"id": "vale", "name": "EMBERFALL VALE", "subtitle": "The wayfarer's hearth",
@@ -82,7 +83,7 @@ var zones: Array[Dictionary] = [
 		"radius": 64.0, "phase": 4.1, "elevation": -1.6, "relief": 0.32,
 		"tree_count": 192, "rock_count": 8, "grass_count": 1900,
 		"ground": Color("55665b"), "accent": Color("7f9a86"),
-		"trees": {"dead": 0.55, "pine": 0.25, "birch": 0.20},
+		"trees": {"dead": 0.62, "pine": 0.24, "birch": 0.14},
 		"description": "Shallow black ponds and dead trees. Movement is exposed.",
 	},
 	{
@@ -91,7 +92,7 @@ var zones: Array[Dictionary] = [
 		"radius": 64.0, "phase": 1.1, "elevation": 3.0, "relief": 1.30,
 		"tree_count": 264, "rock_count": 30, "grass_count": 3800,
 		"ground": Color("857a5c"), "accent": Color("b09a6c"),
-		"trees": {"pine": 0.60, "oak": 0.20, "dead": 0.20},
+		"trees": {"pine": 0.72, "oak": 0.28},
 		"description": "High stone terraces, broken columns and cold pines.",
 	},
 	{
@@ -100,7 +101,7 @@ var zones: Array[Dictionary] = [
 		"radius": 74.0, "phase": 5.3, "elevation": 4.2, "relief": 1.05,
 		"tree_count": 232, "rock_count": 26, "grass_count": 3200,
 		"ground": Color("3f5257"), "accent": Color("79a79b"),
-		"trees": {"dead": 0.55, "pine": 0.30, "oak": 0.15},
+		"trees": {"pine": 0.68, "oak": 0.32},
 		"description": "The highest ground. The dormant waygate stands in its corner.",
 	},
 ]
@@ -120,6 +121,8 @@ var _terrain_colors: PackedColorArray = PackedColorArray()
 var _terrain_grid_size: int = 0
 var _map_cache: ImageTexture
 var _tree_points: Array[Vector2] = []
+var _tree_base: Dictionary = {}
+var _prop_meshes: Dictionary = {}
 var _sites: Array[Dictionary] = []
 var _ponds: Array[Dictionary] = []
 var _road_cells: Dictionary = {}
@@ -148,6 +151,8 @@ func build() -> void:
 	_materials.clear()
 	_flames.clear()
 	_tree_points.clear()
+	_tree_base.clear()
+	_prop_meshes.clear()
 	_init_noise()
 	_init_sites()
 	_init_ponds()
@@ -272,15 +277,42 @@ func _init_sites() -> void:
 
 
 func _init_ponds() -> void:
+	# Lakes are carved bowls, not discs dropped on the ground. Inside the wavy
+	# shoreline the terrain drops to `level - depth` and rises into a bank that is
+	# 42 cm above the water at the rim, so the water plane is always held below the
+	# land (and below the coarse terrain triangles) and can never clip through it.
+	# Centres avoid the trade roads, so no ribbon has to bridge a pool. The
+	# waterline sits 30 cm under the lowest raw rim point.
 	for spec: Dictionary in [
-		{"center": Vector2(100.0, 4.0), "radius": 8.5},
-		{"center": Vector2(70.0, -8.0), "radius": 6.5},
-		{"center": Vector2(94.0, 48.0), "radius": 5.5},
+		{"center": Vector2(64.0, 6.0), "radius": 10.0, "depth": 1.5},
+		{"center": Vector2(86.0, 54.0), "radius": 7.5, "depth": 1.25},
+		{"center": Vector2(110.0, 36.0), "radius": 6.5, "depth": 1.0},
 	]:
-		var center: Vector2 = spec["center"]
-		var radius: float = spec["radius"]
-		var level: float = _raw_height(center.x, center.y) - 0.55
-		_ponds.append({"center": center, "radius": radius, "level": level})
+		var pond: Dictionary = spec.duplicate()
+		pond["phase"] = _rng.randf_range(0.0, TAU)
+		var lowest: float = INF
+		for index: int in range(32):
+			var angle: float = TAU * float(index) / 32.0
+			var shore: Vector2 = spec["center"] + Vector2(cos(angle), sin(angle)) \
+				* float(spec["radius"]) * _shore_shape(angle, float(pond["phase"]))
+			lowest = minf(lowest, _raw_height(shore.x, shore.y))
+		pond["level"] = lowest - 0.30
+		_ponds.append(pond)
+
+
+## Wavy, non-circular shoreline. Four sine harmonics are enough to read as a
+## natural bank and, unlike noise, stay identical in the terrain mesh, the water
+## mesh, the map and the wading test. The 2nd and 3rd harmonics carry the shape:
+## they give each lake a long axis and one broad bay instead of a wobbling disc.
+func _shore_shape(angle: float, phase: float) -> float:
+	return 1.0 + 0.11 * sin(angle * 2.0 + phase * 0.6) \
+		+ 0.15 * sin(angle * 3.0 - phase) \
+		+ 0.08 * sin(angle * 5.0 + phase * 1.7) \
+		+ 0.04 * sin(angle * 8.0 - phase * 2.3)
+
+
+func _pond_shore_radius(pond: Dictionary, angle: float) -> float:
+	return float(pond["radius"]) * _shore_shape(angle, float(pond["phase"]))
 
 
 func _finalize_spawns() -> void:
@@ -299,6 +331,17 @@ func _ground(x: float, z: float) -> Vector3:
 	return Vector3(x, height_at(x, z), z)
 
 
+## Lowest ground under a small footprint. Props with a flat base (trunks, rocks,
+## bushes) use this so the downhill edge never floats above the terrain.
+func _ground_lowest(x: float, z: float, radius: float) -> Vector3:
+	var y: float = height_at(x, z)
+	y = minf(y, height_at(x + radius, z))
+	y = minf(y, height_at(x - radius, z))
+	y = minf(y, height_at(x, z + radius))
+	y = minf(y, height_at(x, z - radius))
+	return Vector3(x, y, z)
+
+
 ## Height is a pure function of x/z. The render mesh, the collision mesh, every
 ## prop, spawn point and the click-to-move ray all use this one function.
 func height_at(x: float, z: float) -> float:
@@ -313,10 +356,22 @@ func height_at(x: float, z: float) -> float:
 	var h: float = _raw_height(x, z)
 	for pond: Dictionary in _ponds:
 		var center: Vector2 = pond["center"]
-		var radius: float = pond["radius"]
-		var distance: float = Vector2(x, z).distance_to(center)
-		if distance < radius * 1.8:
-			h = lerpf(float(pond["level"]), h, smoothstep(radius, radius * 1.8, distance))
+		var delta := Vector2(x, z) - center
+		var distance: float = delta.length()
+		if distance > float(pond["radius"]) * 2.1:
+			continue
+		var shore: float = _pond_shore_radius(pond, atan2(delta.y, delta.x))
+		var t: float = distance / maxf(shore, 0.001)
+		var level: float = float(pond["level"])
+		if t < 1.0:
+			# Bowl: deepest at the centre, then a bank that climbs 42 cm above the
+			# waterline at the rim. The wide lip is deliberate: the terrain grid
+			# samples every ~1.56 m, so a 10 cm lip could be missed by a triangle
+			# and let the water plane show through the bank.
+			var bowl: float = maxf(1.0 - t * t, 0.0)
+			h = level - float(pond["depth"]) * pow(bowl, 0.62) + 0.42 * smoothstep(0.70, 1.0, t)
+		else:
+			h = lerpf(level + 0.42, h, smoothstep(1.0, 1.55, t))
 	for site: Dictionary in _sites:
 		var center: Vector2 = site["center"]
 		var radius: float = site["radius"]
@@ -479,11 +534,17 @@ func map_texture(size: int = 640) -> ImageTexture:
 					or int(floor(h_here / 4.0)) != int(floor(h_south / 4.0)):
 				base = base.darkened(0.09)
 			for pond: Dictionary in _ponds:
-				var distance: float = point.distance_to(pond["center"])
-				var radius: float = float(pond["radius"])
-				if distance < radius * 1.05:
-					var wet: float = 1.0 - smoothstep(radius * 0.72, radius * 1.05, distance)
-					base = base.lerp(Color("2f4a4b"), wet * 0.9)
+				var delta: Vector2 = point - (pond["center"] as Vector2)
+				var distance: float = delta.length()
+				var shore: float = _pond_shore_radius(pond, atan2(delta.y, delta.x))
+				if distance < shore * 1.30:
+					# The terrain height at this pixel decides the waterline exactly,
+					# so the map cannot draw a pool larger than the carved basin.
+					var surface: float = float(pond["level"]) + 0.02
+					if h_here < surface:
+						base = base.lerp(Color("2f4a4b"), 0.94)
+					elif h_here < surface + 0.28:
+						base = base.lerp(Color("4a4a3a"), 0.50)
 			base.a = 1.0
 			image.set_pixel(px, py, base)
 	# Stamp the trunk positions as fine stipple on top of the canopy masses.
@@ -598,6 +659,12 @@ func _create_materials() -> void:
 	_materials["road_flat"] = _textured(ROAD_TEXTURE, 0.95)
 	_materials["road_flat"].albedo_color = Color(0.86, 0.82, 0.72)
 	_materials["bark"] = _textured(BARK_TEXTURE, 0.97)
+	var birch_bark: StandardMaterial3D = _textured(BARK_TEXTURE, 0.94)
+	birch_bark.albedo_color = Color(1.7, 1.62, 1.5)
+	_materials["bark_birch"] = birch_bark
+	var dead_bark: StandardMaterial3D = _textured(BARK_TEXTURE, 0.98)
+	dead_bark.albedo_color = Color(1.22, 1.16, 1.06)
+	_materials["bark_dead"] = dead_bark
 	_materials["leaves"] = _textured(LEAF_TEXTURE, 0.92)
 	_materials["needles"] = _textured(NEEDLE_TEXTURE, 0.95)
 	# The needle atlas is deliberately dark; a bright albedo keeps pine crowns from
@@ -835,11 +902,17 @@ func _terrain_color(p: Vector2, normal: Vector3, height_value: float) -> Color:
 	var alpine: float = smoothstep(34.0, 52.0, height_value)
 	base = base.lerp(Color("9aa39a"), alpine * 0.78)
 	for pond: Dictionary in _ponds:
-		var center: Vector2 = pond["center"]
-		var radius: float = pond["radius"]
-		var distance: float = p.distance_to(center)
-		if distance < radius * 1.55:
-			base = base.lerp(Color("4a4d3c"), (1.0 - smoothstep(radius, radius * 1.55, distance)) * 0.55)
+		var delta: Vector2 = p - (pond["center"] as Vector2)
+		var distance: float = delta.length()
+		var shore: float = _pond_shore_radius(pond, atan2(delta.y, delta.x))
+		if distance < shore * 1.55:
+			var t: float = distance / maxf(shore, 0.001)
+			if t < 1.02:
+				# Wet silt below the waterline; the darker bed is what the water
+				# shader fades out of, so the pool reads shallow at the edge.
+				base = base.lerp(Color("363c2e"), 0.82)
+			else:
+				base = base.lerp(Color("5d5943"), 1.0 - smoothstep(1.02, 1.55, t))
 	for site: Dictionary in _sites:
 		var kind: String = str(site["kind"])
 		if kind != "camp" and kind != "waygate":
@@ -1010,21 +1083,183 @@ func _near_site(p: Vector2, padding: float) -> bool:
 
 func _in_pond(p: Vector2, padding: float) -> bool:
 	for pond: Dictionary in _ponds:
-		if p.distance_to(pond["center"]) < float(pond["radius"]) * 1.5 + padding:
+		var delta: Vector2 = p - pond["center"]
+		var shore: float = _pond_shore_radius(pond, atan2(delta.y, delta.x))
+		if delta.length() < shore * 1.35 + padding:
 			return true
 	return false
 
 
+## Depth of standing water at a point, in metres (0 when dry). The player uses it
+## to wade a step into the shallows and stop, because there is no swimming.
+func water_depth_at(x: float, z: float) -> float:
+	var point := Vector2(x, z)
+	var deepest: float = 0.0
+	for pond: Dictionary in _ponds:
+		var delta: Vector2 = point - pond["center"]
+		var distance: float = delta.length()
+		if distance > float(pond["radius"]) * 2.0:
+			continue
+		var shore: float = _pond_shore_radius(pond, atan2(delta.y, delta.x))
+		if distance > shore:
+			continue
+		deepest = maxf(deepest, float(pond["level"]) - height_at(x, z))
+	return maxf(deepest, 0.0)
+
+
+## Water is a ring mesh that follows the same wavy shoreline as the carved
+## terrain, so the surface ends inside the bank instead of cutting through it.
+## The analytic basin depth is baked into vertex colour: the shader gets an exact
+## depth field without reading the screen depth buffer, which keeps the gradient
+## stable at every renderer setting and makes the shallows line up with the bank.
+func _pond_water_mesh(pond: Dictionary) -> ArrayMesh:
+	var center: Vector2 = pond["center"]
+	var surface: float = float(pond["level"]) + 0.02
+	var segments: int = 72
+	var rings: int = 16
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var colors := PackedColorArray()
+	var indices := PackedInt32Array()
+	vertices.append(Vector3(center.x, surface, center.y))
+	normals.append(Vector3.UP)
+	uvs.append(center * 0.035)
+	colors.append(Color(maxf(surface - height_at(center.x, center.y), 0.0) * 0.5, 0.0, 0.0, 1.0))
+	for ring: int in range(1, rings + 1):
+		# The disc deliberately runs past the waterline and slides *under* the
+		# raised bank. Stopping the mesh exactly at the analytic shore leaves a
+		# visible hard edge wherever the sampled terrain triangle crosses the
+		# plane; burying the rim in the bank makes the actual shoreline the
+		# intersection of water and land, which is what it should be.
+		var t: float = float(ring) / float(rings) * 1.35
+		for index: int in range(segments):
+			var angle: float = TAU * float(index) / float(segments)
+			var shore: float = _pond_shore_radius(pond, angle) * t
+			var point: Vector2 = center + Vector2(cos(angle), sin(angle)) * shore
+			vertices.append(Vector3(point.x, surface, point.y))
+			normals.append(Vector3.UP)
+			uvs.append(point * 0.035)
+			colors.append(Color(maxf(surface - height_at(point.x, point.y), 0.0) * 0.5, 0.0, 0.0, 1.0))
+	for index: int in range(segments):
+		var next: int = (index + 1) % segments
+		indices.append_array([0, 1 + index, 1 + next])
+	for ring: int in range(rings - 1):
+		var inner: int = 1 + ring * segments
+		var outer: int = inner + segments
+		for index: int in range(segments):
+			var next: int = (index + 1) % segments
+			indices.append_array([inner + index, outer + index, outer + next,
+				inner + index, outer + next, inner + next])
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
 func _create_water() -> void:
 	_reseed(4421)
+	var water_shader: Shader = load("res://shaders/water.gdshader") as Shader
+	if water_shader == null:
+		return
+	var ripple: NoiseTexture2D = _ripple_normal_texture()
+	for index: int in range(_ponds.size()):
+		var pond: Dictionary = _ponds[index]
+		var water := MeshInstance3D.new()
+		water.name = "FenPool%d" % (index + 1)
+		water.mesh = _pond_water_mesh(pond)
+		var material := ShaderMaterial.new()
+		material.shader = water_shader
+		material.set_shader_parameter("ripple_normal", ripple)
+		water.material_override = material
+		water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(water)
+	_create_pond_dressing()
+
+
+## One seamless normal map shared by every pond. A NoiseTexture2D keeps the
+## ripples procedural like the rest of the art, and sharing the texture means
+## three lakes still cost one sampler upload.
+func _ripple_normal_texture() -> NoiseTexture2D:
+	var noise := FastNoiseLite.new()
+	noise.seed = 3313
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.frequency = 0.010
+	noise.fractal_type = FastNoiseLite.FRACTAL_FBM
+	noise.fractal_octaves = 3
+	noise.fractal_gain = 0.5
+	var texture := NoiseTexture2D.new()
+	texture.width = 256
+	texture.height = 256
+	texture.seamless = true
+	texture.as_normal_map = true
+	texture.bump_strength = 2.2
+	texture.generate_mipmaps = true
+	texture.noise = noise
+	return texture
+
+
+func _create_pond_dressing() -> void:
+	# Reeds grow in the shallows and a few wet stones sit on the bank; both hide
+	# the exact water/land seam and give the pool a readable edge from gameplay
+	# distance. Reeds are one multimesh, stones are a handful of instances.
+	_reseed(7723)
+	var reed_mesh := _grass_tuft_mesh()
+	var reed_material := StandardMaterial3D.new()
+	reed_material.albedo_texture = GRASS_BLADES
+	reed_material.albedo_color = Color(0.82, 0.90, 0.62)
+	reed_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	reed_material.alpha_scissor_threshold = 0.40
+	reed_material.vertex_color_use_as_albedo = true
+	reed_material.roughness = 0.95
+	reed_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	reed_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	reed_mesh.surface_set_material(0, reed_material)
+	var entries: Array = []
 	for pond: Dictionary in _ponds:
 		var center: Vector2 = pond["center"]
-		var radius: float = pond["radius"]
-		var level: float = float(pond["level"])
-		var bank: MeshInstance3D = _flattened_disc("FenBank", Vector3(center.x, level + 0.03, center.y), radius * 1.04, "earth_dark", 24)
-		bank.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var water: MeshInstance3D = _flattened_disc("FenPool", Vector3(center.x, level + 0.07, center.y), radius * 0.97, "water", 24)
-		water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var placed: int = 0
+		var attempts: int = 0
+		while placed < 46 and attempts < 260:
+			attempts += 1
+			var angle: float = _rng.randf_range(0.0, TAU)
+			var t: float = _rng.randf_range(0.84, 1.06)
+			var point: Vector2 = center + Vector2(cos(angle), sin(angle)) * _pond_shore_radius(pond, angle) * t
+			if absf(point.x) > BOUNDS - 2.0 or absf(point.y) > BOUNDS - 2.0:
+				continue
+			var at := _ground_lowest(point.x, point.y, 0.2)
+			if float(pond["level"]) - at.y > 0.45:
+				continue
+			var scale_value: float = _rng.randf_range(1.25, 2.1)
+			var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(
+				Vector3(scale_value * 0.8, scale_value, scale_value * 0.8))
+			entries.append(Transform3D(basis, at))
+			placed += 1
+		for index: int in range(6):
+			var angle: float = _rng.randf_range(0.0, TAU)
+			var point: Vector2 = center + Vector2(cos(angle), sin(angle)) \
+				* _pond_shore_radius(pond, angle) * _rng.randf_range(1.0, 1.18)
+			if absf(point.x) > BOUNDS - 2.0 or absf(point.y) > BOUNDS - 2.0:
+				continue
+			var mesh: Mesh = _load_prop_mesh("stone_%d.glb" % _rng.randi_range(1, 2), "stone")
+			if mesh == null:
+				break
+			var stone := MeshInstance3D.new()
+			stone.name = "ShoreStone"
+			stone.mesh = mesh
+			stone.position = _ground_lowest(point.x, point.y, 0.3) + Vector3.DOWN * 0.03
+			stone.rotation = Vector3(0.0, _rng.randf_range(0.0, TAU), 0.0)
+			var scale_value: float = _rng.randf_range(0.8, 1.5)
+			stone.scale = Vector3.ONE * scale_value
+			stone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+			add_child(stone)
+	_create_multimesh("ShoreReeds", reed_mesh, entries, false)
 
 
 func _pick_tree(zone: Dictionary) -> String:
@@ -1079,10 +1314,10 @@ func _create_vegetation() -> void:
 			var kind: String = _pick_tree(zone)
 			var scale_value: float = _rng.randf_range(0.92, 1.34)
 			var basis: Basis = Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale_value)
-			var at: Vector3 = _ground(point.x, point.y)
-			# The low-poly trunks are flat at their base. Sink them a little so no
-			# daylight shows under the roots on a slope.
-			at.y -= 0.22
+			var at: Vector3 = _ground_lowest(point.x, point.y, 0.45)
+			# The per-kind base offset is applied when the instances are built, so
+			# this is only a shallow bed for the root flare, not a burial.
+			at.y -= 0.05
 			(transforms[kind] as Array).append(Transform3D(basis, at))
 			_tree_points.append(point)
 			placed += 1
@@ -1102,14 +1337,14 @@ func _create_vegetation() -> void:
 			continue
 		if _near_road(point.x, point.y, 1) or _near_site(point, 7.0) or _in_pond(point, 1.0):
 			continue
-		var at: Vector3 = _ground(point.x, point.y)
+		var at: Vector3 = _ground_lowest(point.x, point.y, 0.45)
 		# Rock and scree above the treeline stay bare.
 		if at.y > 26.0:
 			continue
 		var kind: String = "pine" if _rng.randf() < 0.62 else ("oak" if _rng.randf() < 0.55 else "birch")
 		var scale_value: float = _rng.randf_range(0.86, 1.24)
 		var basis: Basis = Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale_value)
-		at.y -= 0.22
+		at.y -= 0.05
 		(transforms[kind] as Array).append(Transform3D(basis, at))
 		_tree_points.append(point)
 		outskirt_placed += 1
@@ -1120,7 +1355,7 @@ func _create_vegetation() -> void:
 		var mesh: Mesh = _load_tree_mesh(kind)
 		if mesh == null:
 			continue
-		_create_multimesh("Trees_" + kind, mesh, entries, true)
+		_create_multimesh("Trees_" + kind, mesh, entries, true, float(_tree_base.get(kind, 0.0)))
 	_create_grass()
 	_create_flowers()
 	_create_bushes()
@@ -1141,19 +1376,55 @@ func _load_tree_mesh(kind: String) -> Mesh:
 	instance.free()
 	if mesh == null or mesh.get_surface_count() == 0:
 		return null
-	mesh.surface_set_material(0, _materials["bark"])
+	# Older exports put the GLB origin in the middle of the trunk, so the mesh
+	# hung several metres below y=0 and every instance was half buried. The
+	# exporter now writes a base pivot at y=0, but keep the AABB lift as a safety
+	# net: a stale or hand-made GLB still plants its feet on the ground.
+	_tree_base[kind] = -mesh.get_aabb().position.y
+	var bark_key: String = "bark"
+	if kind == "birch":
+		bark_key = "bark_birch"
+	elif kind == "dead":
+		bark_key = "bark_dead"
+	mesh.surface_set_material(0, _materials[bark_key])
 	if mesh.get_surface_count() > 1:
 		mesh.surface_set_material(1, _materials["needles"] if kind == "pine" else _materials["leaves"])
 	return mesh
 
 
-func _create_multimesh(node_name: String, mesh: Mesh, entries: Array, shadows: bool) -> MultiMeshInstance3D:
+## Props (bush, boulders, stones) are Blender GLBs too. They are cached per file
+## and given one of the generated materials, since the export is single-surface.
+func _load_prop_mesh(file_name: String, material_key: String) -> Mesh:
+	if _prop_meshes.has(file_name):
+		return _prop_meshes[file_name]
+	var packed: PackedScene = load("res://assets/models/props/" + file_name) as PackedScene
+	if packed == null:
+		return null
+	var instance := packed.instantiate()
+	var found := instance.find_children("*", "MeshInstance3D", true, false)
+	if found.is_empty():
+		instance.free()
+		return null
+	var mesh: Mesh = (found[0] as MeshInstance3D).mesh
+	instance.free()
+	if mesh == null or mesh.get_surface_count() == 0:
+		return null
+	var copy: Mesh = mesh.duplicate() as Mesh
+	copy.surface_set_material(0, _materials[material_key])
+	_prop_meshes[file_name] = copy
+	return copy
+
+
+func _create_multimesh(node_name: String, mesh: Mesh, entries: Array, shadows: bool, base_lift: float = 0.0) -> MultiMeshInstance3D:
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.mesh = mesh
 	multimesh.instance_count = entries.size()
 	for index: int in range(entries.size()):
-		multimesh.set_instance_transform(index, entries[index])
+		var entry: Transform3D = entries[index]
+		if base_lift != 0.0:
+			entry.origin.y += base_lift
+		multimesh.set_instance_transform(index, entry)
 	var node := MultiMeshInstance3D.new()
 	node.name = node_name
 	node.multimesh = multimesh
@@ -1356,56 +1627,68 @@ func _create_flowers() -> void:
 
 func _create_bushes() -> void:
 	_reseed(6653)
-	var mesh := _bush_mesh()
+	var mesh := _load_prop_mesh("bush.glb", "leaves")
+	if mesh == null:
+		return
+	_materials["leaves"].vertex_color_use_as_albedo = true
 	var entries: Array = []
+	var colors: Array[Color] = []
 	for zone: Dictionary in zones:
 		var center: Vector2 = zone["center"]
 		var radius: float = zone["radius"]
 		var placed: int = 0
 		var attempts: int = 0
-		while placed < 70 and attempts < 900:
+		while placed < 95 and attempts < 1200:
 			attempts += 1
 			var angle: float = _rng.randf_range(0.0, TAU)
-			var point: Vector2 = center + Vector2(cos(angle), sin(angle)) * sqrt(_rng.randf()) * radius * 0.9
+			var point: Vector2 = center + Vector2(cos(angle), sin(angle)) * sqrt(_rng.randf()) * radius * 0.92
 			if absf(point.x) > BOUNDS - 3.0 or absf(point.y) > BOUNDS - 3.0:
 				continue
 			if _near_road(point.x, point.y, 0) or _near_site(point, 5.0) or _in_pond(point, 0.0):
 				continue
+			var scale_value: float = _rng.randf_range(0.72, 1.45)
 			var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(
-				Vector3(_rng.randf_range(0.85, 1.25), _rng.randf_range(0.7, 1.15), _rng.randf_range(0.85, 1.25)))
-			var at := _ground(point.x, point.y)
-			at.y -= 0.05
+				Vector3(scale_value * _rng.randf_range(0.85, 1.2), scale_value * _rng.randf_range(0.8, 1.25), scale_value * _rng.randf_range(0.85, 1.2)))
+			var at := _ground_lowest(point.x, point.y, 0.45)
+			at.y -= 0.04
 			entries.append(Transform3D(basis, at))
+			var tint: Color = Color(1.0, 1.0, 1.0).lerp((zone["ground"] as Color).lightened(0.22), _rng.randf_range(0.10, 0.34))
+			colors.append(tint)
 			placed += 1
-	_create_multimesh("Underbrush", mesh, entries, true)
-
-
-## Underbrush is a cluster of small leaf puffs, not one big sphere, so a bush
-## reads as a shrub instead of a boulder when the camera gets close.
-func _bush_mesh() -> ArrayMesh:
-	var puff := SphereMesh.new()
-	puff.radius = 0.36
-	puff.height = 0.72
-	puff.radial_segments = 7
-	puff.rings = 4
-	var blobs: Array = [
-		[Vector3(0.0, 0.30, 0.0), 1.0, 0.0],
-		[Vector3(0.30, 0.20, 0.08), 0.62, 1.9],
-		[Vector3(-0.28, 0.22, -0.10), 0.66, 3.1],
-		[Vector3(0.04, 0.18, -0.30), 0.58, 4.4],
-		[Vector3(-0.08, 0.46, 0.10), 0.52, 5.3],
-	]
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for blob: Array in blobs:
-		var offset: Vector3 = blob[0]
-		var puff_scale: float = float(blob[1])
-		var angle: float = float(blob[2])
-		var basis := Basis(Vector3.UP, angle).scaled(Vector3(1.0, 0.82, 1.0) * puff_scale)
-		st.append_from(puff, 0, Transform3D(basis, offset))
-	var mesh := st.commit()
-	mesh.surface_set_material(0, _materials["leaves"])
-	return mesh
+	# The outskirts need underbrush as well, otherwise the forest thins into lawn.
+	var outskirt_placed: int = 0
+	var outskirt_attempts: int = 0
+	while outskirt_placed < 170 and outskirt_attempts < 2600:
+		outskirt_attempts += 1
+		var point := Vector2(
+			_rng.randf_range(-BOUNDS + 4.0, BOUNDS - 4.0),
+			_rng.randf_range(-BOUNDS + 4.0, BOUNDS - 4.0))
+		if maxf(absf(point.x), absf(point.y)) < 58.0 or _inside_any_zone(point, 0.9):
+			continue
+		if _near_road(point.x, point.y, 0) or _near_site(point, 5.0) or _in_pond(point, 0.0):
+			continue
+		var at := _ground_lowest(point.x, point.y, 0.45)
+		if at.y > 24.0:
+			continue
+		var scale_value: float = _rng.randf_range(0.72, 1.35)
+		var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale_value)
+		at.y -= 0.04
+		entries.append(Transform3D(basis, at))
+		colors.append(Color(1.0, 1.0, 1.0).lerp(_zone_ground_near(point).lightened(0.2), _rng.randf_range(0.10, 0.3)))
+		outskirt_placed += 1
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.use_colors = true
+	multimesh.mesh = mesh
+	multimesh.instance_count = entries.size()
+	for index: int in range(entries.size()):
+		multimesh.set_instance_transform(index, entries[index])
+		multimesh.set_instance_color(index, colors[index])
+	var node := MultiMeshInstance3D.new()
+	node.name = "Underbrush"
+	node.multimesh = multimesh
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	add_child(node)
 
 
 func _create_rocks_and_logs() -> void:
@@ -1428,9 +1711,9 @@ func _create_rocks_and_logs() -> void:
 				continue
 			var size_value: float = _rng.randf_range(0.25, 0.78)
 			var size := Vector3(size_value * _rng.randf_range(0.9, 1.55), size_value * _rng.randf_range(0.45, 0.8), size_value)
-			var at: Vector3 = _ground(point.x, point.y)
+			var at: Vector3 = _ground_lowest(point.x, point.y, size.x * 0.5)
 			# Sink the sphere so it grows out of the soil instead of resting on it.
-			at.y -= size.y * 0.16
+			at.y -= size.y * 0.22
 			var rock := _rock(at, size, "stone_dark" if _rng.randf() < 0.55 else "stone")
 			if size_value > 0.6:
 				rock.create_trimesh_collision()
@@ -1448,6 +1731,7 @@ func _create_rocks_and_logs() -> void:
 		log_mesh.position = Vector3(at.x, at.y + 0.26, at.z)
 		log_mesh.rotation = Vector3(PI * 0.5, _rng.randf_range(-1.0, 1.0), 0.0)
 		log_mesh.create_trimesh_collision()
+	_create_stones()
 
 
 func _create_distant_landscape() -> void:
@@ -1469,10 +1753,10 @@ func _create_distant_landscape() -> void:
 			continue
 		var scale_value: float = _rng.randf_range(0.95, 1.45)
 		var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale_value)
-		var at := _ground(point.x, point.y)
-		at.y -= 0.25
+		var at := _ground_lowest(point.x, point.y, 0.45)
+		at.y -= 0.05
 		entries.append(Transform3D(basis, at))
-	_create_multimesh("FoothillPines", mesh, entries, false)
+	_create_multimesh("FoothillPines", mesh, entries, false, float(_tree_base.get("pine", 0.0)))
 
 
 func _create_boundaries() -> void:
@@ -1587,11 +1871,46 @@ func _flattened_disc(node_name: String, at: Vector3, radius: float, material_key
 
 ## `at` is already a world position (the caller sampled the terrain).
 func _rock(at: Vector3, size: Vector3, material_key: String) -> MeshInstance3D:
-	var instance := _add_mesh(self, "Boulder", _sphere_mesh(0.9, 7, 4), material_key)
+	var variant: String = "rock_%d.glb" % _rng.randi_range(1, 3)
+	var mesh: Mesh = _load_prop_mesh(variant, material_key)
+	if mesh == null:
+		mesh = _sphere_mesh(0.9, 7, 4)
+	var instance := MeshInstance3D.new()
+	instance.name = "Boulder"
+	instance.mesh = mesh
 	instance.position = at
-	instance.scale = size
-	instance.rotation = Vector3(_rng.randf_range(-0.22, 0.22), _rng.randf_range(0.0, TAU), _rng.randf_range(-0.22, 0.22))
+	instance.scale = Vector3(size.x * 1.15, size.x * _rng.randf_range(0.75, 1.15), size.z * 1.05)
+	instance.rotation = Vector3(0.0, _rng.randf_range(0.0, TAU), 0.0)
+	add_child(instance)
 	return instance
+
+
+## Loose stones are the small stuff that makes a meadow floor read as ground
+## instead of a flat texture: no collision, no shadows, one draw call each.
+func _create_stones() -> void:
+	_reseed(4471)
+	for variant in ["stone_1.glb", "stone_2.glb"]:
+		var mesh: Mesh = _load_prop_mesh(variant, "stone")
+		if mesh == null:
+			continue
+		var entries: Array = []
+		var attempts: int = 0
+		while entries.size() < 190 and attempts < 3200:
+			attempts += 1
+			var point := Vector2(
+				_rng.randf_range(-BOUNDS + 2.0, BOUNDS - 2.0),
+				_rng.randf_range(-BOUNDS + 2.0, BOUNDS - 2.0))
+			if _near_road(point.x, point.y, 0) or _near_site(point, 3.0) or _in_pond(point, 0.05):
+				continue
+			var at := _ground_lowest(point.x, point.y, 0.3)
+			if at.y > 30.0:
+				continue
+			var scale_value: float = _rng.randf_range(0.45, 1.2)
+			var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(
+				Vector3(scale_value, scale_value * _rng.randf_range(0.7, 1.05), scale_value))
+			at.y -= 0.02
+			entries.append(Transform3D(basis, at))
+		_create_multimesh("LooseStones_" + variant.get_basename(), mesh, entries, false)
 
 
 func _light(parent: Node3D, at: Vector3, color: Color, energy: float, range_value: float) -> OmniLight3D:

@@ -35,6 +35,66 @@ Rules:
 - If a change was reverted, say so and say why.
 - If an entry is still in progress, mark it `(in progress)` in the heading.
 
+## 2026-10-28 - Forest, enemy and lake correction pass
+
+**Intent.** The fen's dead trees had spread into every biome, trees sat half
+buried, the synthesized ambience was a constant hiss, mobs missed attacks and
+clipped through each other, and the lakes were flat discs that cut through the
+terrain.
+
+**Changed.**
+- `scripts/world_builder.gd`: removed `dead` from every zone except the fen
+  (`dead: 0.62`); added a base-pivot lift from the mesh AABB so a stale GLB
+  cannot bury a tree; replaced code-built bushes/boulders with the generated
+  `assets/models/props/*.glb`; rebuilt the three lakes as 4-harmonic carved bowls
+  with a 0.42 m bank, water mesh 1.35x past the analytic shore, and analytic
+  depth baked into vertex colour; the map now paints water from the rendered
+  height at each pixel.
+- `shaders/water.gdshader`: new depth-gradient water with world-space ripple
+  normals, foam collar, reduced fresnel and a matte sheen (a mirror plane under
+  the overcast sky read as grey glass).
+- `scripts/player.gd`: wading slow-down and the 0.62 m `WADE_MAX_DEPTH` stop,
+  reusing `world.water_depth_at()`.
+- `scripts/enemy.gd`: committed windup + strike, reach-matched damage test,
+  collision mask `1|2|4`, floor snap, crowd separation, stuck sidestep, and the
+  boss slam gate on `aggro`.
+- `scripts/audio_director.gd`: removed the looping noise/wind bed. Interaction
+  cues remain.
+- `assets/models/trees/generate_trees.py`: base pivot at y=0, root flare, stacked
+  tapered trunk, dense foliage clumps, jagged/drooping pine tiers. Regenerated
+  `tree_oak.glb`, `tree_birch.glb`, `tree_pine.glb`, `tree_dead.glb`.
+- `assets/models/props/generate_props.py`: new generator for `bush.glb`,
+  `rock_1..3.glb`, `stone_1..2.glb`.
+- `scripts/main.gd`: added the `11_pond` screenshot and re-framed the camp and
+  Thornwood shots so canopies no longer hide the subject.
+- `tests/test_world.gd`: pond checks for wavy shoreline, carved depth, baked
+  colour depth, and rendered terrain above the waterline (plus a
+  `_rendered_height()` bilinear sampler); an enemy-AI section proving the windup
+  and the boss aggro gate.
+
+**Why this way.** Dead trees are a biome signal, so the fix belongs in the zone
+table rather than in placement jitter. The AABB lift stays after the exporter
+fix because it costs nothing and protects hand-made or stale GLBs. Baked depth
+was preferred over the screen-depth texture because the procedural mesh has no
+tangents and the depth buffer path was unstable at every renderer setting. The
+enemy rewrite keeps the old detection/leash numbers, changing only the commit
+window and physics so fights remain readable without becoming slower.
+
+**Verified.**
+- `--headless --path . --quit-after 300` and `--import`: no script, parse or
+  shader errors.
+- `tests/test_world.gd` passes, including the pond and enemy-AI sections.
+- All other `test_*.gd` suites pass except `test_hud_snapping.gd`, which fails the
+  same assertion on pre-change HEAD in a clean worktree.
+- `--screenshot` tour regenerated at 1600x900 and inspected: `01_camp`,
+  `03_thornwood`, `04_ashen_fen`, `05_broken_arch`, `06_sanctum`, `07_waygate`,
+  `08_camp_night`, `09_world_map`, `10_frontier`, `11_pond`.
+
+**Risk / follow-up.** Enemy AI and wading are logic-tested and visually checked
+but not yet playtested on a slope/boulder fight; the water sheen is intentionally
+matte and may need a small boost on a clear-sky setting. `test_hud_snapping` is a
+separate pre-existing UI bug.
+
 ## 2026-10-28 - Chat moves to the bottom-left
 
 **Intent.** The friend wanted the MMO chat where the old system journal sat

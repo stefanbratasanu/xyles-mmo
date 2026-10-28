@@ -43,6 +43,12 @@ const SPRINT_SPEED_FACTOR := 1.50
 const BASE_MOVEMENT_SPEED := 5.3
 const MAX_WALK_ANIMATION_RATE := 1.4
 const DODGE_DURATION := 0.55
+## Waist height. Lakes are for wading only, so anything deeper stops the body.
+const WADE_MAX_DEPTH := 0.62
+## 0.72 at the waterline down to 0.32 at the waist: shallow water should feel
+## like resistance, not like a second ground speed.
+const WADE_SLOW_SHALLOW := 0.72
+const WADE_SLOW_DEEP := 0.32
 
 func _ready() -> void:
 	var speed_file := FileAccess.open(AUTHORED_SPEEDS_PATH, FileAccess.READ)
@@ -51,7 +57,7 @@ func _ready() -> void:
 		if parsed is Dictionary:
 			authored_animation_speeds = parsed
 	collision_layer = 2
-	collision_mask = 1
+	collision_mask = 1 | 4
 	var shape: CollisionShape3D = get_node_or_null("CollisionShape3D") as CollisionShape3D
 	if not is_instance_valid(shape):
 		shape = CollisionShape3D.new()
@@ -184,12 +190,30 @@ func _physics_process(delta: float) -> void:
 		speed_value = dash_speed
 	if channeling: speed_value *= float(game.state.skill_catalog.data.rules.channel_speed)
 	speed_value *= 1.0 + game.skill_runtime.own_stat("movement_speed") if game.skill_runtime != null else 1.0
+	# Lakes are wading depth only: the shallows slow the body and the waist-deep
+	# line stops it. `water_depth_at` is the same analytic field that carved the
+	# basin, so the stop always matches the visible waterline.
+	var wade_depth: float = float(game.world.water_depth_at(global_position.x, global_position.z))
+	if wade_depth > 0.02:
+		speed_value *= lerpf(WADE_SLOW_SHALLOW, WADE_SLOW_DEEP,
+			clampf(wade_depth / WADE_MAX_DEPTH, 0.0, 1.0))
 	velocity.x = direction.x * speed_value
 	velocity.z = direction.z * speed_value
 	velocity.y -= 20.0 * delta
 	if on_ground and not jump_started:
 		velocity.y = -0.2
+	var wade_from := Vector2(global_position.x, global_position.z)
 	move_and_slide()
+	var wade_now: float = float(game.world.water_depth_at(global_position.x, global_position.z))
+	if wade_now > WADE_MAX_DEPTH and wade_depth <= WADE_MAX_DEPTH:
+		# Revert only the horizontal step: gravity and floor snapping stay intact,
+		# so the player never pops up or falls through the shore. If they somehow
+		# start deeper than the limit they may still walk out.
+		global_position.x = wade_from.x
+		global_position.z = wade_from.y
+		velocity.x = 0.0
+		velocity.z = 0.0
+		moving_to_click = false
 	if jump_started:
 		jump_started = false
 		was_airborne = true

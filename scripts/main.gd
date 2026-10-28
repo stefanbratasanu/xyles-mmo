@@ -178,10 +178,11 @@ func _ready() -> void:
 func _run_screenshot_tour() -> void:
 	await get_tree().create_timer(1.8).timeout
 	var shots: Array[Dictionary] = [
-		{"name": "01_camp", "at": Vector3(-36.0, 0.0, 38.0), "yaw": 0.0, "pitch": 0.62, "distance": 30.0},
+		{"name": "01_camp", "at": Vector3(-36.0, 0.0, 34.0), "yaw": 0.0, "pitch": 0.44, "distance": 10.0},
 		{"name": "02_vale_road", "at": Vector3(0.0, 0.0, 12.0), "yaw": 0.9, "pitch": 0.68, "distance": 36.0},
-		{"name": "03_thornwood", "at": Vector3(-66.0, 0.0, 16.0), "yaw": 0.95, "pitch": 0.36, "distance": 24.0},
+		{"name": "03_thornwood", "at": Vector3(-76.9, 0.0, 19.1), "yaw": 0.97, "pitch": 0.30, "distance": 16.0},
 		{"name": "04_ashen_fen", "at": Vector3(88.0, 0.0, 16.0), "yaw": 1.6, "pitch": 0.34, "distance": 22.0},
+		{"name": "11_pond", "at": Vector3(60.9, 0.0, 15.5), "yaw": 2.88, "pitch": 0.65, "distance": 16.0},
 		{"name": "05_broken_arch", "at": Vector3(72.0, 0.0, -68.0), "yaw": 0.12, "pitch": 0.36, "distance": 20.0},
 		{"name": "06_sanctum", "at": Vector3(-52.0, 0.0, -84.0), "yaw": 0.08, "pitch": 0.40, "distance": 16.0},
 		{"name": "07_waygate", "at": Vector3(-104.0, 0.0, -114.0), "yaw": 0.45, "pitch": 0.36, "distance": 24.0},
@@ -206,11 +207,11 @@ func _run_screenshot_tour() -> void:
 	hud.toggle_map()
 	await get_tree().create_timer(0.4).timeout
 	world.set_time_of_day(22.0)
-	player.position = Vector3(-36.0, world.height_at(-36.0, 38.0) + 0.4, 38.0)
+	player.position = Vector3(-36.0, world.height_at(-36.0, 34.0) + 0.4, 34.0)
 	camera_focus = player.global_position + Vector3.UP
 	camera_yaw = 0.0
-	camera_pitch = 0.48
-	camera_distance = 22.0
+	camera_pitch = 0.44
+	camera_distance = 10.0
 	_update_camera(1.0)
 	await get_tree().create_timer(1.2).timeout
 	await _capture_frame("08_camp_night")

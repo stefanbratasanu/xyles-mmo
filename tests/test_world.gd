@@ -2,8 +2,8 @@ extends SceneTree
 
 ## Verifies the Map I world contract: five zones with distinct level bands,
 ## finite rolling terrain, the sealed waygate inside the hardest zone, a branched
-## road network, the day/night cycle, the full-screen map, MMO chat channels and
-## the runtime log.
+## road network, the day/night cycle, the full-screen map, MMO chat channels, the
+## runtime log, carved wading ponds and committed enemy attacks.
 ##
 ## Run:
 ##   .\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/test_world.gd
@@ -26,16 +26,18 @@ func _run() -> void:
 
 	_test_zones()
 	_test_terrain()
+	_test_water()
 	_test_waygate()
 	_test_roads()
 	_test_day_night()
 	_test_map()
 	_test_chat()
 	_test_log()
+	_test_enemy_ai()
 
 	game.queue_free()
 	await process_frame
-	print("PASS: 5 zones, finite terrain, sanctum waygate, branched roads, day/night, map, chat, runtime log")
+	print("PASS: 5 zones, finite terrain, sanctum waygate, branched roads, day/night, map, chat, runtime log, enemy AI")
 	quit()
 
 
@@ -115,6 +117,98 @@ func _test_terrain() -> void:
 		var zone: Dictionary = world.zone_at(spawn)
 		assert(not zone.is_empty(), "spawn outside every zone: %s" % spawn)
 		assert(world.height_at(spawn.x, spawn.z) > -20.0)
+
+
+func _test_water() -> void:
+	# Ponds are carved bowls, not discs dropped on the terrain: the centre must be
+	# deeper than the wading limit, the analytic shore must sit above the surface,
+	# and the water mesh must carry that depth for the shader.
+	var ponds: Array[Dictionary] = world.ponds()
+	assert(ponds.size() == 3, "expected three fen ponds, got %d" % ponds.size())
+	var water_meshes: int = 0
+	for child: Node in world.get_children():
+		if not (child is MeshInstance3D) or not str(child.name).begins_with("FenPool"):
+			continue
+		water_meshes += 1
+		var arrays: Array = (child as MeshInstance3D).mesh.surface_get_arrays(0)
+		assert(arrays[Mesh.ARRAY_COLOR] != null, "water mesh has no baked depth colours")
+		var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+		var deepest: float = 0.0
+		for colour: Color in colors:
+			deepest = maxf(deepest, colour.r * 2.0)
+		assert(deepest > 1.0, "water mesh depth colour never reaches the bowl bottom (%.2f)" % deepest)
+	assert(water_meshes == ponds.size(), "one water mesh per pond expected (%d vs %d)" % [water_meshes, ponds.size()])
+	for pond: Dictionary in ponds:
+		var center: Vector2 = pond["center"]
+		var level: float = float(pond["level"])
+		var depth: float = float(pond["depth"])
+		assert(depth > 0.8, "pond is too shallow to read as water")
+		assert(absf(world.water_depth_at(center.x, center.y) - depth) < 0.12,
+			"water_depth_at disagrees with the carved bowl")
+		assert(world.water_depth_at(center.x, center.y) > game.player.WADE_MAX_DEPTH,
+			"the middle of the pond must be deeper than the wading limit")
+		# The shoreline is wavy, not a circle.
+		var lowest: float = INF
+		var highest: float = 0.0
+		for index: int in range(24):
+			var angle: float = TAU * float(index) / 24.0
+			var shore: float = world._pond_shore_radius(pond, angle)
+			lowest = minf(lowest, shore)
+			highest = maxf(highest, shore)
+		assert(highest - lowest > float(pond["radius"]) * 0.35, "pond shoreline is too circular")
+		# The analytic bank is above the waterline all the way round, so the water
+		# plane never pokes through the ground.
+		for index: int in range(24):
+			var angle: float = TAU * float(index) / 24.0
+			var shore_point: Vector2 = center + Vector2(cos(angle), sin(angle)) * world._pond_shore_radius(pond, angle)
+			assert(world.height_at(shore_point.x, shore_point.y) > level + 0.05,
+				"pond bank dips below the waterline")
+			assert(world.water_depth_at(shore_point.x, shore_point.y) < 0.05,
+				"water leaks past the shoreline")
+		# Check the *rendered* terrain mesh, not just the analytic field. A coarse
+		# grid can interpolate a low triangle under the water rim even when the
+		# formula says the bank is high, which is exactly what "water clips the
+		# terrain" looked like.
+		var surface: float = level + 0.02
+		for index: int in range(24):
+			var angle: float = TAU * float(index) / 24.0
+			var shot: float = world._pond_shore_radius(pond, angle)
+			for t: float in [0.75, 0.85]:
+				var wet_point: Vector2 = center + Vector2(cos(angle), sin(angle)) * shot * t
+				assert(_rendered_height(wet_point.x, wet_point.y) < surface,
+					"terrain pokes through the pond at t=%.2f" % t)
+			for t: float in [1.20, 1.30, 1.35]:
+				var bank_point: Vector2 = center + Vector2(cos(angle), sin(angle)) * shot * t
+				assert(_rendered_height(bank_point.x, bank_point.y) > surface + 0.004,
+					"water rim is exposed at t=%.2f" % t)
+		# There is a real wading shelf: the waist-deep line sits inside the shore by
+		# at least a quarter of a metre, so stepping in is possible but shallow.
+		var angle_zero: float = 0.0
+		var shore_zero: float = world._pond_shore_radius(pond, angle_zero)
+		var shoulder: Vector2 = center + Vector2(1.0, 0.0) * shore_zero * 0.60
+		assert(world.water_depth_at(shoulder.x, shoulder.y) > game.player.WADE_MAX_DEPTH,
+			"the inner wading shelf never reaches the waist limit")
+	assert(game.player.WADE_MAX_DEPTH > 0.3 and game.player.WADE_MAX_DEPTH < 0.9,
+		"wading limit should be waist height")
+
+
+func _rendered_height(x: float, z: float) -> float:
+	# Same bilinear split as `_create_terrain`: a(q00,q10,q01) and b(q10,q11,q01).
+	var count: int = world._terrain_grid_size
+	var step: float = (world.TERRAIN_EXTENT * 2.0) / float(world.TERRAIN_SEGMENTS)
+	var fx: float = (x + world.TERRAIN_EXTENT) / step
+	var fz: float = (z + world.TERRAIN_EXTENT) / step
+	var ix: int = clampi(int(floor(fx)), 0, count - 2)
+	var iz: int = clampi(int(floor(fz)), 0, count - 2)
+	var u: float = clampf(fx - float(ix), 0.0, 1.0)
+	var v: float = clampf(fz - float(iz), 0.0, 1.0)
+	var h00: float = world._terrain_heights[iz * count + ix]
+	var h10: float = world._terrain_heights[iz * count + ix + 1]
+	var h01: float = world._terrain_heights[(iz + 1) * count + ix]
+	var h11: float = world._terrain_heights[(iz + 1) * count + ix + 1]
+	if u + v <= 1.0:
+		return h00 + u * (h10 - h00) + v * (h01 - h00)
+	return h10 * (1.0 - v) + h11 * (u + v - 1.0) + h01 * (1.0 - u)
 
 
 func _test_waygate() -> void:
@@ -244,3 +338,49 @@ func _test_log() -> void:
 	assert(text.contains("[BOOT]"), "session has no boot entry")
 	assert(text.contains("[WORLD] world_ready"), "session has no world build entry")
 	assert(text.contains("[COMBAT] enemy_spawned"), "session has no enemy spawn entry")
+
+
+func _test_enemy_ai() -> void:
+	# The old AI dealt damage on the cooldown frame and let mobs walk through
+	# each other. Verify the two rules that are easy to regress: a mob in reach
+	# commits to a windup and then lands the hit, and a distant boss never starts
+	# its slam (which used to fire every seven seconds from anywhere on the map).
+	var wolf = null
+	var boss = null
+	for candidate in game.enemies:
+		if candidate.kind == "normal" and wolf == null:
+			wolf = candidate
+		elif candidate.kind == "boss" and boss == null:
+			boss = candidate
+	assert(wolf != null, "no normal enemy to test")
+	assert(boss != null, "no boss to test")
+	game.player.set_physics_process(false)
+	# --- Wolf in reach: windup, then damage. ---
+	wolf.global_position = game.player.global_position + Vector3(1.0, 0.0, 0.0)
+	wolf.home = wolf.global_position
+	wolf.aggro = true
+	wolf.attack_timer = 0.0
+	var hp_before: float = game.state.hp
+	wolf._physics_process(0.02)
+	assert(wolf.winding_up, "an in-reach wolf did not start its windup")
+	assert(is_equal_approx(game.state.hp, hp_before), "wolf damaged on the windup frame")
+	for step: int in range(60):
+		wolf._physics_process(0.02)
+	assert(game.state.hp < hp_before, "the committed wolf strike never landed")
+	assert(not wolf.winding_up, "wolf never finished its windup")
+	# --- Distant boss: no slam. ---
+	boss.global_position = Vector3(-140.0, 0.0, -140.0)
+	boss.home = boss.global_position
+	boss.aggro = false
+	boss.boss_timer = -1.0
+	boss._physics_process(0.02)
+	assert(not boss.slam_active, "a distant boss started a slam")
+	assert(boss.telegraph == null, "a distant boss left a telegraph")
+	# --- Engaged boss: slam. ---
+	boss.global_position = game.player.global_position + Vector3(4.0, 0.0, 0.0)
+	boss.home = boss.global_position
+	boss.aggro = true
+	boss.boss_timer = -1.0
+	boss._physics_process(0.02)
+	assert(boss.slam_active, "an engaged boss did not start its slam")
+	assert(boss.telegraph != null, "the slam has no red telegraph")
