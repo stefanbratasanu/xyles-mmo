@@ -32,9 +32,45 @@ file is the shorter contract used during implementation.
 | `Ctrl` | Crouch |
 | `Space` | Jump |
 | `K` / `I` / `C` / `H` / `O` / `B` | Skills, inventory, forge, guide, options, bestiary |
-| `Esc` | Close panel |
+| `M` | Open / close the full-screen world map |
+| `Enter` | Focus chat input (sends with `Enter`, cancels with `Esc`) |
+| `Esc` | Close panel or map |
 | `F5` | Save |
-| `M` | Mute audio |
+| `F8` | Mute / unmute audio |
+| `F9` | Open the runtime log folder |
+| `F10` | Write a bug marker to the runtime log |
+| `F12` | Save a screenshot to `screenshots/` |
+
+## 2a. World, zones and presentation
+
+- **Map I - The Ashen Frontier** is one continent of five uneven zones of roughly
+  equal area. Emberfall Vale is the central starting zone; the others ring it.
+- Zone shapes are wavy blobs, not circles. One zone table in
+  `scripts/world_builder.gd` drives the terrain, the ground colour, enemy levels,
+  the HUD region label and the world map.
+
+| Zone | Levels | Identity |
+|---|---|---|
+| Emberfall Vale | 1-3 | Central starting vale; survivor camp and forge |
+| Thornwood | 4-6 | Dense dark pine forest |
+| Ashen Fen | 7-9 | Low wetland with standing pools |
+| The Broken Arch | 10-12 | Ruined stone terrace and altar |
+| Crownless Sanctum | 13-15 | Highest ground, pillars, world boss |
+
+- The **sealed waygate** stands in the north-west corner of the Crownless
+  Sanctum. It leads to Map II, **which does not exist yet**: it must never
+  teleport the player. The waygate pad and the camp are safe zones with faster
+  regeneration.
+- The terrain is a real 3D height field shared by the render mesh, collision,
+  roads and every prop. Props must never be placed on a flat assumption.
+- Sunlight uses a wide angular diameter and blurred shadow splits so shadows are
+  soft and diffuse, never hard cut-outs.
+- The day/night cycle is automatic: one in-game day lasts 15 real minutes and
+  starts at 08:15 on day 1. The HUD clock shows the time, day and phase
+  (Dawn / Day / Dusk / Night).
+- There is **no minimap**. `M` opens a full-screen map drawn from the same zone,
+  road, pond and landmark data as the world. North is up (-Z).
+
 
 ## 3. Combat and feedback
 
@@ -82,6 +118,9 @@ file is the shorter contract used during implementation.
 - Enemies aggro inside their detection radius and leash back to their home point.
 - Enemies regenerate health while not aggroed. The health bar must reflect that
   regeneration.
+- Enemy HP and damage scale with the level band of the zone they spawn in, so a
+  Briarwolf in the sanctum is not the tutorial wolf from the vale. The level band
+  is shown next to the enemy name.
 - The boss telegraphs its slam with a red ring; leaving the ring avoids damage.
 
 ## 6. Death and recovery
@@ -123,8 +162,14 @@ Visual language:
 - Thin red vitality and blue mana bars.
 - Square artwork and skill slots.
 - Compact sans-serif labels; avoid oversized panels.
-- Status top-left; map/journal right; system log bottom-left; five skills bottom
-  centre.
+- Status top-left; clock, menu and quest journal top/right; chat bottom-left;
+  system log bottom-right; five skills bottom centre.
+- The five-skill hotbar is **bare**: the tiles sit directly on the world with no
+  container panel around them.
+- The clock panel shows time, day and phase; the full-screen map replaces the old
+  minimap entirely.
+- Chat has World / Local / Party / Guild tabs, timestamps, and blocks movement
+  while the input has focus.
 - Floating windows drag by their title bar, stay inside the viewport, and save
   their positions.
 - One concept, one panel. If information already exists in the world (such as an

@@ -18,11 +18,16 @@ gameplay, combat, progression, or UI behaviour.
 ## 2. First five minutes
 
 1. `git status -sb` - know what is already modified before touching anything.
-2. Read `CURRENT_WORK.md`.
-3. Read `GAME_RULES.md` and `Documentation/UI_STANDARD.md` for the area you are
+2. Run the remote-change check **before pulling**:
+   `powershell -ExecutionPolicy Bypass -File .\scripts\dev\check_remote_changes.ps1`
+   If it reports commits from another PC, read the report it appended to
+   `Documentation/IMPLEMENTATION_LOG.md` and ask the user before changing,
+   reverting or "fixing" anything.
+3. Read `CURRENT_WORK.md`.
+4. Read `GAME_RULES.md` and `Documentation/UI_STANDARD.md` for the area you are
    about to change.
-4. Run the project and the relevant tests.
-5. Make the smallest coherent change. Do not revert or overwrite other people's
+5. Run the project and the relevant tests.
+6. Make the smallest coherent change. Do not revert or overwrite other people's
    work, even if it looks unfinished.
 
 ## 3. Run and test
@@ -45,13 +50,75 @@ Run the test scripts:
 .\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/test_progression.gd
 .\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/test_combat_effects.gd
 .\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/test_skill_panel.gd
+.\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/test_world.gd
 ```
 
 `tests/benchmark_skill_effects.gd` is a benchmark, not a pass/fail test.
 
+Scripted visual tour (writes PNGs to `res://screenshots/`, including the
+full-screen map and a night frame):
+
+```powershell
+.\Godot_v4.7.2-stable_win64.exe --path . -- --screenshot
+```
+
 A normal launch must show no `SCRIPT ERROR` or `Parse Error`. Warnings about the
 missing local `modifier_list_editor` addon are expected on machines that do not
 have that editor plugin installed.
+
+## 3a. Debugging and project memory
+
+Before changing a system, read its most recent entry in
+`Documentation/IMPLEMENTATION_LOG.md`. After changing it, append a new entry.
+That file is the engineering memory: intent, changed files, decisions,
+verification and known risk. Do not rewrite old entries.
+
+The game writes a runtime log every launch to `logs/session_*.log`;
+`logs/LATEST.txt` points at the newest one. The log is gitignored and contains
+`BOOT`, `GAMEPLAY`, `COMBAT`, `UI`, `WORLD`, `STATE`, `ERROR`, `PERF` and
+`MARKER` events. In-game, `F10` writes a marker with a position/zone/HP/target
+snapshot and `F9` opens the log folder. Read `Documentation/DEBUGGING.md` for
+the inspection commands.
+
+When investigating a bug, use this order:
+
+1. newest runtime session, find the `[MARKER]` and read the lines before it;
+2. `[ERROR]`, `[PERF]` and the session summary;
+3. `Documentation/IMPLEMENTATION_LOG.md` for what changed most recently;
+4. `CURRENT_WORK.md` for known-unfinished work;
+5. reproduce with `--test-mode` before editing code.
+
+Diagnostics must never change gameplay. Add event-level logs only; never log
+per frame without a throttle.
+
+### Watching for work done on other PCs
+
+The project is shared, so `origin/main` can move without this machine doing
+anything. At the start of a session, before pulling, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\dev\check_remote_changes.ps1
+# optional, slower: also parse-check the fetched tree in a temporary worktree
+powershell -ExecutionPolicy Bypass -File .\scripts\dev\check_remote_changes.ps1 -ParseCheck
+```
+
+The script:
+
+- fetches `origin/main`;
+- lists commits added since its last check (checkpoint in
+  `logs/remote_check_state.json`, never committed);
+- marks commits authored elsewhere or not present in local `HEAD`;
+- flags changed core files, deleted files, conflict markers, debug leftovers,
+  hard-failure calls, unknown addons and executable files;
+- appends a dated **Remote changes from another machine (automatic)** section to
+  `Documentation/IMPLEMENTATION_LOG.md` with proposed keep / adjust / revert
+  actions.
+
+It never edits game code or reverts anything. When it reports a problem, show the
+user the report, explain the risk, propose the smallest fix, and **wait for the
+user's explicit approval** before changing or reverting the other developer's
+work. `-ParseCheck` is opt-in because a full import in a temporary worktree is
+expensive.
 
 ## 4. Architecture
 
@@ -61,11 +128,13 @@ Keep these layers separate:
 |---|---|---|
 | Orchestration | `scripts/main.gd` | Scene wiring, input routing, camera, spawning, combat flow |
 | Persistent rules | `scripts/game_state.gd` | HP/mana, XP, skills, quests, inventory, equipment, saves |
-| World | `scripts/world_builder.gd` | Procedural props and terrain helpers |
+| World | `scripts/world_builder.gd` | Zones, height field, roads, water, props, day/night, sealed waygate |
+| Map | `scripts/world_map.gd` | Full-screen map drawn from the world data |
 | Player | `scripts/player.gd` | Movement, animation state, equipment visuals |
 | Enemies | `scripts/enemy.gd` | AI, health, telegraphs, world-space name/health display |
 | Presentation | `scripts/actor_visual.gd`, `scripts/combat_effects.gd` | Models and pooled effects |
-| HUD | `scripts/game_hud.gd`, `skill_panel.gd`, `inventory_panel.gd` | Read state and render UI |
+| Diagnostics | `scripts/game_log.gd` | Runtime event log and tester markers |
+| HUD | `scripts/game_hud.gd`, `scripts/world_map.gd`, `skill_panel.gd`, `inventory_panel.gd` | Read state and render UI |
 | Audio | `scripts/audio_director.gd` | Cues and volume |
 
 Rules:
@@ -74,6 +143,9 @@ Rules:
 - The HUD reads state and emits requests; it must not own progression rules.
 - `actor_visual.gd` draws actors; it must not decide damage or progression.
 - Keep damage numbers, HP values, and UI values driven by the same source.
+- `world_builder.gd` is the single source of truth for zone data, height, spawns,
+  roads and the waygate. The map, terrain colour and enemy levels read from it;
+  never duplicate zone numbers elsewhere.
 - Use static typing where practical and match the existing tab indentation.
 
 ## 5. Dependencies and the Effekseer addon
@@ -120,6 +192,12 @@ Current UI rules that are easy to break:
   in `scripts/enemy.gd`. Do not add a second top-centre target panel.
 - Enemy bars must visibly react to both damage and healing and must deplete from
   the left edge, not shrink from the centre.
+- There is **no minimap**. `M` opens the full-screen map in `scripts/world_map.gd`.
+- The five-skill hotbar has no frame panel; do not wrap it in `_panel()` again.
+- Chat lives at the bottom left with World / Local / Party / Guild tabs and must
+  block movement while its input has focus (`game.ui_text_input`). The system
+  log sits at the bottom right.
+- The day/night clock sits at the top right; do not add a second time display.
 - Floating windows are draggable, clamped to the viewport, and remember their
   positions in `saves/ui_layout.cfg`.
 - Use square inventory/skill slots, dark translucent brown interiors, bronze
@@ -145,7 +223,13 @@ Current UI rules that are easy to break:
 A change is done when:
 
 - the game launches without parse or runtime errors;
-- the affected tests pass;
+- the affected tests pass, including `tests/test_world.gd` for world/map/clock
+  changes;
 - the UI still follows `Documentation/UI_STANDARD.md`;
 - no duplicate UI panels or competing sources of truth were introduced;
-- `CURRENT_WORK.md` is updated with what changed and what remains.
+- the runtime log grows with the new events and contains no errors from the
+  tested flow;
+- `Documentation/IMPLEMENTATION_LOG.md` has an entry for the pass;
+- `CURRENT_WORK.md` is updated with what changed and what remains;
+- if `origin/main` moved, the remote-change check has been run and its findings
+  were shown to the user before any of the other developer's code was touched.
