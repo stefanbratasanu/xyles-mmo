@@ -12,6 +12,10 @@ func _run() -> void:
 	for i in range(3): await process_frame
 	check(editor.entries.item_count>30,"Catalog is populated")
 	check(editor.catalog.validate().is_empty(),"Initial draft is valid")
+	check(editor.catalog.data.modifiers.chain.has("tier"), "Tier is available in the editor")
+	editor._change(["modifiers", "chain", "tier"], "mythical")
+	check(editor.catalog.data.modifiers.chain.tier == "mythical", "Tier can be edited")
+	editor._undo()
 	var original: float=editor.catalog.data.modifiers.chain.weight
 	editor._change(["modifiers","chain","weight"],31.0)
 	check(editor.dirty and editor.catalog.data.modifiers.chain.weight==31,"Change is a draft")

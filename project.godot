@@ -28,7 +28,7 @@ window/size/min_height=650
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/modifier_list_editor/plugin.cfg", "res://addons/effekseer/plugin.cfg", "res://editor_plugins/skill_distribution/plugin.cfg")
+enabled=PackedStringArray("res://addons/modifier_list_editor/plugin.cfg", "res://addons/effekseer/plugin.cfg", "res://addons/skill_distribution/plugin.cfg")
 
 [physics]
 

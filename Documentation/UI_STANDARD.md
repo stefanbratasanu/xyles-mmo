@@ -20,6 +20,8 @@ The implementation uses original Godot-drawn frames; reference screenshots are n
   timestamps and a line input. Typing must not move the character.
 - Inventory follows the reference paperdoll: 21 equipment slots on the left, a nine-column bag on the right, and All / Equip / Supplies / Crafting / Quest tabs. Hover shows attributes and durability; double-click or right-click a bag item to equip it, and click worn equipment to remove it. Bottom controls repair, sort, and discard (with a second confirmation click). Wood and iron appear as live crafting stacks.
 - All floating windows use title-bar dragging, stay within the viewport and remember their own positions in `saves/ui_layout.cfg`. Options includes a layout reset.
-- Skills retain ten equipped slots, square evolution groups, ten upgrade stages, the `+` / `X / 10` control and the completed `10/10` tile.
+- Skills retain ten equipped slots, square evolution groups, ten upgrade stages, the `+` / `X / 10` control and the completed `10/10` tile. Clicking an installed enchantment shows its saved details; the `+` tile opens new choices. Enchantment tiers appear in the description and use restrained slot/choice colours alongside text.
 
 Reusable implementation: `scripts/classic_frame.gd` supplies the frame ornamentation, while the HUD's `_panel`, `_button`, `_bar` and `_label` helpers supply common styling. Register new floating HUD windows through `_register_window`; use a title-only hit area so content buttons remain interactive.
+
+- Character selection uses a compact bronze-framed roster and creation form. Show the chosen race/class and explain that race-specific models and gameplay are not implemented.

@@ -393,6 +393,26 @@ func height_at(x: float, z: float) -> float:
 	return h
 
 
+## Height of the rendered/collidable terrain triangles, for ground overlays.
+## The analytic height field can differ slightly between mesh vertices.
+func surface_height_at(x: float, z: float) -> float:
+	if _terrain_grid_size < 2 or _terrain_heights.is_empty() or absf(x) > TERRAIN_EXTENT or absf(z) > TERRAIN_EXTENT:
+		return height_at(x, z)
+	var step: float = (TERRAIN_EXTENT * 2.0) / float(TERRAIN_SEGMENTS)
+	var fx := (x + TERRAIN_EXTENT) / step
+	var fz := (z + TERRAIN_EXTENT) / step
+	var ix := clampi(floori(fx), 0, _terrain_grid_size - 2)
+	var iz := clampi(floori(fz), 0, _terrain_grid_size - 2)
+	var u := clampf(fx - float(ix), 0.0, 1.0)
+	var v := clampf(fz - float(iz), 0.0, 1.0)
+	var h00 := _terrain_heights[iz * _terrain_grid_size + ix]
+	var h10 := _terrain_heights[iz * _terrain_grid_size + ix + 1]
+	var h01 := _terrain_heights[(iz + 1) * _terrain_grid_size + ix]
+	var h11 := _terrain_heights[(iz + 1) * _terrain_grid_size + ix + 1]
+	if u + v <= 1.0: return h00 + u * (h10 - h00) + v * (h01 - h00)
+	return h10 * (1.0 - v) + h11 * (u + v - 1.0) + h01 * (1.0 - u)
+
+
 func _raw_height(x: float, z: float) -> float:
 	var p := Vector2(x, z)
 	var h: float = _hills.get_noise_2d(x, z) * 3.1

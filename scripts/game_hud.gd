@@ -18,6 +18,7 @@ var mana_bar: ProgressBar
 var hp_text: Label
 var mana_text: Label
 var player_name: Label
+var player_identity: Label
 var quest_text: Label
 var quest_title: Label
 var region_label: Label
@@ -187,7 +188,8 @@ func _build_player() -> void:
 	mana_text.custom_minimum_size.x = 62
 	mana_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	mrow.add_child(mana_text)
-	column.add_child(_label("XYLES  •  CONTESTED TERRITORY", 8, GOLD))
+	player_identity = _label("HUMAN  /  FIGHTER  •  CONTESTED", 8, GOLD)
+	column.add_child(player_identity)
 
 
 func _build_quest() -> void:
@@ -548,7 +550,10 @@ func refresh() -> void:
 	mana_bar.value = float(s.mana)
 	hp_text.text = "%d / %d" % [int(s.hp), int(effective_hp)]
 	mana_text.text = "%d / %d" % [int(s.mana), int(effective_mana)]
-	player_name.text = "WANDERER  /  LV. %02d" % int(s.level)
+	var display_name: String = str(s.character_name).to_upper()
+	if display_name.length() > 18: display_name = display_name.left(17) + "…"
+	player_name.text = "%s  /  LV. %02d" % [display_name, int(s.level)]
+	player_identity.text = "%s  /  %s  •  CONTESTED" % [str(s.character_race).to_upper(), str(s.character_class).to_upper()]
 	quest_text.text = str(s.get_quest_text())
 	if not s.quests.is_empty():
 		quest_title.text = str(s.quests[0].get("title", "A Debt of Iron"))
@@ -791,7 +796,7 @@ func _render_forge() -> void:
 
 func _render_settings() -> void:
 	overlay_title.text = "Settings"
-	overlay_subtitle.text = "Tune camera handling and audio. Changes apply immediately and save when you close the menu."
+	overlay_subtitle.text = "Tune camera and audio, open debug tools, or log out to character selection."
 	var camera_card: PanelContainer = _panel(Color("121f25"))
 	overlay_content.add_child(camera_card)
 	var camera_column: VBoxContainer = _column(camera_card, 20, 16)
@@ -863,6 +868,10 @@ func _render_settings() -> void:
 	debug_button.custom_minimum_size.y = 38
 	debug_button.pressed.connect(_switch_panel.bind("debug"))
 	overlay_content.add_child(debug_button)
+	var logout_button := _button("LOG OUT · CHARACTER SELECTION", 11)
+	logout_button.custom_minimum_size.y = 38
+	logout_button.pressed.connect(game.logout_to_characters)
+	overlay_content.add_child(logout_button)
 	overlay_content.add_child(layout_reset)
 
 
@@ -936,7 +945,7 @@ func _render_debug() -> void:
 	key_column.add_child(_label("KEYBOARD SHORTCUTS", 11, GOLD))
 	key_column.add_child(_label("Click a key, then press an unused key. Esc cancels.", 10, MUTED))
 	debug_binding_buttons.clear()
-	for item: Array in [["Invulnerability", "invulnerable"], ["Restore vitals", "heal"], ["Spawn minions", "spawn"]]:
+	for item: Array in [["Debug panel", "panel"], ["Invulnerability", "invulnerable"], ["Restore vitals", "heal"], ["Spawn minions", "spawn"]]:
 		var row := HBoxContainer.new()
 		key_column.add_child(row)
 		var label := _label(str(item[0]), 11, TEXT)
@@ -1019,7 +1028,7 @@ func _render_guide() -> void:
 		["TRAVEL & TARGETING", "WASD to move or click the ground. S backpedals; hold Shift while moving forward to sprint, hold Alt to walk, hold Ctrl to crouch, and press Space to jump. X toggles sitting; movement or using a skill starts standing up. Hold the right mouse button and drag to look around; scroll to zoom. Press O or Esc for settings. Click a creature or press Tab to select a target. E interacts with nearby objects."],
 		["FIVE WAYS TO SURVIVE", "1  Iron Cleave: your close combat attack.  2  Ember Bolt: a ranged mana attack.  3  Iron Guard: mitigate incoming damage.  4  Wayfarer's Step: reposition quickly.  5  Restoring Light: spend mana to restore vitality. Watch mana and cooldowns."],
 		["POWER THROUGH DISCOVERY", "Open B for the regional bestiary. Your first normal, quest and boss completions grant 2, 5 and 3 skill points. Leveling alone grants no skill points. Spend them with K, choosing from five compatible enchantments at each of ten stages. Equip ten abilities with the slot buttons; keys 1–0 activate them. Channel skills slow movement and turn gradually."],
-		["RISK & REPAIR", "Death damages random pieces of equipment. Below 50% durability, gear can drop; at 0%, it always drops. Return to Emberfall and repair through I. Craft better equipment through C. F5 saves your journey, and progress also saves automatically."],
+		["RISK & REPAIR", "Death damages random pieces of equipment. Below 50% durability, gear can drop; at 0%, it always drops. Return to Emberfall and repair through I. Craft better equipment through C. F5 saves your journey, and progress also saves automatically. Use Options to log out and choose another character; recover dropped equipment first."],
 		["THE CHRONICLE", "Begin at the Emberfall blacksmith. Cull the Briarwolves, confront the Oathbound Guardian, then follow the clue toward the Hollow Regent. Powerful foes reward preparation and careful movement."]
 	]
 	for section: Array in sections:
@@ -1232,8 +1241,11 @@ func _register_window(control: Control, id: String) -> void:
 
 
 func _settle_hud() -> void:
+	if not is_inside_tree(): return
 	await get_tree().process_frame
+	if not is_inside_tree(): return
 	await get_tree().process_frame
+	if not is_inside_tree(): return
 	for control: Control in floating_windows.values():
 		control.size = control.get_meta("default_size")
 		_clamp_window(control)
@@ -1241,8 +1253,11 @@ func _settle_hud() -> void:
 
 
 func _settle_active(panel_name: String) -> void:
+	if not is_inside_tree(): return
 	await get_tree().process_frame
+	if not is_inside_tree(): return
 	await get_tree().process_frame
+	if not is_inside_tree(): return
 	if current_panel != panel_name:
 		return
 	var desired := _panel_size(panel_name)

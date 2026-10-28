@@ -26,6 +26,12 @@ func _initialize() -> void:
 	state.skill_seed=0
 	var cat: Resource = state.skill_catalog
 	check(cat.validate().is_empty(), "Catalog validation: " + str(cat.validate()))
+	var found_tiers: Dictionary = {}
+	for id: String in cat.data.modifiers:
+		var tier: String = cat.data.modifiers[id].get("tier", "")
+		check(tier in cat.TIERS, id + " has an authored tier")
+		found_tiers[tier] = true
+	check(found_tiers.size() == 5, "All five tiers are represented")
 	check(state.loadout.size()==10, "Ten initial slots")
 	check(cat.data.skills.cast.type=="cast_projectile", "Slot two is a pure projectile")
 	for id: String in cat.data.skills:
@@ -47,6 +53,16 @@ func _initialize() -> void:
 	state.skill_points=50
 	var first: Array=state.get_skill_offers("cast",0).duplicate(true)
 	check(first.size()==5, "Five choices")
+	for offer: Dictionary in first:
+		check(offer.tier == cat.data.modifiers[offer.id].tier, "Offers retain authored tier")
+		check(cat.describe(offer).contains(str(offer.tier).capitalize()), "Description displays tier")
+	var old_offer: Dictionary = first[0].duplicate(true)
+	old_offer.erase("tier")
+	check(cat.valid_roll(old_offer), "Previous saves without tiers remain valid")
+	check(cat.tier_of(old_offer) == cat.data.modifiers[old_offer.id].tier, "Previous saves use the authored tier")
+	var unknown_old := old_offer.duplicate(true)
+	unknown_old["id"] = "removed_definition"
+	check(cat.tier_of(unknown_old) == "basic", "Unknown old enchantments have a safe fallback")
 	check(state.install_evolution("cast",0,0), "Install first enchantment")
 	check(state.skill_points==49, "Spend one point")
 	check(state.reset_evolutions()==1, "Refund one point")
@@ -66,6 +82,9 @@ func _initialize() -> void:
 	check(legacy.skills.melee.evolutions.size()==3 and legacy.skill_points==4,"Legacy migration preserves point spending")
 	check(is_equal_approx(legacy.compiled_skill("melee").power_scale,1.24),"Legacy migration preserves power")
 	var draft: Resource=cat.duplicate(true)
+	draft.data.modifiers.power.tier = "invalid"
+	check(not draft.validate().is_empty(), "Reject unsupported tier")
+	draft.data.modifiers.power.tier = "basic"
 	draft.data.modifiers.power.events={"ON_HIT_TAKEN":1}
 	check(not draft.validate().is_empty(),"Reject unimplemented event/operation pairing")
 	state.free(); restored.free(); legacy.free()

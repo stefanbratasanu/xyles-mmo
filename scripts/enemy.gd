@@ -1,6 +1,8 @@
 extends CharacterBody3D
 
 const Visual = preload("res://scripts/actor_visual.gd")
+const ATTACK_HALF_ANGLE := PI * 50.0 / 180.0
+const SLAM_RADIUS := 5.5
 var game: Node
 var display_name: String = "Briarwolf"
 var kind: String = "normal"
@@ -22,6 +24,10 @@ var aggro: bool = false
 var boss_timer: float = 5.0
 var winding_up: bool = false
 var attack_windup: float = 0.0
+var attack_origin := Vector3.ZERO
+var attack_direction := Vector3.FORWARD
+var attack_reach: float = 0.0
+var attack_telegraph: MeshInstance3D
 var slam_active: bool = false
 var sidestep_time: float = 0.0
 var sidestep_dir := Vector3.ZERO
@@ -182,6 +188,7 @@ func _physics_process(delta: float) -> void:
 	var speed_value: float = 2.3 if kind == "normal" else (2.1 if kind == "quest" else 1.65)
 	if game.is_dead:
 		aggro = false
+		_cancel_attack()
 	elif distance < detection:
 		aggro = true
 	elif distance > leash:
@@ -230,10 +237,13 @@ func _physics_process(delta: float) -> void:
 		sidestep_time = 0.7
 		var side := Vector3(-direction.z, 0.0, direction.x)
 		sidestep_dir = side.normalized() if randf() < 0.5 else -side.normalized()
-	if sidestep_time > 0.0:
+	if sidestep_time > 0.0 and not winding_up and not slam_active:
 		sidestep_time -= delta
 		direction = (direction + sidestep_dir * 1.4).normalized()
 		wants_move = true
+	if winding_up or slam_active:
+		direction = Vector3.ZERO
+		wants_move = false
 	if kind == "boss":
 		boss_timer -= delta
 		# Only a boss that has actually engaged may slam. Without the aggro gate
@@ -252,7 +262,9 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y -= 26.0 * delta
 	move_and_slide()
-	if direction.length() > 0.05:
+	if winding_up:
+		visual.rotation.y = atan2(-attack_direction.x, -attack_direction.z)
+	elif direction.length() > 0.05:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), delta * 7)
 	elif aggro and to_player.length() > 0.01:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-to_player.x, -to_player.z), delta * 7)
@@ -285,32 +297,97 @@ func _avoid_crowd(direction: Vector3) -> Vector3:
 ## negative and the mob had drifted out of range.
 func _begin_attack() -> void:
 	winding_up = true
-	attack_windup = 0.55 if kind == "normal" else (0.45 if kind == "quest" else 0.35)
+	attack_windup = 0.8 if kind == "normal" else (0.9 if kind == "quest" else 1.0)
 	attack_timer = 1.7 if kind == "normal" else (2.0 if kind == "quest" else 2.3)
+	attack_origin = global_position
+	attack_direction = game.player.global_position - attack_origin
+	attack_direction.y = 0.0
+	if attack_direction.length_squared() < 0.0001:
+		attack_direction = Vector3.FORWARD.rotated(Vector3.UP, visual.global_rotation.y)
+	attack_direction = attack_direction.normalized()
+	attack_reach = _reach() + 0.55
+	sidestep_time = 0.0
+	visual.rotation.y = atan2(-attack_direction.x, -attack_direction.z)
+	_show_attack_telegraph()
+	game.game_log.combat("enemy_attack_windup", {"enemy": display_name, "origin": str(attack_origin), "direction": str(attack_direction), "reach": attack_reach, "windup": attack_windup})
 	visual.strike = 1.0
+
+func _show_attack_telegraph() -> void:
+	# Tessellate the same sector used by the hit test over the shared height field.
+	var vertices := PackedVector3Array()
+	var indices := PackedInt32Array()
+	const SEGMENTS := 24
+	const RINGS := 4
+	for ring in range(RINGS + 1):
+		var radius := attack_reach * float(ring) / float(RINGS)
+		for step in range(SEGMENTS + 1):
+			var angle := lerpf(-ATTACK_HALF_ANGLE, ATTACK_HALF_ANGLE, float(step) / float(SEGMENTS))
+			var offset := attack_direction.rotated(Vector3.UP, angle) * radius
+			var height: float = game.world.surface_height_at(attack_origin.x + offset.x, attack_origin.z + offset.z)
+			vertices.append(Vector3(offset.x, height - attack_origin.y + 0.08, offset.z))
+	for ring in range(RINGS):
+		for step in range(SEGMENTS):
+			var a := ring * (SEGMENTS + 1) + step
+			var b := a + SEGMENTS + 1
+			indices.append_array(PackedInt32Array([a, b, a + 1, a + 1, b, b + 1]))
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.albedo_color = Color(0.9, 0.14, 0.08, 0.48)
+	attack_telegraph = MeshInstance3D.new()
+	attack_telegraph.name = "AttackTelegraph"
+	attack_telegraph.top_level = true
+	attack_telegraph.mesh = mesh
+	attack_telegraph.material_override = material
+	attack_telegraph.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(attack_telegraph)
+	attack_telegraph.global_position = attack_origin
+
+func _strike_contains(point: Vector3) -> bool:
+	var offset := point - attack_origin
+	offset.y = 0.0
+	if offset.length_squared() > attack_reach * attack_reach: return false
+	if offset.length_squared() < 0.0001: return true
+	return attack_direction.dot(offset.normalized()) >= cos(ATTACK_HALF_ANGLE)
+
+func _cancel_attack() -> void:
+	winding_up = false
+	attack_windup = 0.0
+	if is_instance_valid(attack_telegraph):
+		attack_telegraph.queue_free()
+		attack_telegraph = null
 
 
 func _finish_attack() -> void:
-	winding_up = false
+	var hit := _strike_contains(game.player.global_position)
+	_cancel_attack()
+	game.game_log.combat("enemy_attack_resolved", {"enemy": display_name, "hit": hit})
 	visual.strike = 1.0
-	var to_player: Vector3 = game.player.global_position - global_position
-	to_player.y = 0.0
-	if to_player.length() <= _reach() + 0.55:
+	if hit:
 		game.damage_player((7.0 if kind == "normal" else (12.0 if kind == "quest" else 18.0)) * damage_scale, self)
 
 
 func _begin_slam() -> void:
 	slam_active = true
 	boss_timer = 7.0
-	telegraph = _ring(5.5, Color("d46b64"))
+	telegraph = _ring(SLAM_RADIUS, Color("d46b64"))
 	add_child(telegraph)
 	game.state.notice.emit("Hollow Regent is gathering power. Leave the red circle!")
 	var tween := create_tween()
 	tween.tween_property(telegraph, "scale", Vector3(1, 2, 1), 1.7)
 	tween.tween_callback(func():
 		if not dead:
-			game.burst(global_position + Vector3.UP * 0.1, Color("ba7dc4"), 5.5)
-			if game.player.global_position.distance_to(global_position) < 5.8:
+			game.burst(global_position + Vector3.UP * 0.1, Color("ba7dc4"), SLAM_RADIUS)
+			var offset: Vector3 = game.player.global_position - global_position
+			offset.y = 0.0
+			if offset.length() <= SLAM_RADIUS:
 				game.damage_player(36.0 * damage_scale, self, "area")
 		slam_active = false
 		if is_instance_valid(telegraph):
@@ -329,6 +406,7 @@ func take_damage(amount: float) -> void:
 	tween.tween_property(visual, "scale", Vector3.ONE * (1.0 if kind == "normal" else (1.35 if kind == "quest" else 2.45)), 0.12)
 	if hp <= 0:
 		dead = true
+		_cancel_attack()
 		collision_layer = 0
 		game.enemy_defeated(self)
 		name_label.hide()

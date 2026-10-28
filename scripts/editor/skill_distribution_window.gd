@@ -136,6 +136,8 @@ func _refresh_list() -> void:
 	for key: Variant in keys:
 		var value: Variant=values[key]
 		var text_value:=str(key) + (" · "+str(value.get("name","")) if value is Dictionary else "")
+		if section == "modifiers" and value is Dictionary:
+			text_value += " · " + str(value.get("tier", "basic")).capitalize()
 		if not search.text.is_empty() and not (text_value+str(value)).to_lower().contains(search.text.to_lower()): continue
 		entries.add_item(text_value)
 		entries.set_item_metadata(entries.item_count-1,str(key))
@@ -204,9 +206,9 @@ func _add_fields(value: Variant, path: Array, depth: int) -> void:
 			var next:=path.duplicate(); next.append(i)
 			spin.value_changed.connect(func(v: float): _change(next,v))
 			row.add_child(spin)
-	elif str(path.back()) in ["op","type","target_policy","response"]:
+	elif str(path.back()) in ["op","type","target_policy","response","tier"]:
 		var choice:=OptionButton.new()
-		var choices: Array={"op":Catalog.OPERATIONS,"type":Catalog.TYPES,"target_policy":["nearest","lowest_health","random"],"response":["","heal","fixed_damage"]}[str(path.back())]
+		var choices: Array={"op":Catalog.OPERATIONS,"type":Catalog.TYPES,"target_policy":["nearest","lowest_health","random"],"response":["","heal","fixed_damage"],"tier":Catalog.TIERS}[str(path.back())]
 		for option: String in choices: choice.add_item(option)
 		choice.select(maxi(0,choices.find(str(value))))
 		choice.item_selected.connect(func(i: int): _change(path,choices[i]))

@@ -12,6 +12,8 @@ const CATEGORY_POINTS := {"normal": 2, "quest": 5, "boss": 3}
 const MODIFIER_CATALOG_PATH := "res://resources/modifiers/modifier_catalog.tres"
 const CRAFT_MULTIPLIERS := {"basic": 1.0, "rare": 1.5, "epic": 2.2, "legendary": 3.2}
 const SAVE_PATH := "user://xyles_frontier_save.json"
+const CHARACTER_RACES := ["Human", "Orc", "Elf", "Dark Elf", "Dwarf"]
+const CHARACTER_CLASSES := ["Fighter", "Mystic"]
 const EquipmentSlots = preload("res://scripts/equipment_slots.gd")
 const WEAPON_DEFINITIONS := {
 	"sword": {"name":"Ashforged Sword","base_power":15,"icon":"sword","modifier_slot":"weapon"},
@@ -28,6 +30,9 @@ var loadout: Array = []
 var learned_skills: Array = []
 var compiled_skills: Dictionary = {}
 var modifier_catalog: ModifierCatalog = preload("res://resources/modifiers/modifier_catalog.tres")
+var character_name: String = "Wayfarer"
+var character_race: String = "Human"
+var character_class: String = "Fighter"
 
 var hp: float = 120.0
 var max_hp: float = 120.0
@@ -600,7 +605,10 @@ func _notify(message: String) -> void:
 
 
 func save_game(path: String = SAVE_PATH) -> bool:
-	var file := FileAccess.open(path, FileAccess.WRITE)
+	# Write beside the destination, then replace it only after a successful
+	# flush. A failed save must not truncate the character's previous progress.
+	var temporary := path + "." + Crypto.new().generate_random_bytes(12).hex_encode() + ".tmp"
+	var file := FileAccess.open(temporary, FileAccess.WRITE)
 	if file == null:
 		return false
 	var ranks := {}
@@ -608,7 +616,7 @@ func save_game(path: String = SAVE_PATH) -> bool:
 	for id: String in skills:
 		ranks[id] = skills[id]["ranks"]
 		histories[id] = skills[id]["history"]
-	file.store_string(JSON.stringify({"version": 1, "level": level, "xp": xp,
+	file.store_string(JSON.stringify({"version": 1, "character_name": character_name, "character_race": character_race, "character_class": character_class, "level": level, "xp": xp,
 		"gold": gold, "wood": wood, "iron": iron, "hp": hp, "max_hp": max_hp,
 		"mana": mana, "max_mana": max_mana, "skill_points": skill_points,
 		"earned_skill_points": earned_skill_points, "skill_ranks": ranks, "skill_histories": histories,
@@ -616,6 +624,16 @@ func save_game(path: String = SAVE_PATH) -> bool:
 		"evolutions": _evolution_save(), "skill_offers": skill_offers, "skill_seed": skill_seed, "loadout": loadout, "learned_skills": learned_skills,
 		"equipment_schema_version": equipment_schema_version,
 		"quests": quests, "current_region": current_region}, "", true, true))
+	file.flush()
+	var write_ok := file.get_error() == OK
+	file.close()
+	var temp_absolute := ProjectSettings.globalize_path(temporary)
+	if not write_ok:
+		DirAccess.remove_absolute(temp_absolute)
+		return false
+	if DirAccess.rename_absolute(temp_absolute, ProjectSettings.globalize_path(path)) != OK:
+		DirAccess.remove_absolute(temp_absolute)
+		return false
 	return true
 
 
@@ -633,6 +651,12 @@ func load_game(path: String = SAVE_PATH) -> bool:
 			return false
 	_define_skills()
 	_define_quests()
+	character_name = str(parsed.get("character_name", "Wayfarer")).strip_edges().left(24)
+	if character_name.is_empty(): character_name = "Wayfarer"
+	character_race = str(parsed.get("character_race", "Human"))
+	if character_race not in CHARACTER_RACES: character_race = "Human"
+	character_class = str(parsed.get("character_class", "Fighter"))
+	if character_class not in CHARACTER_CLASSES: character_class = "Fighter"
 	level = maxi(1, int(parsed.get("level", 1)))
 	xp = maxi(0, int(parsed.get("xp", 0)))
 	gold = maxi(0, int(parsed.get("gold", 180)))

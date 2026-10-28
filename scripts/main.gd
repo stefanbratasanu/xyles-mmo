@@ -9,8 +9,11 @@ const HUDScript = preload("res://scripts/game_hud.gd")
 const VisualScript = preload("res://scripts/actor_visual.gd")
 const AudioScript = preload("res://scripts/audio_director.gd")
 const GameLogScript = preload("res://scripts/game_log.gd")
+const CharacterSelect = preload("res://scripts/character_select.gd")
+const CharacterStore = preload("res://scripts/character_store.gd")
 const SAVE_PATH := "res://saves/journey.json"
 const SETTINGS_PATH := "res://saves/settings.cfg"
+static var select_character_on_next_start := false
 
 var state: Node
 var world: Node3D
@@ -30,7 +33,7 @@ var block_time: float = 0.0
 var is_dead: bool = false
 var debug_invulnerable: bool = false
 var debug_time_paused: bool = false
-var debug_keys: Dictionary = {"invulnerable": KEY_F2, "heal": KEY_F3, "spawn": KEY_F4}
+var debug_keys: Dictionary = {"invulnerable": KEY_F2, "heal": KEY_F3, "spawn": KEY_F4, "panel": KEY_F1}
 var camera_yaw: float = 0.25
 var camera_pitch: float = 0.68
 var camera_distance: float = 20.0
@@ -59,6 +62,7 @@ var arrow: Node3D
 var last_failed_notice: float = -10.0
 var test_mode: bool = false
 var screenshot_mode: bool = false
+var current_save_path: String = ""
 
 func _ready() -> void:
 	DisplayServer.window_set_title("XYLES  |  Ashen Frontier")
@@ -73,14 +77,43 @@ func _ready() -> void:
 		state = StateScript.new()
 		state.name = "GameState"
 		add_child(state)
-	test_mode = OS.get_cmdline_user_args().has("--test-mode")
+	test_mode = OS.get_cmdline_user_args().has("--test-mode") or OS.get_cmdline_args().has("--script")
 	screenshot_mode = OS.get_cmdline_user_args().has("--screenshot")
 	if not test_mode:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://saves"))
 	_load_settings()
-	if not test_mode and not OS.get_cmdline_user_args().has("--fresh"):
-		state.load_game(SAVE_PATH)
-	game_log.boot_ready({"test_mode": test_mode, "level": int(state.level), "save_loaded": not test_mode})
+	var save_loaded := false
+	var show_selector := select_character_on_next_start
+	select_character_on_next_start = false
+	if (not test_mode and not screenshot_mode and not OS.get_cmdline_user_args().has("--fresh")) or has_meta("character_test_store"):
+		var store: RefCounted = get_meta("character_test_store") if has_meta("character_test_store") else CharacterStore.new()
+		if not show_selector and (not test_mode or has_meta("character_test_auto")):
+			var remembered_path: String = store.auto_login_path()
+			if not remembered_path.is_empty() and state.load_game(remembered_path):
+				save_loaded = true
+				current_save_path = remembered_path
+		if not save_loaded:
+			set_process(false)
+			set_process_unhandled_input(false)
+			var inactive_hud := get_node_or_null("HUD")
+			if inactive_hud != null: inactive_hud.set_process_unhandled_key_input(false)
+		while not save_loaded:
+			var selection := CharacterSelect.new()
+			selection.name = "CharacterSelection"
+			selection.store = store
+			add_child(selection)
+			var chosen_path: String = await selection.character_selected
+			selection.visible = false
+			selection.queue_free()
+			save_loaded = state.load_game(chosen_path)
+			if save_loaded: current_save_path = chosen_path
+		if not store.remember_character(current_save_path):
+			game_log.state("last_character_save_failed", {})
+	elif not test_mode:
+		current_save_path = SAVE_PATH
+		if not OS.get_cmdline_user_args().has("--fresh"):
+			save_loaded = state.load_game(current_save_path)
+	game_log.boot_ready({"test_mode": test_mode, "level": int(state.level), "save_loaded": save_loaded})
 	var world_started := Time.get_ticks_msec()
 	world = get_node_or_null("World") as Node3D
 	if not is_instance_valid(world):
@@ -152,6 +185,9 @@ func _ready() -> void:
 		hud.name = "HUD"
 		add_child(hud)
 	hud.setup(self)
+	hud.set_process_unhandled_key_input(true)
+	set_process(true)
+	set_process_unhandled_input(true)
 	game_log.ui("hud_ready", {"panels": ["status", "quest", "menu", "chat", "map", "hotbar"]})
 	state.notice.connect(_on_notice)
 	state.changed.connect(_on_state_changed)
@@ -330,7 +366,26 @@ func _notification(what: int) -> void:
 		get_tree().quit()
 
 func _save_journey() -> bool:
-	return true if test_mode else state.save_game(SAVE_PATH)
+	if test_mode: return true
+	if current_save_path.is_empty(): return false
+	return state.save_game(current_save_path)
+
+func logout_to_characters() -> void:
+	if is_dead:
+		_on_notice("Wait until you respawn before logging out.")
+		return
+	if not ground_loot.is_empty():
+		_on_notice("Recover your dropped equipment before logging out.")
+		return
+	if not _save_journey():
+		_on_notice("Could not save the character. You remain in the world.")
+		return
+	game_log.state("character_logout", {"character": state.character_name})
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	select_character_on_next_start = true
+	if get_tree().change_scene_to_file("res://scenes/main.tscn") != OK:
+		select_character_on_next_start = false
+		_on_notice("Could not open character selection. You remain in the world.")
 
 func _load_settings() -> void:
 	var config := ConfigFile.new()
@@ -345,6 +400,13 @@ func _load_debug_keys(config: ConfigFile) -> void:
 	var saved_keys: Dictionary = debug_keys.duplicate()
 	for action: String in saved_keys:
 		saved_keys[action] = int(config.get_value("debug_keys", action, saved_keys[action]))
+	# Existing settings may already use F1 for another action. Preserve them and
+	# choose an unused default for the newly introduced panel shortcut.
+	if not config.has_section_key("debug_keys", "panel"):
+		for candidate: int in [KEY_F1, KEY_F7, KEY_F11, KEY_G, KEY_J]:
+			if candidate not in [saved_keys["invulnerable"], saved_keys["heal"], saved_keys["spawn"]]:
+				saved_keys["panel"] = candidate
+				break
 	var used: Array = []
 	for action: String in saved_keys:
 		var key: int = saved_keys[action]
@@ -376,7 +438,9 @@ func set_debug_key(action: String, key: int) -> bool:
 	return true
 
 func _handle_debug_shortcut(key: int) -> bool:
-	if key == int(debug_keys["invulnerable"]):
+	if key == int(debug_keys["panel"]):
+		hud.toggle_panel("debug")
+	elif key == int(debug_keys["invulnerable"]):
 		debug_set_invulnerable(not debug_invulnerable)
 		hud.show_notice("Invulnerability %s." % ("enabled" if debug_invulnerable else "disabled"))
 		hud.refresh()

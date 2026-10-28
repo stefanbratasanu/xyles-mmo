@@ -17,6 +17,7 @@ data = {
 "default_loadout": ["melee", "cast", "block", "move", "support", "whirl", "flame", "burst", "ray", "barrage"],
 "modifiers": {
 "afterglow": {
+"tier": "rare",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Natural expiry of this skill’s own buff restores health. Reset and removal do not count.",
@@ -42,6 +43,7 @@ data = {
 "weight": 10.0
 },
 "area": {
+"tier": "basic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Enlarges all area nodes supplied by this skill and its enchantments; radius scales by square root. No damage increase.",
@@ -64,6 +66,7 @@ data = {
 "weight": 10.0
 },
 "arrival": {
+"tier": "rare",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "At the end of your dash, damages nearby enemies. The direct pulse enables on-hit effects.",
@@ -88,6 +91,7 @@ data = {
 "weight": 10.0
 },
 "buff_received": {
+"tier": "epic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Receiving this skill's buff grants brief haste. Proc-created buffs cannot recursively activate this.",
@@ -115,6 +119,7 @@ data = {
 "weight": 10.0
 },
 "chain": {
+"tier": "legendary",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Two additional targets. Each hop retains 80% of the previous hit; no revisits. Pierce resolves before chain.",
@@ -141,6 +146,7 @@ data = {
 "weight": 10.0
 },
 "chain_end": {
+"tier": "mythical",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Burst at the last successful contact when a chain exhausts its hops or targets. Cannot restart chaining.",
@@ -164,6 +170,7 @@ data = {
 "weight": 10.0
 },
 "chain_power": {
+"tier": "legendary",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Successful chain contacts empower later casts.",
@@ -191,6 +198,7 @@ data = {
 "weight": 10.0
 },
 "chance_bolt": {
+"tier": "epic",
 "chance": 1.0,
 "chance_range": [0.2, 0.4],
 "cost_increase": 0.04,
@@ -216,6 +224,7 @@ data = {
 "weight": 10
 },
 "chance_burst": {
+"tier": "epic",
 "chance": 1.0,
 "chance_range": [0.2, 0.45],
 "cost_increase": 0.04,
@@ -242,6 +251,7 @@ data = {
 "weight": 10
 },
 "chance_empower": {
+"tier": "rare",
 "chance": 1.0,
 "chance_range": [0.2, 0.4],
 "cost_increase": 0.04,
@@ -271,6 +281,7 @@ data = {
 "weight": 10
 },
 "chance_field": {
+"tier": "epic",
 "chance": 1.0,
 "chance_range": [0.15, 0.3],
 "cost_increase": 0.04,
@@ -298,6 +309,7 @@ data = {
 "weight": 10
 },
 "chance_heal_pulse": {
+"tier": "epic",
 "chance": 1.0,
 "chance_range": [0.25, 0.5],
 "cost_increase": 0.04,
@@ -323,6 +335,7 @@ data = {
 "weight": 10
 },
 "chance_leech": {
+"tier": "epic",
 "chance": 1.0,
 "chance_range": [0.2, 0.4],
 "cost_increase": 0.04,
@@ -351,6 +364,7 @@ data = {
 "weight": 10
 },
 "chance_recover": {
+"tier": "rare",
 "chance": 1.0,
 "chance_range": [0.2, 0.45],
 "cost_increase": 0.04,
@@ -379,6 +393,7 @@ data = {
 "weight": 10
 },
 "chance_weaken": {
+"tier": "rare",
 "chance": 1.0,
 "chance_range": [0.2, 0.45],
 "cost_increase": 0.04,
@@ -410,6 +425,7 @@ data = {
 "weight": 10
 },
 "critical": {
+"tier": "rare",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "A critical direct hit restores mana, once per cast.",
@@ -435,6 +451,7 @@ data = {
 "weight": 10.0
 },
 "duration": {
+"tier": "basic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Extends this skill's timed buffs, debuffs and fields.",
@@ -457,6 +474,7 @@ data = {
 "weight": 10.0
 },
 "echo": {
+"tier": "legendary",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Repeats the skill once at reduced power. The echo cannot repeat itself.",
@@ -479,6 +497,7 @@ data = {
 "weight": 10.0
 },
 "efficiency": {
+"tier": "basic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Applies to the supported skill. Values are additive fractions: 0.15 = 15%.",
@@ -501,6 +520,7 @@ data = {
 "weight": 10.0
 },
 "evasion": {
+"tier": "legendary",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "For ten seconds after casting, a successful evade releases a fixed-power burst. Each ward has its own interval.",
@@ -526,6 +546,7 @@ data = {
 "weight": 10.0
 },
 "expiry": {
+"tier": "rare",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Natural expiry of this skill's buff restores mana. Consumption, refresh, death and respec do not qualify.",
@@ -551,6 +572,7 @@ data = {
 "weight": 10.0
 },
 "exploit": {
+"tier": "legendary",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Increased damage against enemies already weakened before this hit.",
@@ -573,6 +595,7 @@ data = {
 "weight": 10.0
 },
 "field": {
+"tier": "epic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Projectile enemy contacts leave a damaging field. Ticks are not hits.",
@@ -598,6 +621,7 @@ data = {
 "weight": 10.0
 },
 "guarded": {
+"tier": "legendary",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "While this ward is active, successful blocks emit a fixed-power burst. The interval is shared across mantles.",
@@ -623,6 +647,7 @@ data = {
 "weight": 18.0
 },
 "haste": {
+"tier": "rare",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Successful casts grant movement speed. Recasting refreshes the same buff.",
@@ -650,6 +675,7 @@ data = {
 "weight": 10.0
 },
 "healing_burst": {
+"tier": "epic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Restores nearby friendly recipients, excluding the original recipient.",
@@ -674,6 +700,7 @@ data = {
 "weight": 10.0
 },
 "impact": {
+"tier": "epic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Direct hits create a secondary enemy burst. It cannot re-trigger on-hit enchantments.",
@@ -697,6 +724,7 @@ data = {
 "weight": 10.0
 },
 "kill": {
+"tier": "rare",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "A kill credited to this skill restores health.",
@@ -722,6 +750,7 @@ data = {
 "weight": 10.0
 },
 "last_stand": {
+"tier": "mythical",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "For ten seconds after casting, death releases one fixed-power burst. Cannot heal, revive or recurse.",
@@ -747,6 +776,7 @@ data = {
 "weight": 10.0
 },
 "launch": {
+"tier": "epic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Each paid emission builds next-emission damage. Extra projectiles do not multiply stacks.",
@@ -774,6 +804,7 @@ data = {
 "weight": 10.0
 },
 "leech": {
+"tier": "epic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Recover a fraction of actual hit damage over two seconds; shares the per-cast recovery budget.",
@@ -800,6 +831,7 @@ data = {
 "weight": 10.0
 },
 "mantle": {
+"tier": "legendary",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Finishing a cast grants a mantle. Its rolled incoming-hit event releases a burst; secondary damage cannot trigger retaliation.",
@@ -826,6 +858,7 @@ data = {
 "weight": 18.0
 },
 "mending": {
+"tier": "legendary",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "After healing, grant a ward that restores health when its holder takes an enemy hit.",
@@ -851,6 +884,7 @@ data = {
 "weight": 18.0
 },
 "momentum": {
+"tier": "rare",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Each distinct enemy grants skill damage for future casts. Max five stacks, once per enemy per cast.",
@@ -879,6 +913,7 @@ data = {
 "weight": 10.0
 },
 "opening": {
+"tier": "rare",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "A short power buff for this skill, including the triggering cast. Damage increases healing and dash distance when appropriate.",
@@ -906,6 +941,7 @@ data = {
 "weight": 10.0
 },
 "overflow": {
+"tier": "legendary",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Converts overhealing into a temporary barrier capped at 15% maximum health.",
@@ -929,6 +965,7 @@ data = {
 "weight": 10.0
 },
 "pierce": {
+"tier": "epic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Continues through enemies along the original shot direction before any chain hops.",
@@ -951,6 +988,7 @@ data = {
 "weight": 10.0
 },
 "power": {
+"tier": "basic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Applies to the supported skill. Values are additive fractions: 0.15 = 15%.",
@@ -973,6 +1011,7 @@ data = {
 "weight": 10.0
 },
 "projectiles": {
+"tier": "epic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Adds a projectile aimed at a different enemy. Shared per-cast trigger budget.",
@@ -995,6 +1034,7 @@ data = {
 "weight": 10.0
 },
 "pulse": {
+"tier": "basic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Receiving a new buff from this skill restores its rolled resource. Refreshing the buff does not count.",
@@ -1020,6 +1060,7 @@ data = {
 "weight": 10.0
 },
 "range": {
+"tier": "basic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Applies to the supported skill. Values are additive fractions: 0.15 = 15%.",
@@ -1042,6 +1083,7 @@ data = {
 "weight": 10.0
 },
 "reclaim": {
+"tier": "basic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Finishing the skill restores a little mana; one recovery budget per cast.",
@@ -1067,6 +1109,7 @@ data = {
 "weight": 10.0
 },
 "recovery": {
+"tier": "basic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Restores mana on a qualifying direct hit, once per cast.",
@@ -1093,6 +1136,7 @@ data = {
 "weight": 10.0
 },
 "renew": {
+"tier": "basic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Finishing the skill restores health, bounded by the recovery budget.",
@@ -1118,6 +1162,7 @@ data = {
 "weight": 10.0
 },
 "stride": {
+"tier": "rare",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "When this skill’s buff expires naturally, gain short movement speed. Cannot renew itself.",
@@ -1145,6 +1190,7 @@ data = {
 "weight": 10.0
 },
 "tempo": {
+"tier": "basic",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Applies to the supported skill. Values are additive fractions: 0.15 = 15%.",
@@ -1167,6 +1213,7 @@ data = {
 "weight": 10.0
 },
 "weakening": {
+"tier": "rare",
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Reduces the rolled enemy stat; up to three stacks, strongest source group applies.",

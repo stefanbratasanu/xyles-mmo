@@ -360,3 +360,134 @@ The 640 px map texture is generated lazily on first open and cached, so the firs
 **Verified.** Integration test passed under Direct3D 12 and its 1600×900 layout was inspected. Skill runtime, skill panel, combat effects and world tests passed. Runtime diagnostics recorded key changes and debug actions without game errors. Headless sandbox runs reported user-log/certificate access errors and the known ObjectDB exit warning.
 
 **Risk / follow-up.** Shortcuts operate outside the debug window whenever gameplay input is available. Rebinding accepts unused single physical keys only; modifier combinations and existing gameplay bindings are rejected. Window positions and bindings are saved separately.
+
+## 2026-10-28 - Read-only installed enchantment inspection
+
+**Intent.** Clicking an installed enchantment should show that enchantment rather than immediately presenting the retained alternatives, as reported in the two screenshots.
+
+**Changed.** `scripts/skill_panel.gd` opens a read-only inspector for installed tiles, using the actual saved modifier and existing description formatter. The `+` tile continues to open next-stage offers; accidental calls to the choice picker on an installed stage also route to inspection. Updated the full-skill notice and tile tooltip. `tests/test_skill_panel.gd` checks the first and second installed tiles, their exact details, lack of alternative-choice buttons, unchanged saved state, and the `+` picker.
+
+**Visual decisions.** The reference topic was reviewed; its linked images were unavailable. Kept the existing compact bronze framed draggable picker, ivory text, square slots and hierarchy described in `Documentation/UI_STANDARD.md`.
+
+**Verified.** Skill-panel integration passed headless and under Direct3D 12; the second-stage inspector was reviewed at 1600×900. Inspection did not change points, offers or installed effects. Headless sandbox reports user-log/certificate access errors and the known ObjectDB exit warning.
+
+**Risk / follow-up.** Installed-stage replacement is no longer exposed in the panel, in keeping with the requested read-only inspection. Reset All still refunds points and retains saved choices; the underlying replacement API remains unchanged.
+
+## 2026-10-28 - Configurable debug panel shortcut
+
+**Intent.** Open and close the debug menu with a configurable key.
+
+**Changed.** Added the debug panel action to the existing shortcut routing and rebind controls in `scripts/main.gd` and `scripts/game_hud.gd`; its default is F1. Settings predating the new action retain custom bindings, selecting an unused panel default if F1 is occupied. `tests/test_training_minions.gd` exercises opening, closing, rebinding, input suppression and old-settings migration.
+
+**Verified.** Debug integration passed headless and with Direct3D 12; the four shortcut rows were inspected at 1600×900. Headless sandbox reported its usual user-log/certificate access errors and ObjectDB warning. The runtime log contained no game errors.
+
+**Risk / follow-up.** Like the other debug shortcuts, the panel key is suppressed while chat or a blocking panel is active. Existing custom bindings can change the new shortcut's initial default.
+
+## 2026-10-28 - Authored enchantment tiers and editor discovery
+
+**Intent.** Classify enchantments as Basic, Rare, Epic, Legendary or Mythical according to their existing power and complexity, surface the tier to players and make it authorable.
+
+**Changed.** The 47 definitions in `resources/skills/skill_catalog.tres` have explicit curated tiers. `scripts/skills/skill_catalog.gd` validates tiers, retains them in new offers, shows tier names in descriptions, and supports pre-tier saved rolls by looking up the current definition with a Basic fallback for missing definitions. `scripts/skill_panel.gd` displays names and restrained tier colors. The distribution editor exposes a tier selector and tier in its list. Moved its plugin from `editor_plugins/skill_distribution/` to `addons/skill_distribution/`, updated the enabled path and Git ignore exception so Godot can discover it in Plugins. Existing draft/source edits were preserved. `tests/test_skill_catalog.gd` and `tests/test_distribution_editor.gd` cover authoring, validation, persistence and legacy fallback. `tests/test_progression.gd` now compares JSON float round trips using the same small tolerance as the catalog test after an existing random-seed-dependent false failure.
+
+**Visual decisions.** Reviewed the reference topic and followed `Documentation/UI_STANDARD.md`: square slots, bronze framing, compact ivory text, plus text labels and subdued colors so tier is not indicated by color alone. The linked reference images were unavailable.
+
+**Verified.** Catalog, distribution editor, skill-panel, progression, skill-runtime, combat-effects and chance/debug tests passed. The in-game choice window was inspected at 1600×900 using Direct3D 12. Headless tests report sandbox user-log/certificate access errors and the known ObjectDB warning. Computer-use could not capture the existing editor window, so plugin discovery after restart remains a manual check.
+
+**Risk / follow-up.** The tier is authored classification, not an automatic multiplier or rarity probability; numerical ranges and family/variant weights remain independent. Existing saved rolls without a tier follow their current definition's tier and otherwise fall back to Basic. Restart the open Godot editor to pick up the moved plugin, then verify its Plugins listing and Tools entry.
+
+## 2026-10-28 - Character selection and local logout
+
+**Intent.** Add separate local characters, a race and starting-class selector, and a way to log out and choose another character without losing the original journey.
+
+**Changed.** `scripts/character_select.gd` provides a bronze-framed roster and creation form. `scripts/character_store.gd` lists the original `saves/journey.json` in place and creates uniquely named files in `saves/characters/`, validating names, race and class and refusing duplicates. `scripts/game_state.gd` persists identity with legacy Human/Fighter/Wayfarer defaults and writes saves via a temporary file and replacement to avoid truncating an existing save on a failed write. `scripts/main.gd` waits for selection before building gameplay, routes saves to the selected file and implements logout. `scripts/game_hud.gd` shows identity and offers logout in Options. Logout requires respawn and recovery of dropped equipment because world loot is not yet persisted. `tests/test_characters.gd` uses isolated fixtures to exercise old/new saves, race and class selection, save routing, failure guards and the logout transition. Existing CLI script tests and screenshot mode bypass the selection screen.
+
+**Visual decisions.** Reviewed the project reference topic and followed `Documentation/UI_STANDARD.md`: compact dark brown interior, bronze frame, ivory text and clear roster/form hierarchy. Linked reference images were unavailable, so no reference artwork was used.
+
+**Verified.** Character integration, progression, skill catalog, skill panel, combat effects and world tests passed. The selector was visually inspected at 1600×900 under Direct3D 12; normal startup reached it without script errors and the original journey's SHA-256 was unchanged. Headless sandbox runs report user-log/certificate access errors and the existing ObjectDB exit warning. A test found a deferred HUD callback during immediate logout; it now checks that the node remains in the tree.
+
+**Risk / follow-up.** Race/class currently change identity only; all choices use the same rig, stats, skills and spawn. Ground equipment is still not persisted across application exit, so logout blocks until it is recovered. The original journey remains in its original file and will acquire default identity fields when next saved.
+
+## 2026-10-28 - Automatically load the last character
+
+**Intent.** Start directly in the last used character while preserving logout as an explicit way to choose another character.
+
+**Changed.** `scripts/character_store.gd` stores the last selected save path separately in `saves/last_character.cfg`, written via a temporary file. It accepts only paths in the local character roster. `scripts/main.gd` loads the last valid save before building the world; with no pointer a single existing save is selected, and missing or damaged saves fall back to the selector. Successful selections update the pointer. A one-shot flag makes Options → Log out open the selector rather than immediately logging back in. `tests/test_characters.gd` covers remembered characters, first-time legacy migration, multiple characters without a pointer, logout selection, stale and corrupt saves, and save isolation.
+
+**Verified.** Character integration, progression and skill-panel tests passed using isolated fixtures. The damaged-save test confirmed that the file was not overwritten. Headless runs reported sandbox user-log/certificate access errors and the existing ObjectDB exit warning.
+
+**Risk / follow-up.** A failure writing the last-character pointer leaves gameplay available, but the next start may require character selection. Saved characters and the existing journey remain independent of the pointer.
+
+## 2026-10-28 21:32 - Remote changes from another machine (automatic)
+
+**Source.** `origin/main` moved from `2f2f4c59` to `69acc1bc`. Local HEAD is `2f2f4c59`.
+
+**Commits not authored on this PC** (local identity: `bratasanu.stefan@gmail.com`):
+
+- `69acc1bc` 2026-10-28T21:31:11+02:00 **XyLeS** - Merge branch 'main' of https://github.com/stefanbratasanu/xyles-mmo (8 files, +492/-18) [not in local HEAD]
+- `03deb0a0` 2026-10-28T21:30:16+02:00 **XyLeS** - Xyle update 28 oct (29 files, +1605/-307) [not in local HEAD]
+
+**Files touched by the external commits:**
+
+- `assets/models/props/bush.glb`
+- `assets/models/props/generate_props.py`
+- `assets/models/props/rock_1.glb`
+- `assets/models/props/rock_2.glb`
+- `assets/models/props/rock_3.glb`
+- `assets/models/props/stone_1.glb`
+- `assets/models/props/stone_2.glb`
+- `assets/models/trees/generate_trees.py`
+- `assets/models/trees/tree_birch.glb`
+- `assets/models/trees/tree_dead.glb`
+- `assets/models/trees/tree_oak.glb`
+- `assets/models/trees/tree_pine.glb`
+- `CURRENT_WORK.md`
+- `Documentation/IMPLEMENTATION_LOG.md`
+- `GAME_RULES.md`
+- `scripts/audio_director.gd`
+- `scripts/enemy.gd`
+- `scripts/game_hud.gd`
+- `scripts/main.gd`
+- `scripts/player.gd`
+- `scripts/skills/skill_runtime.gd`
+- `scripts/world_builder.gd`
+- `shaders/water.gdshader`
+- `tests/test_training_minions.gd`
+- `tests/test_world.gd`
+- Generated Godot metadata: 7 `.uid`/`.import` file(s) (regenerate with a headless import)
+
+**Flags.**
+
+- Core file changed: `scripts/enemy.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/game_hud.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/main.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/player.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/world_builder.gd`. Re-run the game and the tests before trusting it.
+- Hard failure calls on 24 added line(s).
+
+**Proposed actions (not applied).**
+
+- **Re-verify:** launch the game, run the tests, and re-read the changed core files against `GAME_RULES.md`.
+- Nothing was changed automatically. Confirm each action with the user before editing or reverting.
+
+**Status.** Awaiting the user's decision. This report did not modify any game code.
+
+
+## 2026-10-28 - Merge remote nature and combat changes
+
+**Intent.** Integrate `origin/main` through `69acc1bc` while preserving the local character selection, enchantment and debug work.
+
+**Changed.** Temporarily stashed local tracked and untracked work, excluding the locked Effekseer temporary file, fast-forwarded `main` and reapplied the stash. Git auto-merged the four overlapping files without conflict markers. Retained the merged world and enemy changes and local character and skill work. Corrected the current-work hotbar description to ten slots. The named stash remains as a recovery copy.
+
+**Verified.** Headless import completed with exit 0; the editor reported an existing empty-name condition and case warnings from the local animation source collection. Progression, combat effects, skill panel, skill runtime, training minions, character selection and world tests passed. A Direct3D 12 test-mode launch exited 0 with no script errors; its runtime log recorded world build and no error events. `test_hud_snapping.gd` still reports the saved-placement failure already documented by the incoming work. Headless sandbox runs report user-log/certificate access errors.
+
+**Decision needed.** The incoming `GAME_RULES.md` says enemy swings lock their direction and hit within a telegraphed cone, but incoming `scripts/enemy.gd` tracks the player during windup and uses a radial range check at impact; ordinary swings do not draw a cone. This discrepancy predates the local merge. Keep the merged behavior pending a decision whether to implement the written directional telegraph or adopt the current radial behavior as the rule.
+
+## 2026-10-28 - Direction-locked enemy attack telegraphs
+
+**Intent.** Resolve the post-merge rule/implementation discrepancy according to the user's choice: telegraphed, direction-locked attacks.
+
+**Changed.** `scripts/enemy.gd` commits basic attacks to a fixed origin, direction, 100-degree sector and reach at windup start. It draws a red terrain-fitted sector for the full 0.8/0.9/1.0 s normal/quest/boss windup, prevents turning and sidestepping through the swing, applies damage only inside the committed sector, and removes the marker on impact or interruption/death. Combat logging records windups and hit/miss events. The boss slam remains circular and uses the same 5.5 m radius for the marker and horizontal hit check. `scripts/world_builder.gd` exposes the actual rendered terrain triangle height for ground overlays rather than resampling the analytic height. `tests/test_enemy_telegraphs.gd` checks the sector edges, locked facing and origin, movement out of danger, hit, death cleanup and boss circle; `tests/test_world.gd` independently checks surface interpolation against the terrain mesh.
+
+**Verified.** Enemy telegraph, world, progression, combat effects and training-minion tests passed. Direct3D 12 rendered the telegraph in a 1600×900 test frame, and a normal test-mode launch exited 0 with no script errors. The runtime log recorded windups and hit/miss events with no error events. A headless microbenchmark of 20 telegraph creations improved from about 60 ms with analytic height queries to about 6 ms using the terrain grid on this machine; this is not a frame-time guarantee. Headless sandbox reports user-log/certificate access errors.
+
+**Risk / follow-up.** The fixed 100-degree cone and 0.8/0.9/1.0 s windups are initial tuning values; playtest the feel on slopes and against groups. Terrain overlays are tessellated approximations of the sector and surface. The existing HUD saved-placement test failure remains unrelated.

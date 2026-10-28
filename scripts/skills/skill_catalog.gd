@@ -5,6 +5,7 @@ extends Resource
 const EVENTS := ["PASSIVE", "ON_BEGIN_CAST", "ON_FINISH_CAST", "ON_ENEMY_HIT_THIS_SKILL", "ON_ALLY_HIT", "ON_HIT_TAKEN", "ON_BUFF_RECEIVED", "ON_THIS_BUFF_EXPIRED", "ON_DEATH", "ON_PROJECTILE_LAUNCHED", "ON_PROJECTILE_LANDED", "ON_PROJECTILE_DAMAGE_RECEIVED", "ON_MELEE_DAMAGE_RECEIVED", "ON_CHAIN", "ON_CHAIN_HIT", "ON_CHAIN_END", "ON_BLOCK", "ON_SUCCESSFUL_EVADE", "ON_KILL", "ON_CRITICAL_HIT"]
 const OPERATIONS := ["power", "area", "range", "duration", "efficiency", "tempo", "projectiles", "chain", "pierce", "echo", "burst", "field", "bolt", "weaken", "empower", "recover", "leech", "mantle", "barrier", "exploit", "legacy"]
 const TYPES := ["melee_cone", "melee_area", "melee_projectile", "cast_cone", "cast_area_self", "cast_area_target", "cast_projectile", "cast_projectile_area", "channel_ray", "channel_projectiles", "dash", "cast_effect"]
+const TIERS := ["basic", "rare", "epic", "legendary", "mythical"]
 const PASSIVE_OPS := ["power", "area", "range", "duration", "efficiency", "tempo", "projectiles", "chain", "pierce", "echo", "exploit", "legacy"]
 const REACTIONS := ["ON_HIT_TAKEN", "ON_PROJECTILE_DAMAGE_RECEIVED", "ON_MELEE_DAMAGE_RECEIVED", "ON_BLOCK", "ON_SUCCESSFUL_EVADE", "ON_DEATH"]
 const EVENT_TAGS := {"ON_ENEMY_HIT_THIS_SKILL":"hit", "ON_ALLY_HIT":"heal", "ON_PROJECTILE_LAUNCHED":"projectile", "ON_PROJECTILE_LANDED":"projectile", "ON_CHAIN":"chain", "ON_CHAIN_HIT":"chain", "ON_CHAIN_END":"chain", "ON_KILL":"damage", "ON_CRITICAL_HIT":"hit", "ON_THIS_BUFF_EXPIRED":"duration", "ON_BUFF_RECEIVED":"buff"}
@@ -26,6 +27,7 @@ func validate() -> PackedStringArray:
 		if float(skill.get("interval", 0)) < 0.05: errors.append(id + ": interval must be at least 0.05 s")
 	for id: String in data.modifiers:
 		var m: Dictionary = data.modifiers[id]
+		if str(m.get("tier", "basic")) not in TIERS: errors.append(id + ": invalid enchantment tier")
 		for field in ["name", "family", "op"]:
 			if not m.get(field) is String or str(m.get(field, "")).is_empty(): errors.append(id + ": missing " + field)
 		for field in ["requires", "excludes", "provides"]:
@@ -101,6 +103,7 @@ func _number(value: Variant) -> bool:
 
 func valid_roll(value: Variant) -> bool:
 	if not value is Dictionary or not value.get("op") in OPERATIONS or not value.get("event") in EVENTS or not value.get("values") is Dictionary: return false
+	if value.has("tier") and str(value.tier) not in TIERS: return false
 	for field in ["family","name"]:
 		if not value.get(field) is String: return false
 	for amount: Variant in value.values.values():
@@ -112,6 +115,14 @@ func valid_roll(value: Variant) -> bool:
 	if value.op in ["weaken","empower"] and (not value.values.has("duration") or not value.values.has("stacks")): return false
 	if value.op=="mantle" and (not value.values.has("duration") or not value.values.has("radius")): return false
 	return true
+
+func tier_of(modifier: Dictionary) -> String:
+	var tier := str(modifier.get("tier", ""))
+	if tier in TIERS: return tier
+	var definition: Variant = data.get("modifiers", {}).get(str(modifier.get("id", "")), {})
+	if definition is Dictionary and str(definition.get("tier", "")) in TIERS:
+		return str(definition.tier)
+	return "basic"
 
 func capabilities(id: String, installed: Array = []) -> Array:
 	var caps: Array = data.skills[id].get("tags", []).duplicate()
@@ -261,7 +272,7 @@ func compile(id: String, installed: Array) -> Dictionary:
 	return result
 
 func describe(m: Dictionary, skill_id: String = "", installed: Array = []) -> String:
-	var parts: Array[String] = [str(m.get("name", "Evolution")), str(m.get("event", "PASSIVE")).replace("ON_", "").replace("_", " ").capitalize()]
+	var parts: Array[String] = ["%s · %s" % [str(m.get("name", "Evolution")), tier_of(m).capitalize()], str(m.get("event", "PASSIVE")).replace("ON_", "").replace("_", " ").capitalize()]
 	if m.op not in PASSIVE_OPS:
 		var chance_text:=("%.1f" % (float(m.get("chance",1))*100)).trim_suffix(".0")
 		parts.insert(1,"%s%% chance to %s" % [chance_text,effect_name(m)])

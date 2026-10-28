@@ -1,4 +1,6 @@
 Game Design Overview: Hardcore Classic MMO (Lineage 2 Spirit × PoE Skill Depth)
+Current prototype enemy attacks: basic swings commit to a fixed 100-degree terrain-marked sector with 0.8/0.9/1.0 second normal/quest/boss windups; the boss slam uses a 5.5 m warning and hit radius.
+Current prototype character selection: Human, Orc, Elf, Dark Elf and Dwarf may each select Fighter or Mystic as identity. Race/class-specific stats, skills and models remain future design work. Each local character uses a separate save; the original journey remains selectable.
 1. Core Vision & Pillars
 Hardcore Grind & Risk: Classic high-stakes progression, open-world dynamics, and real penalties for death.
 Deep Customization: Path of Exile-inspired skill trees and item modifier pools layered on top of classic Lineage 2 class/archetype structures.
@@ -27,6 +29,7 @@ Mages / Ranged Spells: AoE and single-target elemental/arcane damage.
 Support / Priests: Healers, purifiers, and defensive mitigation.
 Shamans (Buffers): Dedicated stat-enhancers and party enablers.
 4. Skill System & Skill Tree Evolution
+Prototype tiers: authored enchantments are classified Basic, Rare, Epic, Legendary or Mythical by effect power and complexity. Their values and offer weights are authored separately; tier labels do not apply automatic multipliers.
 Current local prototype: ten equipped slots and up to ten stages of saved modifier offers per skill. The earlier five-slot and three-branch design below remains a design reference; see GAME_RULES.md and Documentation/SKILL_SYSTEM_IMPLEMENTED.md for implemented behavior.
 Skill Point Cap & Starting Loadout
 Hard Cap: Maximum of 50 Skill Points total across the character’s life.

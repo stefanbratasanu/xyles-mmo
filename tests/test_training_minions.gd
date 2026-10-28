@@ -6,7 +6,19 @@ func _initialize() -> void:
 func _run() -> void:
 	var game: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game)
-	game.hud.toggle_panel("debug")
+	game.debug_keys = {"invulnerable": KEY_F2, "heal": KEY_F3, "spawn": KEY_F4, "panel": KEY_F1}
+	var panel_key := InputEventKey.new()
+	panel_key.physical_keycode = KEY_F1
+	panel_key.pressed = true
+	game._unhandled_input(panel_key)
+	check_panel(game.hud.current_panel == "debug", "Panel shortcut opens debug")
+	game._unhandled_input(panel_key)
+	check_panel(game.hud.current_panel.is_empty(), "Panel shortcut closes debug")
+	game.ui_text_input = true
+	game._unhandled_input(panel_key)
+	check_panel(game.hud.current_panel.is_empty(), "Panel shortcut is suppressed in chat")
+	game.ui_text_input = false
+	game._unhandled_input(panel_key)
 	await process_frame
 	assert(game.hud.is_panel_open() and not game.hud.blocks_gameplay())
 	var w_down := InputEventKey.new()
@@ -31,6 +43,18 @@ func _run() -> void:
 	assert(game.debug_keys["heal"] == KEY_F7)
 	assert(not game.set_debug_key("spawn", KEY_F7))
 	assert(not game.set_debug_key("spawn", KEY_W))
+	assert(not game.set_debug_key("panel", KEY_F7))
+	game.hud._start_debug_rebind("panel")
+	var panel_rebind := InputEventKey.new()
+	panel_rebind.physical_keycode = KEY_F11
+	panel_rebind.pressed = true
+	assert(game.hud._capture_debug_key(panel_rebind))
+	assert(game.debug_keys["panel"] == KEY_F11)
+	game._unhandled_input(panel_rebind)
+	assert(game.hud.current_panel.is_empty())
+	game._unhandled_input(panel_rebind)
+	assert(game.hud.current_panel == "debug")
+	assert(game.set_debug_key("panel", KEY_F1))
 	var config := ConfigFile.new()
 	config.set_value("debug_keys", "heal", KEY_F11)
 	game._load_debug_keys(config)
@@ -39,6 +63,11 @@ func _run() -> void:
 	game._load_debug_keys(config)
 	assert(game.debug_keys["heal"] == KEY_F11)
 	assert(game.set_debug_key("heal", KEY_F7))
+	var old_config := ConfigFile.new()
+	old_config.set_value("debug_keys", "heal", KEY_F1)
+	game._load_debug_keys(old_config)
+	assert(game.debug_keys["heal"] == KEY_F1 and game.debug_keys["panel"] != KEY_F1)
+	game.debug_keys = {"invulnerable": KEY_F2, "heal": KEY_F7, "spawn": KEY_F4, "panel": KEY_F1}
 	game.state.hp = 5.0
 	game._unhandled_input(rebind)
 	assert(game.state.hp >= game.state.max_hp)
@@ -123,3 +152,6 @@ func _run() -> void:
 	await process_frame
 	print("PASS: debug controls, time, training minions, scaling, rewards and cleanup")
 	quit()
+
+func check_panel(ok: bool, message: String) -> void:
+	assert(ok, message)

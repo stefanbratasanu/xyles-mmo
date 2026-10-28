@@ -79,6 +79,9 @@ func _test_terrain() -> void:
 			var h: float = world.height_at(float(x_step), float(z_step))
 			assert(is_finite(h), "height is not finite at (%d, %d)" % [x_step, z_step])
 			assert(h > -40.0 and h < 60.0, "height %.1f out of range at (%d, %d)" % [h, x_step, z_step])
+			var sample_x := float(x_step) + 0.37
+			var sample_z := float(z_step) + 0.63
+			assert(absf(world.surface_height_at(sample_x, sample_z) - _rendered_height(sample_x, sample_z)) < 0.001, "ground overlay height must match the terrain mesh")
 	# Rolling, not flat: the central 40 m must contain real elevation changes.
 	var lowest: float = INF
 	var highest: float = -INF
