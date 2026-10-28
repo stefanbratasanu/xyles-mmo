@@ -10,6 +10,8 @@ var gait: float = 0.0
 var strike: float = 0.0
 var wolf: bool = false
 var boar: bool = false
+var creature_rig: Skeleton3D
+var creature_bones: Dictionary = {}
 var base_color: Color
 
 func _mat(color: Color, metal: float = 0.0, glow: float = 0.0) -> StandardMaterial3D:
@@ -153,7 +155,11 @@ func _load_creature(file_name: String, fur_tint: Color) -> bool:
 	# The Blender-built wolf/boar carry a UV-unwrapped fur/hide texture. Keep the
 	# procedural primitive build below as a fallback so a missing or failed GLB
 	# can never leave a normal enemy invisible.
-	var packed: PackedScene = load("res://assets/models/creatures/" + file_name) as PackedScene
+	var path := "res://assets/models/creatures/" + file_name
+	var rigged_path := path.trim_suffix(".glb") + "_rigged.glb"
+	if ResourceLoader.exists(rigged_path):
+		path = rigged_path
+	var packed: PackedScene = load(path) as PackedScene
 	if packed == null:
 		return false
 	var model := packed.instantiate()
@@ -161,6 +167,11 @@ func _load_creature(file_name: String, fur_tint: Color) -> bool:
 		return false
 	add_child(model)
 	_apply_fur_cards(model, fur_tint)
+	var rigs := model.find_children("*", "Skeleton3D", true, false)
+	if not rigs.is_empty():
+		creature_rig = rigs[0] as Skeleton3D
+		for bone_name: String in ["front_left", "front_right", "hind_left", "hind_right", "head"]:
+			creature_bones[bone_name] = creature_rig.find_bone(bone_name)
 	return true
 
 
@@ -233,10 +244,18 @@ func animate(delta: float, speed_value: float, attacking: bool = false) -> void:
 	if attacking:
 		strike = 1.0
 	if wolf or boar:
-		position.y = absf(sin(gait)) * minf(speed_value * 0.03, 0.12)
+		position.y = absf(sin(gait * 2.0)) * minf(speed_value * 0.012, 0.035)
+		if is_instance_valid(creature_rig):
+			# Diagonal leg pairs move together in a trot; amplitude fades at rest.
+			var step: float = sin(gait) * minf(speed_value / 2.3, 1.0) * (0.25 if boar else 0.36)
+			_pose_creature_bone("front_left", step)
+			_pose_creature_bone("hind_right", step)
+			_pose_creature_bone("front_right", -step)
+			_pose_creature_bone("hind_left", -step)
+			_pose_creature_bone("head", -sin(strike * PI) * (0.12 if boar else 0.20))
 		if boar:
 			# A heavy roll in the shoulders sells the charge without a rig.
-			rotation.z = sin(gait * 0.5) * minf(speed_value * 0.018, 0.08)
+			rotation.z = sin(gait * 0.5) * minf(speed_value * 0.010, 0.045)
 		return
 	if left_leg:
 		var angle: float = sin(gait) * minf(speed_value * 0.13, 0.6)
@@ -246,3 +265,10 @@ func animate(delta: float, speed_value: float, attacking: bool = false) -> void:
 		right_arm.rotation.x = angle * 0.5 - sin(strike * PI) * 2.1
 		right_arm.rotation.z = sin(strike * PI) * -0.9
 		cloak.rotation.x = -0.14 - absf(angle) * 0.3
+
+
+func _pose_creature_bone(bone_name: String, angle: float) -> void:
+	var index: int = int(creature_bones.get(bone_name, -1))
+	if index >= 0:
+		var rest: Quaternion = creature_rig.get_bone_rest(index).basis.get_rotation_quaternion()
+		creature_rig.set_bone_pose_rotation(index, rest * Quaternion(Vector3.RIGHT, angle))

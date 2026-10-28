@@ -6,6 +6,17 @@ func _initialize() -> void:
 func _run() -> void:
 	var game: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game)
+	# Test-mode UI controls must not overwrite the player's real settings file.
+	var settings_path: String = game.SETTINGS_PATH
+	var settings_existed := FileAccess.file_exists(settings_path)
+	var settings_before := FileAccess.get_file_as_bytes(settings_path) if settings_existed else PackedByteArray()
+	var old_sensitivity: float = game.camera_sensitivity
+	game.camera_sensitivity = 0.123
+	game.save_settings()
+	assert(FileAccess.file_exists(settings_path) == settings_existed, "test mode created or deleted player settings")
+	if settings_existed:
+		assert(FileAccess.get_file_as_bytes(settings_path) == settings_before, "test mode overwrote player settings")
+	game.camera_sensitivity = old_sensitivity
 	game.debug_keys = {"invulnerable": KEY_F2, "heal": KEY_F3, "spawn": KEY_F4, "panel": KEY_F1}
 	var panel_key := InputEventKey.new()
 	panel_key.physical_keycode = KEY_F1

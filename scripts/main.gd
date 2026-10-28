@@ -47,6 +47,7 @@ var master_volume: float = 1.0
 ## WorldEnvironment live so the player sees the change before closing the menu.
 var glow_enabled: bool = true
 var ssao_enabled: bool = true
+var ssao_strength: int = 1
 var camera_focus := Vector3.ZERO
 var region_name: String = "EMBERFALL VALE"
 var context_hint: String = ""
@@ -130,7 +131,7 @@ func _ready() -> void:
 	if world.get_child_count() == 0:
 		world.build()
 	if world.has_method("apply_graphics_settings"):
-		world.apply_graphics_settings(glow_enabled, ssao_enabled)
+		world.apply_graphics_settings(glow_enabled, ssao_enabled, ssao_strength)
 	game_log.world("world_ready", {
 		"build_ms": Time.get_ticks_msec() - world_started,
 		"children": world.get_child_count(),
@@ -403,9 +404,13 @@ func _load_settings() -> void:
 	camera_reverse_vertical = bool(config.get_value("camera", "reverse_vertical", true))
 	camera_sensitivity = clampf(float(config.get_value("camera", "sensitivity", camera_sensitivity)), 0.001, 0.015)
 	master_volume = clampf(float(config.get_value("audio", "master_volume", master_volume)), 0.0, 1.0)
+	_load_graphics_settings(config)
+	_load_debug_keys(config)
+
+func _load_graphics_settings(config: ConfigFile) -> void:
 	glow_enabled = bool(config.get_value("graphics", "glow", glow_enabled))
 	ssao_enabled = bool(config.get_value("graphics", "ambient_occlusion", ssao_enabled))
-	_load_debug_keys(config)
+	ssao_strength = clampi(int(config.get_value("graphics", "ambient_occlusion_strength", 1)), 1, 3)
 
 func _load_debug_keys(config: ConfigFile) -> void:
 	var saved_keys: Dictionary = debug_keys.duplicate()
@@ -427,15 +432,23 @@ func _load_debug_keys(config: ConfigFile) -> void:
 	debug_keys = saved_keys
 
 func save_settings() -> void:
+	# Automated and preview runs may toggle graphics or rebind debug keys; they
+	# must never overwrite the player's real settings on close or panel changes.
+	if test_mode:
+		return
 	var config := ConfigFile.new()
 	config.set_value("camera", "reverse_vertical", camera_reverse_vertical)
 	config.set_value("camera", "sensitivity", camera_sensitivity)
 	config.set_value("audio", "master_volume", master_volume)
-	config.set_value("graphics", "glow", glow_enabled)
-	config.set_value("graphics", "ambient_occlusion", ssao_enabled)
+	_store_graphics_settings(config)
 	for action: String in debug_keys:
 		config.set_value("debug_keys", action, debug_keys[action])
 	config.save(SETTINGS_PATH)
+
+func _store_graphics_settings(config: ConfigFile) -> void:
+	config.set_value("graphics", "glow", glow_enabled)
+	config.set_value("graphics", "ambient_occlusion", ssao_enabled)
+	config.set_value("graphics", "ambient_occlusion_strength", ssao_strength)
 
 func _debug_key_available(key: int) -> bool:
 	if key == KEY_NONE or (key >= KEY_0 and key <= KEY_9): return false
@@ -472,6 +485,7 @@ func reset_settings() -> void:
 	master_volume = 1.0
 	glow_enabled = true
 	ssao_enabled = true
+	ssao_strength = 1
 	if is_instance_valid(audio):
 		audio.set_master_volume(master_volume)
 	_apply_graphics_settings()
@@ -480,7 +494,7 @@ func reset_settings() -> void:
 
 func _apply_graphics_settings() -> void:
 	if is_instance_valid(world) and world.has_method("apply_graphics_settings"):
-		world.apply_graphics_settings(glow_enabled, ssao_enabled)
+		world.apply_graphics_settings(glow_enabled, ssao_enabled, ssao_strength)
 
 
 func set_glow_enabled(enabled: bool) -> void:
@@ -495,6 +509,12 @@ func set_ssao_enabled(enabled: bool) -> void:
 	_apply_graphics_settings()
 	save_settings()
 	game_log.ui("graphics_option", {"option": "ambient_occlusion", "enabled": enabled})
+
+func set_ssao_strength(strength: int) -> void:
+	ssao_strength = clampi(strength, 1, 3)
+	_apply_graphics_settings()
+	save_settings()
+	game_log.ui("graphics_option", {"option": "ambient_occlusion_strength", "strength": ssao_strength})
 
 
 func _update_camera(delta: float) -> void:

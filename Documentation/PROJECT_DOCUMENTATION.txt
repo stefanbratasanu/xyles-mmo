@@ -1,5 +1,5 @@
 Game Design Overview: Hardcore Classic MMO (Lineage 2 Spirit × PoE Skill Depth)
-Current prototype enemy attacks: basic swings commit to a fixed 100-degree terrain-marked sector with 0.8/0.9/1.0 second normal/quest/boss windups; the boss slam uses a 5.5 m warning and hit radius.
+Current prototype enemy attacks: wolves and boars commit to a compact locked-point bite or gore in front of the animal; boars can also charge in a straight lane. The boss commits to a locked slam point with a 5.5 m warning and hit radius.
 Current prototype character selection: Human, Orc, Elf, Dark Elf and Dwarf may each select Fighter or Mystic as identity. Race/class-specific stats, skills and models remain future design work. Each local character uses a separate save; the original journey remains selectable.
 1. Core Vision & Pillars
 Hardcore Grind & Risk: Classic high-stakes progression, open-world dynamics, and real penalties for death.

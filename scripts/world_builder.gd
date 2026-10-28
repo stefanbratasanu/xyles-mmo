@@ -117,6 +117,7 @@ var day_number: int = 1
 ## exactly what the environment received.
 var glow_enabled: bool = true
 var ssao_enabled: bool = true
+var ssao_strength: int = 1
 
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _hills: FastNoiseLite
@@ -129,6 +130,10 @@ var _terrain_colors: PackedColorArray = PackedColorArray()
 var _terrain_grid_size: int = 0
 var _map_cache: ImageTexture
 var _tree_points: Array[Vector2] = []
+## Shared spatial grid for every forest and foothill trunk. The conservative
+## clearance covers the widest scaled trunk flare and the authored trunk lean.
+const TREE_TRUNK_CLEARANCE := 3.2
+var _tree_spacing_cells: Dictionary = {}
 ## Every point a grass tuft was placed at. The test driver runs headless, where a
 ## MultiMesh does not hand its transforms back from the rendering server, so the
 ## road-exclusion check reads this audit trail instead.
@@ -167,6 +172,7 @@ func build() -> void:
 	_night_lights.clear()
 	road_lamps.clear()
 	_tree_points.clear()
+	_tree_spacing_cells.clear()
 	grass_points.clear()
 	_tree_base.clear()
 	_prop_meshes.clear()
@@ -809,7 +815,7 @@ func _create_atmosphere() -> void:
 	_environment.fog_aerial_perspective = 0.35
 	_environment.ssao_enabled = ssao_enabled
 	_environment.ssao_radius = 1.5
-	_environment.ssao_intensity = 1.5
+	_environment.ssao_intensity = 1.5 * ssao_strength
 	_environment.ssao_power = 1.4
 	_environment.ssao_detail = 0.5
 	_environment.ssao_light_affect = 0.12
@@ -856,13 +862,15 @@ func _create_atmosphere() -> void:
 ## Applies the Graphics options from Settings without a world rebuild. Both
 ## effects are per-scene Environment flags, so toggling them is immediate and
 ## costs nothing until the next frame.
-func apply_graphics_settings(use_glow: bool, use_ssao: bool) -> void:
+func apply_graphics_settings(use_glow: bool, use_ssao: bool, ao_strength: int = 1) -> void:
 	glow_enabled = use_glow
 	ssao_enabled = use_ssao
+	ssao_strength = clampi(ao_strength, 1, 3)
 	if _environment == null:
 		return
 	_environment.glow_enabled = glow_enabled
 	_environment.ssao_enabled = ssao_enabled
+	_environment.ssao_intensity = 1.5 * ssao_strength
 
 
 func _apply_time_of_day() -> void:
@@ -1568,6 +1576,19 @@ func _outskirt_tree(point: Vector2) -> String:
 	return "oak" if _rng.randf() < 0.55 else "birch"
 
 
+func _reserve_tree_position(point: Vector2) -> bool:
+	var cell := Vector2i(floori(point.x / TREE_TRUNK_CLEARANCE), floori(point.y / TREE_TRUNK_CLEARANCE))
+	for dx: int in range(-1, 2):
+		for dz: int in range(-1, 2):
+			for existing: Vector2 in _tree_spacing_cells.get(cell + Vector2i(dx, dz), []):
+				if point.distance_squared_to(existing) < TREE_TRUNK_CLEARANCE * TREE_TRUNK_CLEARANCE:
+					return false
+	if not _tree_spacing_cells.has(cell):
+		_tree_spacing_cells[cell] = []
+	(_tree_spacing_cells[cell] as Array).append(point)
+	return true
+
+
 func _create_vegetation() -> void:
 	_reseed(9917)
 	var transforms: Dictionary = {"oak": [], "birch": [], "pine": [], "dead": []}
@@ -1588,6 +1609,8 @@ func _create_vegetation() -> void:
 			var kind: String = _pick_tree(zone)
 			var scale_value: float = _rng.randf_range(0.92, 1.34)
 			var basis: Basis = Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale_value)
+			if not _reserve_tree_position(point):
+				continue
 			var at: Vector3 = _ground_lowest(point.x, point.y, 0.45)
 			# The per-kind base offset is applied when the instances are built, so
 			# this is only a shallow bed for the root flare, not a burial.
@@ -1618,6 +1641,8 @@ func _create_vegetation() -> void:
 		var kind: String = _outskirt_tree(point)
 		var scale_value: float = _rng.randf_range(0.86, 1.24)
 		var basis: Basis = Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale_value)
+		if not _reserve_tree_position(point):
+			continue
 		at.y -= 0.05
 		(transforms[kind] as Array).append(Transform3D(basis, at))
 		_tree_points.append(point)
@@ -2053,6 +2078,8 @@ func _create_distant_landscape() -> void:
 			continue
 		var scale_value: float = _rng.randf_range(0.95, 1.45)
 		var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale_value)
+		if not _reserve_tree_position(point):
+			continue
 		var at := _ground_lowest(point.x, point.y, 0.45)
 		at.y -= 0.05
 		entries.append(Transform3D(basis, at))

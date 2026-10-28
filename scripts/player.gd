@@ -3,6 +3,7 @@ extends CharacterBody3D
 const CHARACTER_SCENE = preload("res://assets/animations/player_runtime/character.tscn")
 const PROTOF_ANIMATIONS = preload("res://assets/animations/player_runtime/protof_animations.tres")
 const SWORD_MODEL = preload("res://assets/animations/player_runtime/sword.tscn")
+const ORNATE_SWORD_MODEL = preload("res://assets/models/weapons/ornate_silver_sword.glb")
 const GREATSWORD_MODEL = preload("res://assets/animations/player_runtime/greatsword.tscn")
 const STAFF_MODEL = preload("res://assets/animations/player_runtime/staff.tscn")
 const SPEAR_MODEL = preload("res://assets/animations/player_runtime/spear.tscn")
@@ -20,6 +21,7 @@ var authored_animation_speeds: Dictionary = {}
 var weapon_attachment: BoneAttachment3D
 var weapon_visual: Node3D
 var weapon_style := "unarmed"
+var weapon_visual_variant := ""
 var action_active := false
 var is_dying := false
 var destination := Vector3.ZERO
@@ -369,26 +371,32 @@ func support_animation(attack_type: String = "cast_effect") -> void:
 
 func update_equipment(equipment: Array) -> void:
 	var next_style := "unarmed"
+	var next_variant := ""
 	for item: Dictionary in equipment:
 		if str(item.get("slot", "")) == "weapon":
 			var item_name := str(item.get("name", "")).to_lower()
 			next_style = str(item.get("weapon_type",""))
 			if next_style not in AnimationProfiles.WEAPONS:
 				next_style = "spear" if "spear" in item_name or "polearm" in item_name else ("staff" if "staff" in item_name else ("greatsword" if "greatblade" in item_name or "greatsword" in item_name else "sword"))
+			if next_style == "sword" and str(item.get("visual_id", "")) == "ornate_silver_sword":
+				next_variant = "ornate_silver_sword"
 			break
-	if next_style == weapon_style:
+	if next_style == weapon_style and next_variant == weapon_visual_variant:
 		return
 	weapon_style = next_style
+	weapon_visual_variant = next_variant
 	if is_instance_valid(weapon_visual):
 		weapon_visual.queue_free()
 		weapon_visual = null
 	if weapon_attachment != null and weapon_style != "unarmed":
-		weapon_visual = create_weapon_visual(weapon_style)
+		weapon_visual = create_weapon_visual(weapon_style, weapon_visual_variant)
 		weapon_attachment.add_child(weapon_visual)
 		weapon_visual.visible = not sitting
 
-func create_weapon_visual(style: String) -> Node3D:
+func create_weapon_visual(style: String, variant: String = "") -> Node3D:
 	var scene: PackedScene={"greatsword":GREATSWORD_MODEL,"staff":STAFF_MODEL,"spear":SPEAR_MODEL}.get(style,SWORD_MODEL)
+	if style == "sword" and variant == "ornate_silver_sword":
+		scene = ORNATE_SWORD_MODEL
 	var model:=scene.instantiate() as Node3D
 	var blade_direction := (Vector3(0.07,0,1) if style=="greatsword" else Vector3(0.25,-0.06,.96)).normalized()
 	model.quaternion=Quaternion(Vector3.UP,blade_direction)

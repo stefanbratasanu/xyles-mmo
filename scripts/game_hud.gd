@@ -850,6 +850,20 @@ func _render_settings() -> void:
 	ao_check.add_theme_font_size_override("font_size", 13)
 	ao_check.toggled.connect(_set_ssao_enabled)
 	graphics_column.add_child(ao_check)
+	var ao_row: HBoxContainer = HBoxContainer.new()
+	ao_row.add_theme_constant_override("separation", 14)
+	graphics_column.add_child(ao_row)
+	var ao_label: Label = _label("CONTACT SHADOW STRENGTH", 11, MUTED)
+	ao_label.custom_minimum_size.x = 220
+	ao_row.add_child(ao_label)
+	var ao_strength: OptionButton = OptionButton.new()
+	ao_strength.name = "AmbientOcclusionStrength"
+	ao_strength.focus_mode = Control.FOCUS_NONE
+	for strength in range(1, 4):
+		ao_strength.add_item("%d×" % strength)
+	ao_strength.select(int(game.ssao_strength) - 1)
+	ao_strength.item_selected.connect(_set_ssao_strength)
+	ao_row.add_child(ao_strength)
 	graphics_column.add_child(_label("TURN BOTH OFF ON A SLOW GPU", 9, MUTED))
 
 	var audio_card: PanelContainer = _panel(Color("121f25"))
@@ -1111,6 +1125,9 @@ func _set_glow_enabled(enabled: bool) -> void:
 
 func _set_ssao_enabled(enabled: bool) -> void:
 	game.set_ssao_enabled(enabled)
+
+func _set_ssao_strength(index: int) -> void:
+	game.set_ssao_strength(index + 1)
 
 
 func _set_camera_sensitivity(value: float, readout: Label) -> void:

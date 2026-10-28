@@ -26,6 +26,7 @@ Design notes (why the shapes are built this way):
 import math
 import os
 import random
+import sys
 
 import bmesh
 import bpy
@@ -464,11 +465,11 @@ def build_pine():
     parts = [trunk]
     add_roots(parts, "Pine", height, trunk_radius, bark, lean, count=5)
     cards = []
-    tiers = 16
+    tiers = 24
     for index in range(tiers):
         t = float(index) / float(tiers - 1)
-        z = 1.70 + t * 8.60
-        radius = 2.35 * (1.0 - t) ** 0.82 + 0.26
+        z = 1.70 + t * 9.95
+        radius = 2.35 * (1.0 - t) ** 0.82 + 0.08
         center_spine = spine_point(z / height, height, lean, bend)
         # Horizontal needle fronds radiating from the tier: these catch the
         # top-down camera angle and build the classic fir silhouette. Many short
@@ -481,7 +482,7 @@ def build_pine():
             outward = Vector((math.cos(angle), math.sin(angle), 0.0))
             across = Vector((-math.sin(angle), math.cos(angle), 0.0))
             length = radius * random.uniform(0.88, 1.12)
-            width = random.uniform(0.46, 0.70) * (0.78 + 0.30 * (1.0 - t))
+            width = random.uniform(0.46, 0.70) * (0.78 + 0.30 * (1.0 - t)) * max(0.55, 1.0 - 0.45 * t)
             center = Vector((center_spine.x, center_spine.y, z))
             center += outward * (radius * random.uniform(0.18, 0.36))
             center.z += random.uniform(-0.10, 0.10)
@@ -501,19 +502,12 @@ def build_pine():
             across = Vector((-math.sin(angle), math.cos(angle), 0.0))
             center = Vector((center_spine.x, center_spine.y, z + 0.06))
             center += outward * (radius * random.uniform(0.12, 0.30))
-            width = random.uniform(0.48, 0.68) * (0.82 + 0.22 * (1.0 - t))
+            width = random.uniform(0.48, 0.68) * (0.82 + 0.22 * (1.0 - t)) * max(0.55, 1.0 - 0.45 * t)
             half_right = across * (width * 0.5)
-            half_up = Vector((0.0, 0.0, random.uniform(0.38, 0.58)))
+            half_up = Vector((0.0, 0.0, random.uniform(0.38, 0.58) * max(0.55, 1.0 - 0.45 * t)))
             cards.append((center, half_right, half_up, True))
-    # Crown spire: crossed upright cards close the top instead of a bare pole.
-    top = spine_point(1.0, height, lean, bend)
-    for index in range(4):
-        angle = math.tau * float(index) / 4.0 + 0.35
-        outward = Vector((math.cos(angle), math.sin(angle), 0.0))
-        center = top + Vector((0.0, 0.0, -0.55))
-        half_right = outward * 0.48
-        half_up = Vector((0.0, 0.0, 0.95))
-        cards.append((center, half_right, half_up))
+    # The narrowing upper tiers meet the trunk tip. Avoid the oversized crossed
+    # crown cards, which appeared as a detached upright tuft above the tree.
     foliage = card_mesh("PineNeedles", cards, needles)
     return join(parts, "PineBark"), foliage
 
@@ -577,7 +571,10 @@ def finish_asset(name, joined):
     print("EXPORTED", path, "tris", tris)
 
 
+pine_only = "--pine-only" in sys.argv
 for tree_name in ("oak", "birch", "pine", "dead"):
+    if pine_only and tree_name == "dead":
+        break
     clear_scene()
     if tree_name == "oak":
         bark, foliage = build_oak()
@@ -598,4 +595,7 @@ for tree_name in ("oak", "birch", "pine", "dead"):
     else:
         joined = objects[0]
     joined.name = "Tree_" + tree_name
-    finish_asset(tree_name, joined)
+    # Build earlier trees to preserve the deterministic random sequence but do
+    # not overwrite their existing exports during a pine-only edit.
+    if not pine_only or tree_name == "pine":
+        finish_asset(tree_name, joined)

@@ -36,6 +36,13 @@ func _run() -> void:
 	check(is_equal_approx(point.y, game.world.height_at(point.x, point.z) + 0.02),
 		"The bite target is projected onto the ground")
 	check(is_instance_valid(wolf.telegraph), "Windup displays a telegraph")
+	var initial_distance: float = Vector2(point.x - wolf.global_position.x, point.z - wolf.global_position.z).length()
+	check(wolf.strike_radius <= initial_distance - 0.18 + 0.001,
+		"The wolf's attack patch does not extend behind it")
+	check(initial_distance + wolf.strike_radius <= wolf._reach() + 0.55 + 0.001,
+		"The wolf's attack patch stays close to its reach")
+	check(is_equal_approx((wolf.telegraph.mesh as CylinderMesh).top_radius, wolf.strike_radius),
+		"The visible bite patch matches its hit radius")
 	check(wolf.telegraph.global_position.distance_to(point) < 0.1,
 		"The telegraph marks the locked point")
 	var locked_yaw: float = wolf.visual.rotation.y
@@ -61,6 +68,28 @@ func _run() -> void:
 	before = game.state.hp
 	wolf._finish_attack()
 	check(game.state.hp < before, "Standing on the locked point takes damage")
+
+	game.player.global_position = wolf.global_position + Vector3(1.0, 0.0, 0.0)
+	wolf._begin_attack()
+	game.player.global_position = wolf.global_position - wolf.locked_dir * 0.4
+	before = game.state.hp
+	wolf._finish_attack()
+	check(is_equal_approx(game.state.hp, before), "A player behind the wolf is safe")
+
+	var boar: CharacterBody3D = game.enemies[1]
+	boar.global_position = point
+	game.player.global_position = point + Vector3(1.6, 0.0, 0.0)
+	boar._begin_attack()
+	check(boar.attack_type == "bite", "Nearby boar uses a close gore, not a charge")
+	var boar_distance: float = Vector2(boar.locked_point.x - boar.global_position.x, boar.locked_point.z - boar.global_position.z).length()
+	check(boar.strike_radius <= boar_distance - 0.18 + 0.001,
+		"The boar's gore patch does not extend behind it")
+	check(is_equal_approx((boar.telegraph.mesh as CylinderMesh).top_radius, boar.strike_radius),
+		"The visible gore patch matches its hit radius")
+	game.player.global_position = boar.global_position - boar.locked_dir * 0.4
+	before = game.state.hp
+	boar._finish_attack()
+	check(is_equal_approx(game.state.hp, before), "A player behind the boar is safe")
 
 	wolf._begin_attack()
 	wolf.take_damage(wolf.hp + 1.0)

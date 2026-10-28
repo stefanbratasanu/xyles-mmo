@@ -787,6 +787,8 @@ func _validated_saved_item(value: Variant) -> Dictionary:
 	if slot=="weapon":
 		result.weapon_type=item_weapon_type(value)
 		result.icon=WEAPON_DEFINITIONS[result.weapon_type].icon
+		if result.weapon_type == "sword" and str(value.get("visual_id", "")) == "ornate_silver_sword":
+			result.visual_id = "ornate_silver_sword"
 	return result
 
 

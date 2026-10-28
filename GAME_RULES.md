@@ -75,6 +75,8 @@ file is the shorter contract used during implementation.
 - Trees, bushes and stones are original Blender GLBs. Every tree is exported
   with its pivot at the base and planted on the sampled terrain height, so roots
   and trunks are never buried or floating.
+- Forest and foothill tree centres keep at least 3.2 m of clearance, including
+  across zone boundaries. Canopies can overlap, but trunks must not touch.
 - **A tree trunk is one continuous lofted mesh**, roots included. Do not rebuild
   a tree by stacking cylinder segments; the seams and kinks are visible.
 - **Foliage is modelled, not painted on a cone.** Crowns and bushes use
@@ -136,6 +138,8 @@ file is the shorter contract used during implementation.
   and must stay switchable under **Settings → Graphics**; the choice persists in
   `saves/settings.cfg` under `[graphics]`. Never make a gameplay signal, damage
   number or UI element depend on either effect.
+- Ambient occlusion strength is selectable at 1×, 2× or 3×, with 1× preserving
+  the original intensity. Its selection persists even while the effect is off.
 - There is **no minimap**. `M` opens a full-screen, square **painted map**
   rendered from the same height and colour grids as the terrain: hillshade,
   contours every 4 m, forest canopy from real tree positions, ponds, roads and
@@ -199,6 +203,9 @@ file is the shorter contract used during implementation.
   charge in a straight, committed lane that a sidestep avoids. The boss slam
   lands on a circle at its locked point. Telegraph and damage always use the
   same locked point.
+- Normal bites and gores use a compact circular contact area constrained to
+  the front and close reach of the animal. Their visible warning uses the same
+  radius as their hit area; a player behind the animal is safe.
 - **Creatures are modelled, not bare primitives.** Wolves and boars are
   UV-unwrapped Blender GLBs with a textured pelt, a three-part eye (dark socket,
   offset amber iris, black pupil), modelled extremities and alpha-card fur

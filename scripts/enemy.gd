@@ -250,7 +250,9 @@ func _physics_process(delta: float) -> void:
 	# A mob wedged on a boulder or pinned by the player used to keep pushing into
 	# the obstacle forever. After half a second without progress, sidestep.
 	var moved: float = Vector2(global_position.x - last_position.x, global_position.z - last_position.z).length()
-	if wants_move and moved < 0.02 and not winding_up:
+	# Compare displacement with elapsed time; a fixed per-frame distance made
+	# healthy movement look stuck at high frame rates and caused random sidesteps.
+	if wants_move and moved < delta * 0.12 and not winding_up:
 		stuck_timer += delta
 	else:
 		stuck_timer = 0.0
@@ -342,6 +344,11 @@ func _begin_attack() -> void:
 		locked_dir = Vector3.FORWARD
 	locked_dir = locked_dir.normalized()
 	strike_radius = 1.05 if species == "boar" else 0.85
+	if kind == "normal" and attack_type != "charge":
+		# Keep the whole locked bite/gore patch in front of the animal and
+		# close to its muzzle, including when the attack starts near max reach.
+		strike_radius = minf(strike_radius, maxf(0.12, distance - 0.18))
+		strike_radius = minf(strike_radius, maxf(0.12, _reach() + 0.55 - distance))
 	winding_up = true
 	attack_windup_total = 0.9 if attack_type == "charge" else (0.55 if kind == "normal" else (0.45 if kind == "quest" else 0.35))
 	attack_windup = attack_windup_total
@@ -374,6 +381,10 @@ func _finish_attack() -> void:
 	var offset: Vector3 = game.player.global_position - locked_point
 	offset.y = 0.0
 	var hit := offset.length() <= strike_radius
+	if hit and kind == "normal":
+		var from_animal: Vector3 = game.player.global_position - global_position
+		from_animal.y = 0.0
+		hit = from_animal.dot(locked_dir) > 0.0 and from_animal.length() <= _reach() + 0.55
 	game.game_log.combat("enemy_attack_resolved", {
 		"enemy": display_name,
 		"type": attack_type,
@@ -399,15 +410,16 @@ func _attack_damage() -> float:
 	return base * damage_scale
 
 
-## A short forward shove so a bite reads as a body action rather than a number
-## appearing out of nowhere. The visual is rotated to `locked_dir`, so local -Z
-## is straight at the target point.
+## A short shove along the committed world direction, not the parent's fixed
+## Z axis, so the body lunges toward the same point as the hit and warning.
 func _lunge_visual() -> void:
 	if visual == null or kind == "boss":
 		return
-	var tween := create_tween()
-	tween.tween_property(visual, "position:z", -0.38, 0.07).set_trans(Tween.TRANS_QUAD)
-	tween.tween_property(visual, "position:z", 0.0, 0.18).set_trans(Tween.TRANS_BACK)
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(visual, "position:x", locked_dir.x * 0.32, 0.07).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(visual, "position:z", locked_dir.z * 0.32, 0.07).set_trans(Tween.TRANS_QUAD)
+	tween.chain().tween_property(visual, "position:x", 0.0, 0.18).set_trans(Tween.TRANS_BACK)
+	tween.parallel().tween_property(visual, "position:z", 0.0, 0.18).set_trans(Tween.TRANS_BACK)
 
 
 func _start_charge() -> void:
@@ -515,7 +527,7 @@ func _build_attack_telegraph() -> void:
 	if attack_type == "charge":
 		telegraph = _line_telegraph(global_position, locked_point + locked_dir * 4.5, 1.35, color, 0.20)
 	else:
-		telegraph = _disc_telegraph(locked_point, strike_radius + 0.20, color, 0.22)
+		telegraph = _disc_telegraph(locked_point, strike_radius, color, 0.22)
 	if is_instance_valid(telegraph):
 		_telegraph_mat = telegraph.material_override as StandardMaterial3D
 

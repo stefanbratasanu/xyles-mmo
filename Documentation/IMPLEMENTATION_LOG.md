@@ -678,3 +678,19 @@ merge; this pass did not touch that work.
 **Verified.** Headless enemy-telegraph, training-minion, character, world, progression, combat-effects, skill-panel, skill-catalog, skill-runtime and distribution-editor tests passed. A 300-frame headless test-mode launch exited 0 without script/parse errors. The remote-check script reported no new commits since its checkpoint.
 
 **Risk / follow-up.** This pass did not perform a visual or interactive playtest. The previously documented HUD saved-placement failure remains outside scope. GitHub Desktop's UI could not be captured for inspection.
+
+## 2026-10-29 - Forest spacing, creature motion and sword
+
+**Intent.** Repair pine crowns and overlapping trunks, inspect ambient occlusion and creature movement, narrow attacks, and create the requested longer sword without a paid generation service.
+
+**Changed.** Regenerated the script-built pine with tapering foliage and applied a spatial-grid minimum tree-center clearance to all forest placement paths. Blender scripts derive separate rigged wolf and boar assets from the original static models; runtime poses animate their legs and heads. Locked-point bite/gore areas now stay in front within reach, their markers match the hit radius, lunges follow the locked direction and stuck detection scales with frame time. The boar charge and boss slam retain their existing roles. Added an original procedural silver sword model and persistent visual identifier; equipped it on the selected local journey character and preserved the old equipped item in inventory, with a pre-edit backup under `logs/sword_swap_backup/`. Test-mode shutdown no longer saves player settings. Added `.gdignore` to the preserved merge backup so its old GDScript files do not register duplicate global classes.
+
+**Verified.** Headless tests covered sword equipment and persistence, enemy telegraphs, world spacing, training minions, combat effects, progression and animation selection. Direct3D 12 previews of the sword, pine and multiple creature walk poses were inspected. A static SSAO on/off render showed contact darkening with the existing settings; the forest comparison was subtle and inconclusive, so the settings were retained. Godot imported the assets, but still produced an existing empty-name editor diagnostic.
+
+**Risk / follow-up.** The new creature weights and procedural gait are approximate, and interactive gameplay testing is needed for locomotion, attack timing and appearance. The single watermarked reference does not expose all of the sword's 3D details; the model is an original approximation. The save edit applies only to the local selected character and is not shared through Git. Existing HUD saved-placement follow-up remains.
+
+## 2026-10-29 - Ambient occlusion strength
+
+**Changed.** Added 1×, 2× and 3× contact-shadow intensity to Settings → Graphics. It applies live, persists with the other graphics settings, defaults to the original 1× for older settings, and remains selected when ambient occlusion is switched off. Reset returns it to 1×.
+
+**Verified.** The world test checked all levels, toggling, defaults, bounds and configuration storage/loading. A Direct3D 12 preview verified the settings control and its live effect on the environment; the layout was inspected at 1600×900.

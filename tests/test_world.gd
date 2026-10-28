@@ -26,6 +26,7 @@ func _run() -> void:
 
 	_test_zones()
 	_test_forest_families()
+	_test_tree_spacing()
 	_test_terrain()
 	_test_water()
 	_test_waygate()
@@ -114,6 +115,21 @@ func _test_forest_families() -> void:
 			assert(kind == "dead" or kind == "pine", "fen outskirt grew a %s" % kind)
 		else:
 			assert(kind == "oak" or kind == "birch", "wood outskirt grew a %s" % kind)
+
+
+func _test_tree_spacing() -> void:
+	# Check every reserved trunk, including the foothill belt, independently of
+	# the placement helper. Nearby canopies may overlap; trunks must not.
+	var points: Array[Vector2] = []
+	for cell: Variant in world._tree_spacing_cells:
+		for point: Vector2 in world._tree_spacing_cells[cell]:
+			points.append(point)
+	assert(points.size() > 1000, "forest lost too many trees")
+	var minimum: float = float(world.TREE_TRUNK_CLEARANCE)
+	for i: int in range(points.size()):
+		for j: int in range(i + 1, points.size()):
+			assert(points[i].distance_squared_to(points[j]) >= minimum * minimum - 0.0001,
+				"tree trunks are too close: %s / %s" % [points[i], points[j]])
 
 
 func _test_terrain() -> void:
@@ -515,6 +531,14 @@ func _test_creatures() -> void:
 			"%s is still the primitive fallback (%d triangles)" % [entry[0], triangles])
 		assert(cards > 0, "%s has no runtime fur-card material" % entry[0])
 		assert(eyes > 0, "%s has no emissive eye material" % entry[0])
+		assert(visual.creature_rig != null, "%s has no creature skeleton" % entry[0])
+		for bone: String in ["front_left", "front_right", "hind_left", "hind_right", "head"]:
+			assert(visual.creature_rig.find_bone(bone) >= 0, "%s is missing bone %s" % [entry[0], bone])
+		var leg: int = visual.creature_rig.find_bone("front_left")
+		var before: Quaternion = visual.creature_rig.get_bone_pose_rotation(leg)
+		visual.animate(0.13, 2.3)
+		assert(absf(before.dot(visual.creature_rig.get_bone_pose_rotation(leg))) < 0.9999,
+			"%s legs do not animate while moving" % entry[0])
 		visual.queue_free()
 
 
@@ -660,4 +684,24 @@ func _test_sky() -> void:
 	world.apply_graphics_settings(true, true)
 	assert(environment.glow_enabled and environment.ssao_enabled,
 		"re-enabling graphics effects did not reach the environment")
+	for strength in range(1, 4):
+		game.set_ssao_strength(strength)
+		assert(is_equal_approx(environment.ssao_intensity, 1.5 * strength), "AO strength must update immediately")
+	game.set_ssao_enabled(false)
+	game.set_ssao_strength(3)
+	game.set_ssao_enabled(true)
+	assert(is_equal_approx(environment.ssao_intensity, 4.5), "AO strength must survive toggling")
+	var settings := ConfigFile.new()
+	game._load_graphics_settings(settings)
+	assert(game.ssao_strength == 1, "old settings should retain the original strength")
+	settings.set_value("graphics", "ambient_occlusion_strength", 2)
+	game._load_graphics_settings(settings)
+	assert(game.ssao_strength == 2, "saved AO strength should load")
+	var saved_settings := ConfigFile.new()
+	game._store_graphics_settings(saved_settings)
+	assert(saved_settings.get_value("graphics", "ambient_occlusion_strength") == 2, "AO strength should be stored")
+	settings.set_value("graphics", "ambient_occlusion_strength", 99)
+	game._load_graphics_settings(settings)
+	assert(game.ssao_strength == 3, "AO strength should be bounded")
+	game.set_ssao_strength(1)
 
