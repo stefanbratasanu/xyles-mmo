@@ -23,11 +23,29 @@ var boss_timer: float = 5.0
 var winding_up: bool = false
 var telegraph: MeshInstance3D
 var wander_offset: float = 0.0
+var level_min: int = 1
+var level_max: int = 3
+var level: int = 2
+var power: float = 1.0
+var damage_scale: float = 1.0
+
+
+## Called by main.gd before the enemy enters the tree. The zone band decides how
+## much health and damage the same species has in each region, so a Briarwolf in
+## the sanctum is not the tutorial wolf from the vale.
+func configure_zone(zone: Dictionary) -> void:
+	level_min = int(zone.get("level_min", 1))
+	level_max = int(zone.get("level_max", 3))
+	level = int(round((float(level_min) + float(level_max)) * 0.5))
+	var ramp: float = maxf(0.0, float(level) - 2.0) * 0.18
+	power = 1.0 + ramp * (0.42 if kind == "boss" else 1.0)
+	damage_scale = 0.7 + power * 0.35
+
 
 func _ready() -> void:
 	collision_layer = 4
 	collision_mask = 1
-	max_hp = 64.0 if kind == "normal" else (200.0 if kind == "quest" else 850.0)
+	max_hp = (64.0 if kind == "normal" else (200.0 if kind == "quest" else 850.0)) * power
 	hp = max_hp
 	var scale_value: float = 1.0 if kind == "normal" else (1.35 if kind == "quest" else 2.45)
 	var shape := CollisionShape3D.new()
@@ -48,7 +66,7 @@ func _ready() -> void:
 	selected_ring.visible = false
 	add_child(selected_ring)
 	name_label = Label3D.new()
-	name_label.text = display_name
+	name_label.text = "%s  ·  Lv %d" % [display_name, level]
 	name_label.position.y = 1.9 * scale_value + 0.3
 	name_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	name_label.font_size = 29 if kind == "boss" else 24
@@ -157,7 +175,7 @@ func _physics_process(delta: float) -> void:
 		elif attack_timer <= 0 and not winding_up:
 			attack_timer = 1.7 if kind != "boss" else 2.3
 			visual.strike = 1.0
-			game.damage_player(7.0 if kind == "normal" else (12.0 if kind == "quest" else 18.0), self)
+			game.damage_player((7.0 if kind == "normal" else (12.0 if kind == "quest" else 18.0)) * damage_scale, self)
 		if kind == "boss":
 			boss_timer -= delta
 			if boss_timer <= 0 and not winding_up:
@@ -195,7 +213,7 @@ func _begin_slam() -> void:
 		if not dead:
 			game.burst(global_position + Vector3.UP * 0.1, Color("ba7dc4"), 5.5)
 			if game.player.global_position.distance_to(global_position) < 5.8:
-				game.damage_player(36.0, self)
+				game.damage_player(36.0 * damage_scale, self)
 		winding_up = false
 		if is_instance_valid(telegraph):
 			telegraph.queue_free()

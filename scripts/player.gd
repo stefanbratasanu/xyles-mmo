@@ -120,7 +120,7 @@ func _physics_process(delta: float) -> void:
 	invulnerable_time = maxf(0, invulnerable_time - delta)
 	dash_time = maxf(0, dash_time - delta)
 	var input_dir := Vector2.ZERO
-	var controls_enabled: bool = not game.hud.is_panel_open() and not game.is_dead
+	var controls_enabled: bool = not game.hud.is_panel_open() and not game.is_dead and not bool(game.get("ui_text_input"))
 	if controls_enabled:
 		input_dir = Vector2(float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)), float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W)))
 	if sitting:
@@ -142,7 +142,7 @@ func _physics_process(delta: float) -> void:
 	if input_dir.length() > 0.0:
 		moving_to_click = false
 		direction = Vector3(input_dir.x, 0, input_dir.y).rotated(Vector3.UP, game.camera_yaw).normalized()
-	elif moving_to_click and not sitting and not game.hud.is_panel_open() and not game.is_dead:
+	elif moving_to_click and not sitting and not game.hud.is_panel_open() and not game.is_dead and not bool(game.get("ui_text_input")):
 		var offset := destination - global_position
 		offset.y = 0
 		if offset.length() > 0.3:
@@ -186,10 +186,13 @@ func _physics_process(delta: float) -> void:
 	elif is_on_floor() and was_airborne:
 		was_airborne = false
 		_play_action("protof/greatsword_LandingLight2HandMelee" if weapon_style == "greatsword" else "protof/land")
-	position.x = clampf(position.x, -34.0, 34.0)
-	position.z = clampf(position.z, -34.0, 34.0)
-	if position.y < -4.0:
-		position = game.world.player_spawn
+	var world_limit: float = float(game.world.BOUNDS) - 1.0
+	position.x = clampf(position.x, -world_limit, world_limit)
+	position.z = clampf(position.z, -world_limit, world_limit)
+	if position.y < -6.0:
+		game.game_log.gameplay("fell_out_of_world", {"from": "(%.1f, %.1f, %.1f)" % [position.x, position.y, position.z]})
+		position = game.world.player_spawn + Vector3.UP * 0.4
+		velocity = Vector3.ZERO
 	if direction.length_squared() > 0.01:
 		move_direction = direction
 		var facing_yaw: float = game.camera_yaw if input_dir.length_squared() > 0.0 and dash_time <= 0.0 else atan2(-direction.x, -direction.z)
