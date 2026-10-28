@@ -12,74 +12,94 @@ class_name XylesWorldBuilder
 ## same definitions drive region detection, terrain colour, enemy levels, tree
 ## selection and the full-screen world map: one source of truth.
 
-const BOUNDS := 74.0
-const TERRAIN_EXTENT := 96.0
-const TERRAIN_SEGMENTS := 128
-const EDGE_FADE_START := 78.0
+## Map I is ~296 m across, roughly four times the area of the first pass. All
+## authored coordinates below are written at this scale; the terrain mesh simply
+## covers more ground around them.
+const BOUNDS := 148.0
+const TERRAIN_EXTENT := 224.0
+const TERRAIN_SEGMENTS := 288
+## Beyond the playable square the height field rises into a mountain rim. The rim
+## is part of the terrain mesh, not a ring of separate cones, so peaks, slopes and
+## collision all agree with the ground the player sees.
+const RIM_START := 160.0
+const RIM_END := 200.0
+const RIM_HEIGHT := 32.0
+## After the crest the height falls away again so the square edge of the terrain
+## mesh hides behind the range instead of cutting a straight line across the sky.
+const RIM_FALL_START := 206.0
+const RIM_FALL_END := 223.0
 const ROAD_WIDTH := 3.7
 const ROAD_LIFT := 0.055
 const DAY_SECONDS := 900.0
 
 const GRASS_TEXTURE := preload("res://assets/textures/terrain_grass.png")
+const GRASS_BLADES := preload("res://assets/textures/grass_blades.png")
 const ROAD_TEXTURE := preload("res://assets/textures/terrain_road.png")
 const BARK_TEXTURE := preload("res://assets/textures/bark.png")
 const LEAF_TEXTURE := preload("res://assets/textures/leaves.png")
 const NEEDLE_TEXTURE := preload("res://assets/textures/needles.png")
 
-var player_spawn: Vector3 = Vector3(-16.0, 0.0, 17.5)
-var camp_position: Vector3 = Vector3(-18.0, 0.0, 16.0)
-var quest_spawn: Vector3 = Vector3(30.0, 0.0, -26.0)
-var boss_spawn: Vector3 = Vector3(-24.0, 0.0, -44.0)
-var smith_position: Vector3 = Vector3(-15.4, 0.0, 11.4)
-var waygate_position: Vector3 = Vector3(-52.0, 0.0, -66.0)
+var player_spawn: Vector3 = Vector3(-32.0, 0.0, 35.0)
+var camp_position: Vector3 = Vector3(-36.0, 0.0, 32.0)
+var quest_spawn: Vector3 = Vector3(60.0, 0.0, -52.0)
+var boss_spawn: Vector3 = Vector3(-48.0, 0.0, -88.0)
+var smith_position: Vector3 = Vector3(-30.8, 0.0, 23.2)
+var waygate_position: Vector3 = Vector3(-104.0, 0.0, -132.0)
 var waygate_radius: float = 8.0
 var normal_spawns: Array[Vector3] = [
-	Vector3(-6.0, 0.0, 10.0), Vector3(12.0, 0.0, 18.0),
-	Vector3(-34.0, 0.0, 2.0), Vector3(-46.0, 0.0, -18.0),
-	Vector3(38.0, 0.0, 18.0), Vector3(46.0, 0.0, -6.0),
-	Vector3(32.0, 0.0, -18.0), Vector3(42.0, 0.0, -36.0),
-	Vector3(-8.0, 0.0, -60.0), Vector3(-36.0, 0.0, -34.0)]
+	Vector3(-12.0, 0.0, 20.0), Vector3(24.0, 0.0, 36.0),
+	Vector3(-68.0, 0.0, 4.0), Vector3(-92.0, 0.0, -36.0),
+	Vector3(76.0, 0.0, 36.0), Vector3(92.0, 0.0, -12.0),
+	Vector3(64.0, 0.0, -36.0), Vector3(84.0, 0.0, -72.0),
+	Vector3(-16.0, 0.0, -120.0), Vector3(-72.0, 0.0, -68.0)]
 
 ## Level band and visual identity of each region. Areas are uneven but
-## comparable; the central vale is the starting zone.
+## comparable; the central vale is the starting zone. `relief` scales the local
+## rolling noise and `rocks` controls how stony the biome is, so the five regions
+## differ physically as well as in colour.
 var zones: Array[Dictionary] = [
 	{
 		"id": "vale", "name": "EMBERFALL VALE", "subtitle": "The wayfarer's hearth",
-		"level_min": 1, "level_max": 3, "center": Vector2(0.0, 8.0),
-		"radius": 34.0, "phase": 0.4, "elevation": 0.0, "tree_count": 80,
+		"level_min": 1, "level_max": 3, "center": Vector2(0.0, 16.0),
+		"radius": 68.0, "phase": 0.4, "elevation": 0.0, "relief": 0.95,
+		"tree_count": 320, "rock_count": 10, "grass_count": 7000,
 		"ground": Color("7c8a53"), "accent": Color("c7a96b"),
 		"trees": {"oak": 0.50, "birch": 0.35, "pine": 0.15},
 		"description": "Rolling meadow and the survivor camp. Safe for new wayfarers.",
 	},
 	{
 		"id": "thornwood", "name": "THORNWOOD", "subtitle": "Where the old forest closes",
-		"level_min": 4, "level_max": 6, "center": Vector2(-46.0, -2.0),
-		"radius": 33.0, "phase": 2.2, "elevation": 0.7, "tree_count": 96,
-		"ground": Color("4f6c3e"), "accent": Color("8a6a4a"),
+		"level_min": 4, "level_max": 6, "center": Vector2(-92.0, -4.0),
+		"radius": 66.0, "phase": 2.2, "elevation": 0.9, "relief": 1.15,
+		"tree_count": 384, "rock_count": 14, "grass_count": 8500,
+		"ground": Color("445f37"), "accent": Color("8a6a4a"),
 		"trees": {"oak": 0.45, "birch": 0.35, "pine": 0.20},
 		"description": "Dense oak and birch. The canopy keeps the ground dark.",
 	},
 	{
 		"id": "fen", "name": "ASHEN FEN", "subtitle": "Still water, patient things",
-		"level_min": 7, "level_max": 9, "center": Vector2(42.0, 14.0),
-		"radius": 32.0, "phase": 4.1, "elevation": -1.4, "tree_count": 58,
-		"ground": Color("5c6b60"), "accent": Color("7f9a86"),
+		"level_min": 7, "level_max": 9, "center": Vector2(84.0, 28.0),
+		"radius": 64.0, "phase": 4.1, "elevation": -1.6, "relief": 0.32,
+		"tree_count": 192, "rock_count": 8, "grass_count": 1900,
+		"ground": Color("55665b"), "accent": Color("7f9a86"),
 		"trees": {"dead": 0.55, "pine": 0.25, "birch": 0.20},
 		"description": "Shallow black ponds and dead trees. Movement is exposed.",
 	},
 	{
 		"id": "arch", "name": "THE BROKEN ARCH", "subtitle": "A monastery that lost its oath",
-		"level_min": 10, "level_max": 12, "center": Vector2(36.0, -40.0),
-		"radius": 32.0, "phase": 1.1, "elevation": 2.8, "tree_count": 66,
+		"level_min": 10, "level_max": 12, "center": Vector2(72.0, -80.0),
+		"radius": 64.0, "phase": 1.1, "elevation": 3.0, "relief": 1.30,
+		"tree_count": 264, "rock_count": 30, "grass_count": 3800,
 		"ground": Color("857a5c"), "accent": Color("b09a6c"),
 		"trees": {"pine": 0.60, "oak": 0.20, "dead": 0.20},
 		"description": "High stone terraces, broken columns and cold pines.",
 	},
 	{
 		"id": "sanctum", "name": "CROWNLESS SANCTUM", "subtitle": "The sealed gate watches",
-		"level_min": 13, "level_max": 15, "center": Vector2(-26.0, -50.0),
-		"radius": 37.0, "phase": 5.3, "elevation": 2.0, "tree_count": 58,
-		"ground": Color("44575c"), "accent": Color("79a79b"),
+		"level_min": 13, "level_max": 15, "center": Vector2(-52.0, -100.0),
+		"radius": 74.0, "phase": 5.3, "elevation": 4.2, "relief": 1.05,
+		"tree_count": 232, "rock_count": 26, "grass_count": 3200,
+		"ground": Color("3f5257"), "accent": Color("79a79b"),
 		"trees": {"dead": 0.55, "pine": 0.30, "oak": 0.15},
 		"description": "The highest ground. The dormant waygate stands in its corner.",
 	},
@@ -93,6 +113,13 @@ var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _hills: FastNoiseLite
 var _detail: FastNoiseLite
 var _mottle: FastNoiseLite
+var _ridge: FastNoiseLite
+var _ridge_detail: FastNoiseLite
+var _terrain_heights: PackedFloat32Array = PackedFloat32Array()
+var _terrain_colors: PackedColorArray = PackedColorArray()
+var _terrain_grid_size: int = 0
+var _map_cache: ImageTexture
+var _tree_points: Array[Vector2] = []
 var _sites: Array[Dictionary] = []
 var _ponds: Array[Dictionary] = []
 var _road_cells: Dictionary = {}
@@ -120,6 +147,7 @@ func build() -> void:
 	_road_cells.clear()
 	_materials.clear()
 	_flames.clear()
+	_tree_points.clear()
 	_init_noise()
 	_init_sites()
 	_init_ponds()
@@ -193,31 +221,50 @@ func _init_noise() -> void:
 	_hills = FastNoiseLite.new()
 	_hills.seed = 9127
 	_hills.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	_hills.frequency = 0.0115
+	_hills.frequency = 0.0068
 	_hills.fractal_type = FastNoiseLite.FRACTAL_FBM
-	_hills.fractal_octaves = 4
-	_hills.fractal_gain = 0.5
-	_hills.fractal_lacunarity = 2.05
+	_hills.fractal_octaves = 3
+	_hills.fractal_gain = 0.46
+	_hills.fractal_lacunarity = 2.0
 	_detail = FastNoiseLite.new()
 	_detail.seed = 4413
 	_detail.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	_detail.frequency = 0.055
+	_detail.frequency = 0.028
 	_detail.fractal_type = FastNoiseLite.FRACTAL_FBM
-	_detail.fractal_octaves = 3
-	_detail.fractal_gain = 0.55
+	_detail.fractal_octaves = 2
+	_detail.fractal_gain = 0.5
 	_mottle = FastNoiseLite.new()
 	_mottle.seed = 7821
 	_mottle.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	_mottle.frequency = 0.32
+	_ridge = FastNoiseLite.new()
+	_ridge.seed = 6151
+	_ridge.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	_ridge.frequency = 0.011
+	_ridge.fractal_type = FastNoiseLite.FRACTAL_RIDGED
+	_ridge.fractal_octaves = 4
+	_ridge.fractal_gain = 0.55
+	_ridge.fractal_lacunarity = 2.2
+	_ridge_detail = FastNoiseLite.new()
+	_ridge_detail.seed = 2243
+	_ridge_detail.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	_ridge_detail.frequency = 0.052
+	_ridge_detail.fractal_type = FastNoiseLite.FRACTAL_RIDGED
+	_ridge_detail.fractal_octaves = 3
+	_ridge_detail.fractal_gain = 0.5
 
 
 func _init_sites() -> void:
 	# Flattened pads keep the hand-built landmarks readable on rolling ground.
 	_sites = [
-		{"center": Vector2(-18.0, 16.0), "radius": 9.5, "blend": 7.0, "kind": "camp"},
-		{"center": Vector2(30.0, -26.0), "radius": 10.0, "blend": 7.0, "kind": "quest"},
-		{"center": Vector2(-24.0, -44.0), "radius": 11.5, "blend": 8.0, "kind": "boss"},
-		{"center": Vector2(-52.0, -66.0), "radius": 8.5, "blend": 7.0, "kind": "waygate"},
+		{"center": Vector2(-36.0, 32.0), "radius": 9.5, "blend": 7.0, "kind": "camp"},
+		{"center": Vector2(60.0, -52.0), "radius": 10.0, "blend": 7.0, "kind": "quest"},
+		{"center": Vector2(-48.0, -88.0), "radius": 11.5, "blend": 8.0, "kind": "boss"},
+		{"center": Vector2(-104.0, -132.0), "radius": 8.5, "blend": 7.0, "kind": "waygate"},
+		# The hand-built monastery and sanctum need their own flat pads and a
+		# tree-free apron, or the forest grows through the terrace and pillars.
+		{"center": Vector2(72.0, -80.0), "radius": 10.5, "blend": 7.0, "kind": "arch"},
+		{"center": Vector2(-52.0, -100.0), "radius": 9.5, "blend": 7.0, "kind": "sanctum"},
 	]
 	for site: Dictionary in _sites:
 		var center: Vector2 = site["center"]
@@ -226,9 +273,9 @@ func _init_sites() -> void:
 
 func _init_ponds() -> void:
 	for spec: Dictionary in [
-		{"center": Vector2(50.0, 2.0), "radius": 7.0},
-		{"center": Vector2(35.0, -4.0), "radius": 5.2},
-		{"center": Vector2(47.0, 24.0), "radius": 4.4},
+		{"center": Vector2(100.0, 4.0), "radius": 8.5},
+		{"center": Vector2(70.0, -8.0), "radius": 6.5},
+		{"center": Vector2(94.0, 48.0), "radius": 5.5},
 	]:
 		var center: Vector2 = spec["center"]
 		var radius: float = spec["radius"]
@@ -237,12 +284,12 @@ func _init_ponds() -> void:
 
 
 func _finalize_spawns() -> void:
-	player_spawn = _ground(-16.0, 17.5)
-	camp_position = _ground(-18.0, 16.0)
-	quest_spawn = _ground(30.0, -26.0)
-	boss_spawn = _ground(-24.0, -44.0)
-	smith_position = _ground(-15.4, 11.6)
-	waygate_position = _ground(-52.0, -66.0)
+	player_spawn = _ground(-32.0, 35.0)
+	camp_position = _ground(-36.0, 32.0)
+	quest_spawn = _ground(60.0, -52.0)
+	boss_spawn = _ground(-48.0, -88.0)
+	smith_position = _ground(-30.8, 23.2)
+	waygate_position = _ground(-104.0, -132.0)
 	for index: int in range(normal_spawns.size()):
 		var point: Vector3 = normal_spawns[index]
 		normal_spawns[index] = _ground(point.x, point.z)
@@ -277,28 +324,35 @@ func height_at(x: float, z: float) -> float:
 		var distance: float = Vector2(x, z).distance_to(center)
 		if distance < radius + blend:
 			h = lerpf(float(site["level"]), h, smoothstep(radius, radius + blend, distance))
-	# Beyond the playable rim the land falls away into the fog so the square
-	# edge of the mesh is never visible from inside the map.
+	# Beyond the playable rim the land rises into a mountain range. Because this
+	# lives in the same height function as the forest floor, the peaks are real
+	# terrain: they cast shadows, collide and fade into the fog with everything
+	# else instead of hovering as separate cones.
 	var edge: float = maxf(absf(x), absf(z))
-	if edge > EDGE_FADE_START:
-		h = lerpf(h, -12.0, smoothstep(EDGE_FADE_START, TERRAIN_EXTENT, edge))
+	if edge > RIM_START:
+		var rim: float = smoothstep(RIM_START, RIM_END, edge)
+		var back: float = 1.0 - smoothstep(RIM_FALL_START, RIM_FALL_END, edge)
+		var ridge_value: float = clampf(_ridge.get_noise_2d(x, z) * 0.5 + 0.5, 0.0, 1.0)
+		var crag_value: float = clampf(_ridge_detail.get_noise_2d(x, z) * 0.5 + 0.5, 0.0, 1.0)
+		h += rim * rim * back * (RIM_HEIGHT * (0.52 + 0.78 * ridge_value) + 9.0 * crag_value)
 	return h
 
 
 func _raw_height(x: float, z: float) -> float:
 	var p := Vector2(x, z)
-	var h: float = _hills.get_noise_2d(x, z) * 7.2
-	h += _detail.get_noise_2d(x, z) * 1.1
-	h *= 0.62 + 0.38 * clampf(p.distance_to(Vector2(0.0, 8.0)) / 38.0, 0.0, 1.0)
+	var h: float = _hills.get_noise_2d(x, z) * 3.1
+	h += _detail.get_noise_2d(x, z) * 0.62
 	var bias_sum: float = 0.0
+	var relief_sum: float = 0.0
 	var weight_sum: float = 0.0
 	for zone: Dictionary in zones:
 		var metric: float = maxf(_zone_metric(zone, p), 0.05)
 		var weight: float = 1.0 / pow(metric, 4.0)
 		bias_sum += float(zone["elevation"]) * weight
+		relief_sum += float(zone.get("relief", 1.0)) * weight
 		weight_sum += weight
 	if weight_sum > 0.0:
-		h += bias_sum / weight_sum
+		h = h * (relief_sum / weight_sum) + bias_sum / weight_sum
 	return h
 
 
@@ -346,6 +400,146 @@ func zone_level_text(zone: Dictionary) -> String:
 ## Read-only access to the fen pools for the full-screen map.
 func ponds() -> Array[Dictionary]:
 	return _ponds
+
+
+## World-space rectangle shown by the full-screen map. The mountain rim is left
+## out: the map is about the ground the player can walk, not the scenery wall.
+func map_bounds() -> Rect2:
+	return Rect2(Vector2(-BOUNDS - 6.0, -BOUNDS - 6.0), Vector2((BOUNDS + 6.0) * 2.0, (BOUNDS + 6.0) * 2.0))
+
+
+## Paints the real height field and vertex colours into a square map texture.
+## Height shading, rock and biome tint all come from the same grid the terrain
+## mesh uses, so the map looks like the land instead of like traced blobs.
+func map_texture(size: int = 640) -> ImageTexture:
+	if _map_cache != null:
+		return _map_cache
+	var count: int = _terrain_grid_size
+	if count < 2 or _terrain_heights.is_empty():
+		return null
+	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var bounds := map_bounds()
+	var raster_step: float = (TERRAIN_EXTENT * 2.0) / float(count - 1)
+	var light := Vector3(-0.55, 0.72, -0.42).normalized()
+	# Trunk positions become soft density masses, so the painted map shows where
+	# the forest actually closes instead of a uniform green wash.
+	var density_size: int = 96
+	var density := PackedFloat32Array()
+	density.resize(density_size * density_size)
+	for point: Vector2 in _tree_points:
+		var dx: int = int((point.x - bounds.position.x) / bounds.size.x * float(density_size))
+		var dz: int = int((point.y - bounds.position.y) / bounds.size.y * float(density_size))
+		if dx < 0 or dz < 0 or dx >= density_size or dz >= density_size:
+			continue
+		density[dz * density_size + dx] += 1.0
+	for pass_index: int in range(3):
+		var blurred := PackedFloat32Array()
+		blurred.resize(density.size())
+		for dz: int in range(density_size):
+			for dx: int in range(density_size):
+				var total: float = 0.0
+				var samples: int = 0
+				for oy: int in range(-1, 2):
+					for ox: int in range(-1, 2):
+						var sx: int = dx + ox
+						var sz: int = dz + oy
+						if sx < 0 or sz < 0 or sx >= density_size or sz >= density_size:
+							continue
+						total += density[sz * density_size + sx]
+						samples += 1
+				blurred[dz * density_size + dx] = total / float(maxi(samples, 1))
+		density = blurred
+	for py: int in range(size):
+		var z: float = bounds.position.y + (float(py) + 0.5) / float(size) * bounds.size.y
+		var gz: float = (z + TERRAIN_EXTENT) / raster_step
+		for px: int in range(size):
+			var x: float = bounds.position.x + (float(px) + 0.5) / float(size) * bounds.size.x
+			var gx: float = (x + TERRAIN_EXTENT) / raster_step
+			var base: Color = _sample_color_grid(gx, gz)
+			var h_left: float = _sample_height_grid(gx - 1.0, gz)
+			var h_right: float = _sample_height_grid(gx + 1.0, gz)
+			var h_down: float = _sample_height_grid(gx, gz - 1.0)
+			var h_up: float = _sample_height_grid(gx, gz + 1.0)
+			var normal := Vector3(h_left - h_right, raster_step * 2.0, h_down - h_up).normalized()
+			var shade: float = clampf(normal.dot(light), 0.0, 1.0) * 0.58 + 0.52
+			var point := Vector2(x, z)
+			var forest: float = clampf(_mottle.get_noise_2d(x, z) * 0.5 + 0.5, 0.0, 1.0)
+			base = base * shade * lerpf(0.90, 1.08, forest)
+			var canopy: float = _sample_density(
+				density, density_size,
+				(x - bounds.position.x) / bounds.size.x,
+				(z - bounds.position.y) / bounds.size.y)
+			base = base.lerp(Color("24351f"), clampf(canopy * 2.3, 0.0, 0.58))
+			# Topographic contours every 4 m, so the map reads as surveyed land
+			# rather than a flat colour wash.
+			var h_here: float = _sample_height_grid(gx, gz)
+			var h_west: float = _sample_height_grid(gx - 1.6, gz)
+			var h_south: float = _sample_height_grid(gx, gz - 1.6)
+			if int(floor(h_here / 4.0)) != int(floor(h_west / 4.0)) \
+					or int(floor(h_here / 4.0)) != int(floor(h_south / 4.0)):
+				base = base.darkened(0.09)
+			for pond: Dictionary in _ponds:
+				var distance: float = point.distance_to(pond["center"])
+				var radius: float = float(pond["radius"])
+				if distance < radius * 1.05:
+					var wet: float = 1.0 - smoothstep(radius * 0.72, radius * 1.05, distance)
+					base = base.lerp(Color("2f4a4b"), wet * 0.9)
+			base.a = 1.0
+			image.set_pixel(px, py, base)
+	# Stamp the trunk positions as fine stipple on top of the canopy masses.
+	for point: Vector2 in _tree_points:
+		var px: int = int((point.x - bounds.position.x) / bounds.size.x * float(size))
+		var py: int = int((point.y - bounds.position.y) / bounds.size.y * float(size))
+		for oy: int in range(-1, 2):
+			for ox: int in range(-1, 2):
+				var sx: int = px + ox
+				var sy: int = py + oy
+				if sx < 0 or sy < 0 or sx >= size or sy >= size:
+					continue
+				var current: Color = image.get_pixel(sx, sy)
+				image.set_pixel(sx, sy, current.lerp(Color("2e4227"), 0.38))
+	_map_cache = ImageTexture.create_from_image(image)
+	return _map_cache
+
+
+func _sample_density(grid: PackedFloat32Array, grid_size: int, u: float, v: float) -> float:
+	var gx: float = clampf(u, 0.0, 0.9999) * float(grid_size)
+	var gz: float = clampf(v, 0.0, 0.9999) * float(grid_size)
+	var x0: int = clampi(int(floor(gx)), 0, grid_size - 1)
+	var z0: int = clampi(int(floor(gz)), 0, grid_size - 1)
+	var x1: int = mini(x0 + 1, grid_size - 1)
+	var z1: int = mini(z0 + 1, grid_size - 1)
+	var tx: float = gx - float(x0)
+	var tz: float = gz - float(z0)
+	var top: float = lerpf(grid[z0 * grid_size + x0], grid[z0 * grid_size + x1], tx)
+	var bottom: float = lerpf(grid[z1 * grid_size + x0], grid[z1 * grid_size + x1], tx)
+	return lerpf(top, bottom, tz)
+
+
+func _sample_height_grid(gx: float, gz: float) -> float:
+	var count: int = _terrain_grid_size
+	var x0: int = clampi(int(floor(gx)), 0, count - 1)
+	var z0: int = clampi(int(floor(gz)), 0, count - 1)
+	var x1: int = mini(x0 + 1, count - 1)
+	var z1: int = mini(z0 + 1, count - 1)
+	var tx: float = clampf(gx - float(x0), 0.0, 1.0)
+	var tz: float = clampf(gz - float(z0), 0.0, 1.0)
+	var top: float = lerpf(_terrain_heights[z0 * count + x0], _terrain_heights[z0 * count + x1], tx)
+	var bottom: float = lerpf(_terrain_heights[z1 * count + x0], _terrain_heights[z1 * count + x1], tx)
+	return lerpf(top, bottom, tz)
+
+
+func _sample_color_grid(gx: float, gz: float) -> Color:
+	var count: int = _terrain_grid_size
+	var x0: int = clampi(int(floor(gx)), 0, count - 1)
+	var z0: int = clampi(int(floor(gz)), 0, count - 1)
+	var x1: int = mini(x0 + 1, count - 1)
+	var z1: int = mini(z0 + 1, count - 1)
+	var tx: float = clampf(gx - float(x0), 0.0, 1.0)
+	var tz: float = clampf(gz - float(z0), 0.0, 1.0)
+	var top: Color = (_terrain_colors[z0 * count + x0] as Color).lerp(_terrain_colors[z0 * count + x1], tx)
+	var bottom: Color = (_terrain_colors[z1 * count + x0] as Color).lerp(_terrain_colors[z1 * count + x1], tx)
+	return top.lerp(bottom, tz)
 
 
 func _time_phase(hours: float) -> String:
@@ -488,7 +682,7 @@ func _create_atmosphere() -> void:
 	_sun.light_energy = 1.35
 	_sun.shadow_enabled = true
 	_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
-	_sun.directional_shadow_max_distance = 110.0
+	_sun.directional_shadow_max_distance = 150.0
 	_sun.directional_shadow_split_1 = 0.08
 	_sun.directional_shadow_split_2 = 0.22
 	_sun.directional_shadow_split_3 = 0.48
@@ -564,7 +758,7 @@ func _create_terrain() -> void:
 			var normal := Vector3(heights[left] - heights[right], 2.0 * step, heights[down] - heights[up]).normalized()
 			normals[index] = normal
 			var point := Vector2(vertices[index].x, vertices[index].z)
-			colors[index] = _terrain_color(point, normal)
+			colors[index] = _terrain_color(point, normal, heights[index])
 			uvs[index] = point * 0.085
 	var indices := PackedInt32Array()
 	for iz: int in range(TERRAIN_SEGMENTS):
@@ -594,9 +788,15 @@ func _create_terrain() -> void:
 	terrain.mesh = mesh
 	add_child(terrain)
 	terrain.create_trimesh_collision()
+	# Keep the sampled grid so the world map can paint the real terrain instead
+	# of tracing approximate biome outlines.
+	_terrain_heights = heights
+	_terrain_colors = colors
+	_terrain_grid_size = count
+	_map_cache = null
 
 
-func _terrain_color(p: Vector2, normal: Vector3) -> Color:
+func _terrain_color(p: Vector2, normal: Vector3, height_value: float) -> Color:
 	var nearest: Array[Dictionary] = []
 	var metrics: Array[float] = []
 	for zone: Dictionary in zones:
@@ -626,8 +826,14 @@ func _terrain_color(p: Vector2, normal: Vector3) -> Color:
 	var mottle: float = _mottle.get_noise_2d(p.x, p.y)
 	base = base.lerp(base.lightened(0.14), clampf(mottle * 0.5 + 0.5, 0.0, 1.0) * 0.32)
 	base = base.darkened(0.08 * clampf(mottle, 0.0, 1.0))
-	var slope: float = clampf((1.0 - normal.y) * 2.4, 0.0, 0.55)
-	base = base.lerp(Color("847f6b"), slope)
+	var slope: float = clampf((1.0 - normal.y) * 3.2, 0.0, 0.85)
+	base = base.lerp(Color("74786c"), slope)
+	# Mountains are terrain, so their colour has to climb with them: bare rock on
+	# the high slopes, pale stone on the wind-scoured peaks.
+	var altitude: float = smoothstep(11.0, 28.0, height_value)
+	base = base.lerp(Color("5c645c"), altitude * (0.34 + 0.48 * slope))
+	var alpine: float = smoothstep(34.0, 52.0, height_value)
+	base = base.lerp(Color("9aa39a"), alpine * 0.78)
 	for pond: Dictionary in _ponds:
 		var center: Vector2 = pond["center"]
 		var radius: float = pond["radius"]
@@ -646,31 +852,31 @@ func _terrain_color(p: Vector2, normal: Vector3) -> Color:
 
 func _define_roads() -> void:
 	var nodes: Dictionary = {
-		"camp": Vector2(-18.0, 16.0),
-		"camp_north": Vector2(-12.0, 26.0),
-		"vale_north": Vector2(4.0, 30.0),
-		"north_pass": Vector2(16.0, 21.0),
-		"crossroads": Vector2(0.0, 6.0),
-		"camp_west": Vector2(-32.0, 14.0),
-		"west_road": Vector2(-44.0, 4.0),
-		"thorn_deep": Vector2(-56.0, -14.0),
-		"thorn_south": Vector2(-45.0, -31.0),
-		"sanctum_road": Vector2(-28.0, -35.0),
-		"sanctum": Vector2(-24.0, -44.0),
-		"sanctum_west": Vector2(-44.0, -56.0),
-		"waygate": Vector2(-52.0, -66.0),
-		"fen_gate": Vector2(24.0, 20.0),
-		"fen_road": Vector2(38.0, 18.0),
-		"fen_deep": Vector2(52.0, 6.0),
-		"fen_south": Vector2(44.0, -14.0),
-		"arch_road": Vector2(26.0, -8.0),
-		"arch": Vector2(30.0, -26.0),
-		"arch_east": Vector2(46.0, -34.0),
-		"arch_north": Vector2(30.0, -48.0),
-		"south_vale": Vector2(-4.0, -14.0),
-		"south_pass": Vector2(-12.0, -30.0),
-		"east_vale": Vector2(16.0, 2.0),
-		"east_south": Vector2(18.0, -16.0),
+		"camp": Vector2(-36.0, 32.0),
+		"camp_north": Vector2(-24.0, 52.0),
+		"vale_north": Vector2(8.0, 60.0),
+		"north_pass": Vector2(32.0, 42.0),
+		"crossroads": Vector2(0.0, 12.0),
+		"camp_west": Vector2(-64.0, 28.0),
+		"west_road": Vector2(-88.0, 8.0),
+		"thorn_deep": Vector2(-112.0, -28.0),
+		"thorn_south": Vector2(-90.0, -62.0),
+		"sanctum_road": Vector2(-56.0, -70.0),
+		"sanctum": Vector2(-48.0, -88.0),
+		"sanctum_west": Vector2(-88.0, -112.0),
+		"waygate": Vector2(-104.0, -132.0),
+		"fen_gate": Vector2(48.0, 40.0),
+		"fen_road": Vector2(76.0, 36.0),
+		"fen_deep": Vector2(104.0, 12.0),
+		"fen_south": Vector2(88.0, -28.0),
+		"arch_road": Vector2(52.0, -16.0),
+		"arch": Vector2(60.0, -52.0),
+		"arch_east": Vector2(92.0, -68.0),
+		"arch_north": Vector2(60.0, -96.0),
+		"south_vale": Vector2(-8.0, -28.0),
+		"south_pass": Vector2(-24.0, -60.0),
+		"east_vale": Vector2(32.0, 4.0),
+		"east_south": Vector2(36.0, -32.0),
 	}
 	var edges: Array = [
 		["camp", "camp_north"], ["camp", "crossroads"], ["camp", "camp_west"],
@@ -814,9 +1020,10 @@ func _create_water() -> void:
 	for pond: Dictionary in _ponds:
 		var center: Vector2 = pond["center"]
 		var radius: float = pond["radius"]
-		var bank: MeshInstance3D = _cylinder("FenBank", Vector3(center.x, 0.0, center.y), radius * 1.04, 0.05, "earth_dark", 24)
+		var level: float = float(pond["level"])
+		var bank: MeshInstance3D = _flattened_disc("FenBank", Vector3(center.x, level + 0.03, center.y), radius * 1.04, "earth_dark", 24)
 		bank.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var water: MeshInstance3D = _cylinder("FenPool", Vector3(center.x, 0.04, center.y), radius * 0.97, 0.03, "water", 24)
+		var water: MeshInstance3D = _flattened_disc("FenPool", Vector3(center.x, level + 0.07, center.y), radius * 0.97, "water", 24)
 		water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
@@ -829,6 +1036,27 @@ func _pick_tree(zone: Dictionary) -> String:
 		if roll <= total:
 			return key
 	return "oak"
+
+
+func _inside_any_zone(point: Vector2, factor: float = 0.93) -> bool:
+	for zone: Dictionary in zones:
+		if point.distance_to(zone["center"]) < float(zone["radius"]) * factor:
+			return true
+	return false
+
+
+## The playable square is wider than the five zone blobs, so the ground between
+## the zones and the mountain rim needs its own cover. This returns the colour of
+## the closest zone so the outskirt meadow still blends into the regions.
+func _zone_ground_near(point: Vector2) -> Color:
+	var best: float = 1.0e9
+	var color := Color("6d7f4a")
+	for zone: Dictionary in zones:
+		var distance: float = point.distance_to(zone["center"]) - float(zone["radius"])
+		if distance < best:
+			best = distance
+			color = zone["ground"]
+	return color
 
 
 func _create_vegetation() -> void:
@@ -844,15 +1072,47 @@ func _create_vegetation() -> void:
 			attempts += 1
 			var direction := Vector2(cos(_rng.randf_range(0.0, TAU)), sin(_rng.randf_range(0.0, TAU)))
 			var point: Vector2 = center + direction * sqrt(_rng.randf()) * radius * 0.93
-			if absf(point.x) > 71.0 or absf(point.y) > 71.0:
+			if absf(point.x) > BOUNDS - 3.0 or absf(point.y) > BOUNDS - 3.0:
 				continue
-			if _near_road(point.x, point.y, 1) or _near_site(point, 6.0) or _in_pond(point, 1.0):
+			if _near_road(point.x, point.y, 1) or _near_site(point, 7.0) or _in_pond(point, 1.0):
 				continue
 			var kind: String = _pick_tree(zone)
-			var scale_value: float = _rng.randf_range(0.72, 1.28)
+			var scale_value: float = _rng.randf_range(0.92, 1.34)
 			var basis: Basis = Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale_value)
-			(transforms[kind] as Array).append(Transform3D(basis, _ground(point.x, point.y)))
+			var at: Vector3 = _ground(point.x, point.y)
+			# The low-poly trunks are flat at their base. Sink them a little so no
+			# daylight shows under the roots on a slope.
+			at.y -= 0.22
+			(transforms[kind] as Array).append(Transform3D(basis, at))
+			_tree_points.append(point)
 			placed += 1
+	# Continue the forest past the zone blobs. Without this the outer third of the
+	# map is bare lawn, which makes the world read as five islands in a field.
+	var outskirt_target: int = 760
+	var outskirt_placed: int = 0
+	var outskirt_attempts: int = 0
+	while outskirt_placed < outskirt_target and outskirt_attempts < outskirt_target * 16:
+		outskirt_attempts += 1
+		var point := Vector2(
+			_rng.randf_range(-BOUNDS + 4.0, BOUNDS - 4.0),
+			_rng.randf_range(-BOUNDS + 4.0, BOUNDS - 4.0))
+		if maxf(absf(point.x), absf(point.y)) < 58.0:
+			continue
+		if _inside_any_zone(point, 0.9):
+			continue
+		if _near_road(point.x, point.y, 1) or _near_site(point, 7.0) or _in_pond(point, 1.0):
+			continue
+		var at: Vector3 = _ground(point.x, point.y)
+		# Rock and scree above the treeline stay bare.
+		if at.y > 26.0:
+			continue
+		var kind: String = "pine" if _rng.randf() < 0.62 else ("oak" if _rng.randf() < 0.55 else "birch")
+		var scale_value: float = _rng.randf_range(0.86, 1.24)
+		var basis: Basis = Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale_value)
+		at.y -= 0.22
+		(transforms[kind] as Array).append(Transform3D(basis, at))
+		_tree_points.append(point)
+		outskirt_placed += 1
 	for kind: String in transforms.keys():
 		var entries: Array = transforms[kind]
 		if entries.is_empty():
@@ -902,55 +1162,111 @@ func _create_multimesh(node_name: String, mesh: Mesh, entries: Array, shadows: b
 	return node
 
 
-func _create_grass() -> void:
-	_reseed(3311)
-	var blade := ArrayMesh.new()
-	var vertices := PackedVector3Array([
-		Vector3(-0.10, 0.0, 0.0), Vector3(0.07, 0.0, 0.0), Vector3(0.01, 0.44, 0.04),
-		Vector3(0.0, 0.0, -0.09), Vector3(0.0, 0.0, 0.09), Vector3(0.03, 0.34, 0.0)])
-	var normals := PackedVector3Array([
-		Vector3.BACK, Vector3.BACK, Vector3.BACK, Vector3.RIGHT, Vector3.RIGHT, Vector3.RIGHT])
-	# Without explicit vertex colours the untextured blade renders pure white.
-	var colors := PackedColorArray([
-		Color(0.30, 0.38, 0.20), Color(0.34, 0.42, 0.22), Color(0.58, 0.68, 0.36),
-		Color(0.30, 0.38, 0.20), Color(0.34, 0.42, 0.22), Color(0.58, 0.68, 0.36)])
+func _grass_tuft_mesh() -> ArrayMesh:
+	# Three crossed alpha cards. The atlas supplies many thin, curved blades, so
+	# the silhouette stays grassy from every angle instead of reading as a cone.
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	var width := 1.12
+	var height_value := 0.72
+	for quad: int in range(3):
+		var angle: float = TAU * float(quad) / 3.0
+		var side := Vector2(cos(angle), sin(angle)) * width * 0.5
+		var base: int = vertices.size()
+		vertices.append(Vector3(-side.x, 0.0, -side.y))
+		vertices.append(Vector3(side.x, 0.0, side.y))
+		vertices.append(Vector3(side.x, height_value, side.y))
+		vertices.append(Vector3(-side.x, height_value, -side.y))
+		for point_index: int in range(4):
+			normals.append(Vector3.UP)
+		uvs.append(Vector2(0.0, 1.0))
+		uvs.append(Vector2(1.0, 1.0))
+		uvs.append(Vector2(1.0, 0.0))
+		uvs.append(Vector2(0.0, 0.0))
+		indices.append_array([base, base + 1, base + 2, base, base + 2, base + 3])
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
-	arrays[Mesh.ARRAY_COLOR] = colors
-	blade.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+func _create_grass() -> void:
+	_reseed(3311)
+	var mesh := _grass_tuft_mesh()
 	var material := StandardMaterial3D.new()
-	material.albedo_color = Color.WHITE
+	material.albedo_texture = GRASS_BLADES
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	material.alpha_scissor_threshold = 0.42
 	material.vertex_color_use_as_albedo = true
 	material.roughness = 0.95
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	blade.surface_set_material(0, material)
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	mesh.surface_set_material(0, material)
 	var entries: Array = []
 	var tints: Array[Color] = []
-	var zones_for_grass: Array[Dictionary] = [zones[0], zones[1], zones[2]]
-	for zone: Dictionary in zones_for_grass:
+	for zone: Dictionary in zones:
 		var center: Vector2 = zone["center"]
 		var radius: float = zone["radius"]
+		var target: int = int(zone.get("grass_count", 1600))
 		var placed: int = 0
 		var attempts: int = 0
-		while placed < 620 and attempts < 7000:
+		while placed < target and attempts < target * 14:
 			attempts += 1
 			var angle: float = _rng.randf_range(0.0, TAU)
 			var point: Vector2 = center + Vector2(cos(angle), sin(angle)) * sqrt(_rng.randf()) * radius * 0.94
-			if absf(point.x) > 71.0 or absf(point.y) > 71.0:
+			if absf(point.x) > BOUNDS - 2.0 or absf(point.y) > BOUNDS - 2.0:
 				continue
-			if _near_road(point.x, point.y, 0) or _near_site(point, 1.2) or _in_pond(point, 0.0):
+			if _near_road(point.x, point.y, 0) or _near_site(point, 1.4) or _in_pond(point, 0.1):
 				continue
-			var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * _rng.randf_range(0.65, 1.35))
-			entries.append(Transform3D(basis, _ground(point.x, point.y)))
-			var tint: Color = (zone["ground"] as Color).lightened(_rng.randf_range(0.0, 0.22))
+			var scale_value: float = _rng.randf_range(0.82, 1.38)
+			var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(
+				Vector3(scale_value * _rng.randf_range(0.85, 1.2), scale_value, scale_value * _rng.randf_range(0.85, 1.2)))
+			var at: Vector3 = _ground(point.x, point.y)
+			at.y -= 0.03
+			entries.append(Transform3D(basis, at))
+			var tint: Color = (zone["ground"] as Color).lightened(_rng.randf_range(0.40, 0.58))
+			tint = tint.lerp(Color("b9bd8c"), _rng.randf_range(0.06, 0.30))
 			tints.append(tint)
 			placed += 1
+	# Same for the meadow: grass has to reach the foothills, not stop at an
+	# invisible zone boundary.
+	var outskirt_target: int = 7000
+	var outskirt_placed: int = 0
+	var outskirt_attempts: int = 0
+	while outskirt_placed < outskirt_target and outskirt_attempts < outskirt_target * 8:
+		outskirt_attempts += 1
+		var point := Vector2(
+			_rng.randf_range(-BOUNDS + 2.0, BOUNDS - 2.0),
+			_rng.randf_range(-BOUNDS + 2.0, BOUNDS - 2.0))
+		if maxf(absf(point.x), absf(point.y)) < 56.0:
+			continue
+		if _inside_any_zone(point, 0.92):
+			continue
+		if _near_road(point.x, point.y, 0) or _near_site(point, 1.4) or _in_pond(point, 0.1):
+			continue
+		var at: Vector3 = _ground(point.x, point.y)
+		if at.y > 24.0:
+			continue
+		var scale_value: float = _rng.randf_range(0.82, 1.38)
+		var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(
+			Vector3(scale_value * _rng.randf_range(0.85, 1.2), scale_value, scale_value * _rng.randf_range(0.85, 1.2)))
+		at.y -= 0.03
+		entries.append(Transform3D(basis, at))
+		var tint: Color = _zone_ground_near(point).lightened(_rng.randf_range(0.40, 0.58))
+		tint = tint.lerp(Color("b9bd8c"), _rng.randf_range(0.06, 0.30))
+		tints.append(tint)
+		outskirt_placed += 1
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.use_colors = true
-	multimesh.mesh = blade
+	multimesh.mesh = mesh
 	multimesh.instance_count = entries.size()
 	for index: int in range(entries.size()):
 		multimesh.set_instance_transform(index, entries[index])
@@ -1011,11 +1327,11 @@ func _create_flowers() -> void:
 		var radius: float = zone["radius"]
 		var placed: int = 0
 		var attempts: int = 0
-		while placed < 150 and attempts < 2200:
+		while placed < 420 and attempts < 5200:
 			attempts += 1
 			var angle: float = _rng.randf_range(0.0, TAU)
 			var point: Vector2 = center + Vector2(cos(angle), sin(angle)) * sqrt(_rng.randf()) * radius * 0.9
-			if absf(point.x) > 68.0 or absf(point.y) > 68.0:
+			if absf(point.x) > BOUNDS - 4.0 or absf(point.y) > BOUNDS - 4.0:
 				continue
 			if _near_road(point.x, point.y, 0) or _near_site(point, 2.0) or _in_pond(point, 0.0):
 				continue
@@ -1040,32 +1356,56 @@ func _create_flowers() -> void:
 
 func _create_bushes() -> void:
 	_reseed(6653)
-	var sphere := SphereMesh.new()
-	sphere.radius = 0.85
-	sphere.height = 1.15
-	sphere.radial_segments = 6
-	sphere.rings = 3
-	sphere.material = _materials["leaves"]
+	var mesh := _bush_mesh()
 	var entries: Array = []
 	for zone: Dictionary in zones:
 		var center: Vector2 = zone["center"]
 		var radius: float = zone["radius"]
 		var placed: int = 0
 		var attempts: int = 0
-		while placed < 26 and attempts < 400:
+		while placed < 70 and attempts < 900:
 			attempts += 1
 			var angle: float = _rng.randf_range(0.0, TAU)
 			var point: Vector2 = center + Vector2(cos(angle), sin(angle)) * sqrt(_rng.randf()) * radius * 0.9
-			if absf(point.x) > 70.0 or absf(point.y) > 70.0:
+			if absf(point.x) > BOUNDS - 3.0 or absf(point.y) > BOUNDS - 3.0:
 				continue
-			if _near_road(point.x, point.y, 0) or _near_site(point, 2.5) or _in_pond(point, 0.0):
+			if _near_road(point.x, point.y, 0) or _near_site(point, 5.0) or _in_pond(point, 0.0):
 				continue
-			var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3(_rng.randf_range(0.7, 1.5), _rng.randf_range(0.55, 1.05), _rng.randf_range(0.7, 1.5)))
+			var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(
+				Vector3(_rng.randf_range(0.85, 1.25), _rng.randf_range(0.7, 1.15), _rng.randf_range(0.85, 1.25)))
 			var at := _ground(point.x, point.y)
-			at.y += 0.12
+			at.y -= 0.05
 			entries.append(Transform3D(basis, at))
 			placed += 1
-	_create_multimesh("Underbrush", sphere, entries, true)
+	_create_multimesh("Underbrush", mesh, entries, true)
+
+
+## Underbrush is a cluster of small leaf puffs, not one big sphere, so a bush
+## reads as a shrub instead of a boulder when the camera gets close.
+func _bush_mesh() -> ArrayMesh:
+	var puff := SphereMesh.new()
+	puff.radius = 0.36
+	puff.height = 0.72
+	puff.radial_segments = 7
+	puff.rings = 4
+	var blobs: Array = [
+		[Vector3(0.0, 0.30, 0.0), 1.0, 0.0],
+		[Vector3(0.30, 0.20, 0.08), 0.62, 1.9],
+		[Vector3(-0.28, 0.22, -0.10), 0.66, 3.1],
+		[Vector3(0.04, 0.18, -0.30), 0.58, 4.4],
+		[Vector3(-0.08, 0.46, 0.10), 0.52, 5.3],
+	]
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for blob: Array in blobs:
+		var offset: Vector3 = blob[0]
+		var puff_scale: float = float(blob[1])
+		var angle: float = float(blob[2])
+		var basis := Basis(Vector3.UP, angle).scaled(Vector3(1.0, 0.82, 1.0) * puff_scale)
+		st.append_from(puff, 0, Transform3D(basis, offset))
+	var mesh := st.commit()
+	mesh.surface_set_material(0, _materials["leaves"])
+	return mesh
 
 
 func _create_rocks_and_logs() -> void:
@@ -1073,71 +1413,66 @@ func _create_rocks_and_logs() -> void:
 	for zone: Dictionary in zones:
 		var center: Vector2 = zone["center"]
 		var radius: float = zone["radius"]
+		var target: int = int(zone.get("rock_count", 12))
 		var placed: int = 0
 		var attempts: int = 0
-		while placed < 22 and attempts < 320:
+		while placed < target and attempts < target * 24:
 			attempts += 1
 			var angle: float = _rng.randf_range(0.0, TAU)
 			var point: Vector2 = center + Vector2(cos(angle), sin(angle)) * sqrt(_rng.randf()) * radius * 0.95
-			if absf(point.x) > 72.0 or absf(point.y) > 72.0:
+			if absf(point.x) > BOUNDS - 4.0 or absf(point.y) > BOUNDS - 4.0:
 				continue
-			if _near_road(point.x, point.y, 0) or _near_site(point, 2.0) or _in_pond(point, 0.0):
+			# Two cells of clearance keep boulders out of the road ribbon and its
+			# shoulders; the third cell is the grass verge.
+			if _near_road(point.x, point.y, 2) or _near_site(point, 4.0) or _in_pond(point, 0.5):
 				continue
-			var size_value: float = _rng.randf_range(0.35, 1.5)
-			var size := Vector3(size_value * _rng.randf_range(0.8, 1.5), size_value * _rng.randf_range(0.5, 0.9), size_value)
-			var at := _ground(point.x, point.y)
-			at.y += size.y * 0.35
+			var size_value: float = _rng.randf_range(0.25, 0.78)
+			var size := Vector3(size_value * _rng.randf_range(0.9, 1.55), size_value * _rng.randf_range(0.45, 0.8), size_value)
+			var at: Vector3 = _ground(point.x, point.y)
+			# Sink the sphere so it grows out of the soil instead of resting on it.
+			at.y -= size.y * 0.16
 			var rock := _rock(at, size, "stone_dark" if _rng.randf() < 0.55 else "stone")
-			if size_value > 1.15:
+			if size_value > 0.6:
 				rock.create_trimesh_collision()
 			placed += 1
-	for index: int in range(12):
+	for index: int in range(14):
 		var zone: Dictionary = zones[index % zones.size()]
 		var center: Vector2 = zone["center"]
-		var point: Vector2 = center + Vector2(_rng.randf_range(-14.0, 14.0), _rng.randf_range(-14.0, 14.0))
-		if _near_road(point.x, point.y, 0) or _near_site(point, 3.0):
+		var point: Vector2 = center + Vector2(_rng.randf_range(-24.0, 24.0), _rng.randf_range(-24.0, 24.0))
+		if absf(point.x) > BOUNDS - 6.0 or absf(point.y) > BOUNDS - 6.0:
 			continue
-		var log_mesh: MeshInstance3D = _cylinder("FallenLog", Vector3(point.x, 0.32, point.y), 0.32, _rng.randf_range(2.4, 4.2), "wood", 8)
+		if _near_road(point.x, point.y, 2) or _near_site(point, 5.0) or _in_pond(point, 0.5):
+			continue
+		var at: Vector3 = _ground(point.x, point.y)
+		var log_mesh: MeshInstance3D = _add_mesh(self, "FallenLog", _cylinder_mesh(0.30, _rng.randf_range(2.8, 4.8), 8), "wood")
+		log_mesh.position = Vector3(at.x, at.y + 0.26, at.z)
 		log_mesh.rotation = Vector3(PI * 0.5, _rng.randf_range(-1.0, 1.0), 0.0)
 		log_mesh.create_trimesh_collision()
 
 
 func _create_distant_landscape() -> void:
+	# The mountains are part of the height field now, so there are no separate
+	# crag meshes. A belt of pines along the foot of the rim hides the transition
+	# from forest floor to rock and gives the horizon a scale reference.
 	_reseed(6619)
+	var mesh: Mesh = _load_tree_mesh("pine")
+	if mesh == null:
+		return
+	var entries: Array = []
 	var gate := Vector2(waygate_position.x, waygate_position.z)
-	var sanctum := Vector2(-26.0, -50.0)
-	for index: int in range(30):
-		var angle: float = TAU * float(index) / 30.0 + _rng.randf_range(-0.05, 0.05)
-		var radius: float = _rng.randf_range(108.0, 138.0)
-		var mountain_height: float = _rng.randf_range(22.0, 42.0)
-		var at := Vector2(cos(angle) * radius, sin(angle) * radius)
-		# A crag this close to the gate or the sanctum would swallow the camera
-		# during the sealed-gate scene, so the north-west approach stays open.
-		if at.distance_to(gate) < 54.0 or at.distance_to(sanctum) < 34.0:
+	for index: int in range(900):
+		var point := Vector2(_rng.randf_range(-170.0, 170.0), _rng.randf_range(-170.0, 170.0))
+		var edge: float = maxf(absf(point.x), absf(point.y))
+		if edge < 140.0 or edge > 170.0:
 			continue
-		var crag: MeshInstance3D = _add_mesh(self, "DistantCrag", _cone_mesh(_rng.randf_range(14.0, 24.0), mountain_height, 5), "mountain")
-		# Every crag shares one sub-horizon base so the ring reads as a range, not
-		# as individual cones floating above the fading terrain.
-		crag.position = Vector3(at.x, -18.0 + mountain_height * 0.5, at.y)
-		crag.rotation.y = _rng.randf_range(0.0, TAU)
-		crag.scale.z = _rng.randf_range(0.65, 1.35)
-		crag.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		if mountain_height > 34.0:
-			var cap_height: float = mountain_height * 0.20
-			var cap: MeshInstance3D = _add_mesh(self, "DistantSnow", _cone_mesh(_rng.randf_range(3.0, 5.0), cap_height, 5), "mountain_snow")
-			cap.position = Vector3(at.x, -18.0 + mountain_height - cap_height * 0.5, at.y)
-			cap.rotation.y = crag.rotation.y
-			cap.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	for index: int in range(70):
-		var angle: float = _rng.randf_range(0.0, TAU)
-		var radius: float = _rng.randf_range(80.0, 92.0)
-		var height: float = _rng.randf_range(9.0, 20.0)
-		var at := Vector2(cos(angle) * radius, sin(angle) * radius)
-		if at.distance_to(gate) < 15.0:
+		if point.distance_to(gate) < 24.0:
 			continue
-		var silhouette: MeshInstance3D = _cone("FarPine", Vector3(at.x, height * 0.5 - 1.0, at.y), _rng.randf_range(2.6, 5.0), height, "stone_dark", 5)
-		silhouette.rotation.y = _rng.randf_range(0.0, TAU)
-		silhouette.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var scale_value: float = _rng.randf_range(0.95, 1.45)
+		var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale_value)
+		var at := _ground(point.x, point.y)
+		at.y -= 0.25
+		entries.append(Transform3D(basis, at))
+	_create_multimesh("FoothillPines", mesh, entries, false)
 
 
 func _create_boundaries() -> void:
@@ -1239,6 +1574,14 @@ func _cylinder(node_name: String, at: Vector3, radius: float, height_value: floa
 func _cone(node_name: String, at: Vector3, radius: float, height_value: float, material_key: String, segments: int = 6) -> MeshInstance3D:
 	var instance := _add_mesh(self, node_name, _cone_mesh(radius, height_value, segments), material_key)
 	instance.position = Vector3(at.x, height_at(at.x, at.z) + at.y + height_value * 0.5, at.z)
+	return instance
+
+
+## A flat disc at an exact world height, used for pools whose basin is already
+## levelled by height_at. Terrain-relative helpers would sink or float them.
+func _flattened_disc(node_name: String, at: Vector3, radius: float, material_key: String, segments: int = 20) -> MeshInstance3D:
+	var instance := _add_mesh(self, node_name, _cylinder_mesh(radius, 0.04, segments), material_key)
+	instance.position = at
 	return instance
 
 
@@ -1521,7 +1864,7 @@ func _create_camp() -> void:
 
 func _create_broken_arch() -> void:
 	_reseed(3307)
-	var site := _group("BrokenArch", 36.0, -40.0)
+	var site := _group("BrokenArch", 72.0, -80.0)
 	var terrace := _add_mesh(site, "Terrace", _cylinder_mesh(8.6, 0.55, 14), "stone")
 	terrace.position.y = 0.27
 	var inset := _add_mesh(site, "TerraceInset", _cylinder_mesh(7.4, 0.4, 14), "stone_light")
@@ -1552,7 +1895,7 @@ func _create_broken_arch() -> void:
 
 func _create_sanctum() -> void:
 	_reseed(4409)
-	var site := _group("CrownlessSanctum", -26.0, -50.0)
+	var site := _group("CrownlessSanctum", -52.0, -100.0)
 	var dais := _add_mesh(site, "Dais", _cylinder_mesh(4.4, 0.5, 16), "stone_dark")
 	dais.position.y = 0.25
 	var step := _add_mesh(site, "DaisStep", _cylinder_mesh(3.2, 0.36, 16), "stone")

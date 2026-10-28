@@ -85,7 +85,24 @@ func _test_terrain() -> void:
 			var h: float = world.height_at(float(x_step), float(z_step))
 			lowest = minf(lowest, h)
 			highest = maxf(highest, h)
-	assert(highest - lowest > 4.0, "terrain is too flat (range %.2f)" % (highest - lowest))
+	# Gentle rolling forest: the first pass was deliberately flattened so it stops
+	# reading as desert dunes, but the floor must still have real relief.
+	assert(highest - lowest > 2.0, "terrain is too flat (range %.2f)" % (highest - lowest))
+	assert(highest - lowest < 24.0, "terrain is too drastic for a forest (range %.2f)" % (highest - lowest))
+	# The mountain rim is part of the same height field, not a ring of props.
+	var rim_height: float = world.height_at(195.0, 0.0)
+	assert(rim_height > 15.0, "the mountain rim did not rise (%.1f)" % rim_height)
+	assert(world.height_at(0.0, 0.0) < rim_height, "the playable bowl must sit below the rim")
+	# The world is at least twice the old 148 m width.
+	assert(world.BOUNDS >= 140.0, "world bounds did not grow")
+	# The painted map texture is generated from that same terrain grid.
+	var texture: ImageTexture = world.map_texture(128)
+	assert(texture != null, "the world map has no painted terrain texture")
+	assert(texture.get_width() == 128, "map texture ignored the requested size")
+	# The old separate cone mountains and silhouette pines must be gone.
+	var crag_names: Array[String] = ["DistantCrag", "DistantSnow", "FarPine"]
+	for child: Node in world.get_children():
+		assert(not crag_names.has(str(child.name)), "mountain props must be part of the terrain")
 	# Terrain collision exists so the player does not fall through.
 	var has_collision: bool = false
 	for child: Node in world.get_children():

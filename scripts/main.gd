@@ -125,7 +125,7 @@ func _ready() -> void:
 		camera = Camera3D.new()
 		camera.name = "Camera3D"
 		camera.fov = 48.0
-		camera.far = 220.0
+		camera.far = 420.0
 		camera_arm.add_child(camera)
 	camera.current = true
 	camera_focus = player.position + Vector3.UP
@@ -176,13 +176,14 @@ func _ready() -> void:
 func _run_screenshot_tour() -> void:
 	await get_tree().create_timer(1.8).timeout
 	var shots: Array[Dictionary] = [
-		{"name": "01_camp", "at": Vector3(-9.0, 0.0, 24.0), "yaw": 0.35, "pitch": 0.40, "distance": 18.0},
-		{"name": "02_vale_road", "at": Vector3(0.0, 0.0, 6.0), "yaw": 0.9, "pitch": 0.46, "distance": 22.0},
-		{"name": "03_thornwood", "at": Vector3(-33.0, 0.0, 8.0), "yaw": 0.95, "pitch": 0.55, "distance": 28.0},
-		{"name": "04_ashen_fen", "at": Vector3(44.0, 0.0, 8.0), "yaw": 1.6, "pitch": 0.48, "distance": 24.0},
-		{"name": "05_broken_arch", "at": Vector3(32.0, 0.0, -30.0), "yaw": -0.35, "pitch": 0.40, "distance": 17.0},
-		{"name": "06_sanctum", "at": Vector3(-26.0, 0.0, -38.0), "yaw": 0.0, "pitch": 0.42, "distance": 20.0},
-		{"name": "07_waygate", "at": Vector3(-52.0, 0.0, -57.0), "yaw": 0.02, "pitch": 0.38, "distance": 21.0},
+		{"name": "01_camp", "at": Vector3(-36.0, 0.0, 38.0), "yaw": 0.0, "pitch": 0.62, "distance": 30.0},
+		{"name": "02_vale_road", "at": Vector3(0.0, 0.0, 12.0), "yaw": 0.9, "pitch": 0.68, "distance": 36.0},
+		{"name": "03_thornwood", "at": Vector3(-66.0, 0.0, 16.0), "yaw": 0.95, "pitch": 0.36, "distance": 24.0},
+		{"name": "04_ashen_fen", "at": Vector3(88.0, 0.0, 16.0), "yaw": 1.6, "pitch": 0.34, "distance": 22.0},
+		{"name": "05_broken_arch", "at": Vector3(72.0, 0.0, -68.0), "yaw": 0.12, "pitch": 0.36, "distance": 20.0},
+		{"name": "06_sanctum", "at": Vector3(-52.0, 0.0, -84.0), "yaw": 0.08, "pitch": 0.40, "distance": 16.0},
+		{"name": "07_waygate", "at": Vector3(-104.0, 0.0, -114.0), "yaw": 0.45, "pitch": 0.36, "distance": 24.0},
+		{"name": "10_frontier", "at": Vector3(0.0, 0.0, 62.0), "yaw": PI, "pitch": 0.60, "distance": 78.0},
 	]
 	for shot: Dictionary in shots:
 		var at: Vector3 = shot["at"]
@@ -203,11 +204,11 @@ func _run_screenshot_tour() -> void:
 	hud.toggle_map()
 	await get_tree().create_timer(0.4).timeout
 	world.set_time_of_day(22.0)
-	player.position = Vector3(-9.0, world.height_at(-9.0, 24.0) + 0.4, 24.0)
+	player.position = Vector3(-36.0, world.height_at(-36.0, 38.0) + 0.4, 38.0)
 	camera_focus = player.global_position + Vector3.UP
-	camera_yaw = 0.35
-	camera_pitch = 0.40
-	camera_distance = 18.0
+	camera_yaw = 0.0
+	camera_pitch = 0.48
+	camera_distance = 22.0
 	_update_camera(1.0)
 	await get_tree().create_timer(1.2).timeout
 	await _capture_frame("08_camp_night")
@@ -642,16 +643,16 @@ func _build_resources() -> void:
 				gather_nodes.append({"type": str(deposit.get_meta("resource_type", "wood")), "node": deposit, "timer": 0.0})
 		return
 	for resource: Dictionary in [
-		{"type": "wood", "position": Vector3(-8, 0, 10)},
-		{"type": "iron", "position": Vector3(-3, 0, 16)},
-		{"type": "wood", "position": Vector3(11, 0, 10)},
-		{"type": "iron", "position": Vector3(21, 0, -4)},
-		{"type": "wood", "position": Vector3(2, 0, -14)},
-		{"type": "wood", "position": Vector3(-38, 0, 4)},
-		{"type": "iron", "position": Vector3(-50, 0, -16)},
-		{"type": "wood", "position": Vector3(40, 0, 16)},
-		{"type": "iron", "position": Vector3(30, 0, -30)},
-		{"type": "iron", "position": Vector3(-36, 0, -40)},
+		{"type": "wood", "position": Vector3(-16, 0, 20)},
+		{"type": "iron", "position": Vector3(-6, 0, 32)},
+		{"type": "wood", "position": Vector3(22, 0, 20)},
+		{"type": "iron", "position": Vector3(42, 0, -8)},
+		{"type": "wood", "position": Vector3(4, 0, -28)},
+		{"type": "wood", "position": Vector3(-76, 0, 8)},
+		{"type": "iron", "position": Vector3(-100, 0, -32)},
+		{"type": "wood", "position": Vector3(80, 0, 32)},
+		{"type": "iron", "position": Vector3(60, 0, -60)},
+		{"type": "iron", "position": Vector3(-72, 0, -80)},
 	]:
 		var node := Node3D.new()
 		add_child(node)
