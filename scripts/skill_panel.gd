@@ -4,6 +4,7 @@ extends RefCounted
 const ORDER := ["cast", "melee", "block", "move", "support"]
 const KEYS := {"melee": 1, "cast": 2, "block": 3, "move": 4, "support": 5}
 const COLORS := [Color("e6ae63"), Color("82b9e4"), Color("bf90de")]
+const TIER_COLORS := {"basic": Color("b4aa93"), "rare": Color("80b7bd"), "epic": Color("b29dc9"), "legendary": Color("d2af6e"), "mythical": Color("d77e78")}
 const EFFECTS := [
 	"+16% base skill power per rank\nMelee potency also enables a nearby cleave.",
 	"+4% base skill power per rank\n-7% base cooldown and +6% range per rank",
@@ -105,9 +106,9 @@ func render() -> void:
 		margin.add_child(choices)
 		for stage in range(installed.size()):
 			var m: Dictionary = installed[stage]
-			var tile := _tile(icon("cast" if state.skill_catalog.data.skills[id].role != "melee" else "melee",stage),64,hud.GOLD)
-			tile.tooltip_text = state.skill_catalog.describe(m,id,installed) + "\nClick to replace from this stage's retained five choices."
-			tile.pressed.connect(_choose.bind(id,stage))
+			var tile := _tile(icon("cast" if state.skill_catalog.data.skills[id].role != "melee" else "melee",stage),64,TIER_COLORS[state.skill_catalog.tier_of(m)])
+			tile.tooltip_text = state.skill_catalog.describe(m,id,installed) + "\nClick to inspect this enchantment."
+			tile.pressed.connect(_inspect.bind(id,stage))
 			choices.add_child(tile)
 			var label: Label = hud._label(str(stage+1),12,Color.WHITE)
 			label.position = Vector2(4,2)
@@ -231,8 +232,11 @@ func _new_picker(title: String) -> VBoxContainer:
 func _choose(id: String, stage: int) -> void:
 	var state: Node = hud.game.state
 	if stage < 0: stage = state.skills[id].evolutions.size()
+	if stage < state.skills[id].evolutions.size():
+		_inspect(id, stage)
+		return
 	if stage >= 10:
-		hud.show_notice("Fully enchanted. Select an existing stage to replace it.")
+		hud.show_notice("This skill is fully enchanted. Select an existing stage to inspect it.")
 		return
 	var column := _new_picker("%s · Enchantment %d / 10" % [state.skills[id].name,stage+1])
 	column.add_child(hud._label("Choose one of five. Rolls are retained across resets and reloads.",11,hud.MUTED))
@@ -248,6 +252,7 @@ func _choose(id: String, stage: int) -> void:
 	for index in range(offers.size()):
 		var m: Dictionary = offers[index]
 		var button: Button = hud._button(state.skill_catalog.describe(m,id,state.skills[id].evolutions),11)
+		button.add_theme_color_override("font_color", TIER_COLORS[state.skill_catalog.tier_of(m)])
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		button.custom_minimum_size.x = 590
@@ -256,6 +261,23 @@ func _choose(id: String, stage: int) -> void:
 		button.pressed.connect(_apply.bind(id,stage,index))
 		options.add_child(button)
 	var close: Button = hud._button("CLOSE",11)
+	close.pressed.connect(picker.hide)
+	column.add_child(close)
+	_position_picker.call_deferred()
+
+func _inspect(id: String, stage: int) -> void:
+	var state: Node = hud.game.state
+	if not state.skills.has(id) or stage < 0 or stage >= state.skills[id].evolutions.size():
+		return
+	var installed: Array = state.skills[id].evolutions
+	var column := _new_picker("%s · Enchantment %d / 10" % [state.skills[id].name, stage + 1])
+	column.add_child(hud._label("INSTALLED ENCHANTMENT", 11, hud.GOLD))
+	var details: Label = hud._label(state.skill_catalog.describe(installed[stage], id, installed), 12, hud.TEXT)
+	details.name = "EnchantmentDetails"
+	details.custom_minimum_size.x = 480
+	details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(details)
+	var close: Button = hud._button("CLOSE", 11)
 	close.pressed.connect(picker.hide)
 	column.add_child(close)
 	_position_picker.call_deferred()

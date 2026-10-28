@@ -5,8 +5,8 @@
 - Run the project, press **K** for Skills & enchantments.
 - There are **10 equipped slots**, activated with **1–9 and 0**, with **10 enchantment stages per skill**.
 - Click a slot number to change the equipped skill. Equipping an already equipped skill swaps slots.
-- Click **+** to choose from the stage's five saved offers. Click an installed enchantment to replace that stage.
-- **Reset all** refunds points and retains discovered offers. Replacement and reset do not reroll values.
+- Click **+** to choose from the stage's five saved offers. Click an installed enchantment to inspect its saved effect and rolled values; the inspection is read-only.
+- **Reset all** refunds points and retains discovered offers. Reset does not reroll saved offers. Individual replacement is not exposed by the skill panel.
 - First regional bestiary completions grant points and discover additional abilities. The lifetime budget remains **50 points**.
 - Changes to skills, loadout and balance reloads require leaving combat.
 - Hold a channel's keyboard key; release it to stop. A hotbar click toggles channeling. Channels consume mana per emission, move at 50% speed and turn at up to 360 degrees per second.
@@ -14,17 +14,19 @@
 ## Authoring window
 
 In the Godot editor, open **Project → Tools → Skill & Modifier Distribution**.
-The plugin lives in editor_plugins/skill_distribution/, outside the ignored third-party addons directory.
+The plugin lives in addons/skill_distribution/ so Godot can discover it. Restart the editor after pulling the plugin move.
 If it is disabled, enable **Skill Distribution** under **Project → Project Settings → Plugins**.
 
 The editable native Resource is resources/skills/skill_catalog.tres.
 
-- **Enchantments:** family occurrence weight, implementation weight, event weights, stat weights, activation chance, internal cooldown, mana surcharge, compatibility requirements and exclusions, provided capabilities and rolled min/max values.
+- **Enchantments:** authored tier (Basic, Rare, Epic, Legendary or Mythical), family occurrence weight, implementation weight, event weights, stat weights, activation chance, internal cooldown, mana surcharge, compatibility requirements and exclusions, provided capabilities and rolled min/max values.
 - **Skills:** delivery type, base power, mana cost, cooldown, radius, range, projectile speed, channel interval, acquisition weight and enabled state for acquisition.
 - **Affinities:** item, exact skill or delivery type, family, event and stat filters. An asterisk matches all. Weight multiplier 0 disables a matching outcome. Power percentage scales the rolled **amount**; it does not change duration, range or radius.
 - **Rules:** projectile, field, status and event budgets; weakening/barrier/buff caps; recovery allowance; critical chance and multiplier; channel movement and facing limits.
 - **Family percentages:** set normalized base shares, preserve locked families, redistribute the remainder. All implementations in a family share its base occurrence weight.
 - **Context preview:** choose a skill/item and enter installed modifier IDs (for example impact, chain). Inspect compatibility, effective event weights and sample offers. The 1,000-sample simulation reports five-choice inclusion rates.
+
+Tiers describe authored effect power and complexity; they do not automatically multiply values or change offer probabilities. Numerical ranges and offer weights remain independently editable. Saved rolls with no tier use the current definition’s tier, or Basic if the definition no longer exists.
 
 Weights are relative probabilities, not activation chances. Family selection occurs without replacement, followed by a weighted implementation, event, stat and numerical roll. A custom configuration that disables most of the pool may produce fewer than five offers; the shipped default pool supports five through ten stages.
 

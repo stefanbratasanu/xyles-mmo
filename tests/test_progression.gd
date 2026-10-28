@@ -22,6 +22,22 @@ func _check(condition: bool, message: String) -> void:
 		failures += 1
 		push_error(message)
 
+func _same_saved_value(a: Variant, b: Variant) -> bool:
+	if (a is int or a is float) and (b is int or b is float):
+		if a is int and b is int: return a == b
+		return absf(float(a) - float(b)) <= maxf(1.0, maxf(absf(float(a)), absf(float(b)))) * 1e-14
+	if a is Dictionary and b is Dictionary:
+		if a.size() != b.size(): return false
+		for key: Variant in a:
+			if not b.has(key) or not _same_saved_value(a[key], b[key]): return false
+		return true
+	if a is Array and b is Array:
+		if a.size() != b.size(): return false
+		for index in range(a.size()):
+			if not _same_saved_value(a[index], b[index]): return false
+		return true
+	return typeof(a) == typeof(b) and a == b
+
 
 func _test_bestiary() -> void:
 	var state = GameState.new()
@@ -107,7 +123,7 @@ func _test_save_round_trip() -> void:
 	var restored = GameState.new()
 	_check(restored.load_game("res://.godot/xyles_test_save.json"), "Save should reload successfully")
 	_check(restored.earned_skill_points == 2 and restored.skill_points == 1, "Save must preserve earned and unspent points")
-	_check(restored.skills["cast"]["evolutions"] == state.skills["cast"]["evolutions"], "Save must preserve individual evolution choices")
+	_check(_same_saved_value(restored.skills["cast"]["evolutions"], state.skills["cast"]["evolutions"]), "Save must preserve individual evolution choices")
 	_check(restored.quests[0]["stage"] == 1, "Save must preserve quest progress")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("res://.godot/xyles_test_save.json"))
 	state.free()

@@ -1,6 +1,7 @@
 extends CharacterBody3D
 
 const Visual = preload("res://scripts/actor_visual.gd")
+const SLAM_RADIUS := 5.5
 var game: Node
 var display_name: String = "Briarwolf"
 var kind: String = "normal"
@@ -201,6 +202,7 @@ func _physics_process(delta: float) -> void:
 	var speed_value: float = 2.3 if kind == "normal" else (2.1 if kind == "quest" else 1.65)
 	if game.is_dead:
 		aggro = false
+		_cancel_attack()
 	elif distance < detection:
 		aggro = true
 	elif distance > leash:
@@ -258,10 +260,13 @@ func _physics_process(delta: float) -> void:
 		sidestep_time = 0.7
 		var side := Vector3(-direction.z, 0.0, direction.x)
 		sidestep_dir = side.normalized() if randf() < 0.5 else -side.normalized()
-	if sidestep_time > 0.0:
+	if sidestep_time > 0.0 and not winding_up and not slam_active:
 		sidestep_time -= delta
 		direction = (direction + sidestep_dir * 1.4).normalized()
 		wants_move = true
+	if winding_up or slam_active:
+		direction = Vector3.ZERO
+		wants_move = false
 	if kind == "boss":
 		boss_timer -= delta
 		# Only a boss that has actually engaged may slam. Without the aggro gate
@@ -280,7 +285,9 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y -= 26.0 * delta
 	move_and_slide()
-	if direction.length() > 0.05:
+	if winding_up:
+		visual.rotation.y = atan2(-locked_dir.x, -locked_dir.z)
+	elif direction.length() > 0.05:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), delta * 7)
 	elif aggro and not winding_up and to_player.length() > 0.01:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-to_player.x, -to_player.z), delta * 7)
@@ -339,22 +346,40 @@ func _begin_attack() -> void:
 	attack_windup_total = 0.9 if attack_type == "charge" else (0.55 if kind == "normal" else (0.45 if kind == "quest" else 0.35))
 	attack_windup = attack_windup_total
 	attack_timer = 2.4 if attack_type == "charge" else (1.7 if kind == "normal" else (2.0 if kind == "quest" else 2.3))
+	sidestep_time = 0.0
 	# Snap the body to the committed line: no tracking during the windup.
 	visual.rotation.y = atan2(-locked_dir.x, -locked_dir.z)
+	game.game_log.combat("enemy_attack_windup", {
+		"enemy": display_name,
+		"species": species,
+		"type": attack_type,
+		"point": str(locked_point),
+		"windup": attack_windup,
+	})
 	visual.strike = 1.0
 	_build_attack_telegraph()
 
+func _cancel_attack() -> void:
+	winding_up = false
+	attack_windup = 0.0
+	_clear_telegraph()
+
 
 func _finish_attack() -> void:
-	winding_up = false
+	_cancel_attack()
 	visual.strike = 1.0
-	_clear_telegraph()
 	if attack_type == "charge":
 		_start_charge()
 		return
 	var offset: Vector3 = game.player.global_position - locked_point
 	offset.y = 0.0
-	if offset.length() <= strike_radius:
+	var hit := offset.length() <= strike_radius
+	game.game_log.combat("enemy_attack_resolved", {
+		"enemy": display_name,
+		"type": attack_type,
+		"hit": hit,
+	})
+	if hit:
 		game.damage_player(_attack_damage(), self)
 		game.burst(locked_point + Vector3.UP * 0.4, Color("d3b07a"), 0.7)
 	else:
@@ -515,17 +540,17 @@ func _begin_slam() -> void:
 	# The Regent marks the ground where the player stands, not its own feet.
 	locked_point = game.player.global_position
 	locked_point.y = _ground_at(locked_point)
-	telegraph = _disc_telegraph(locked_point, 5.5, Color("d46b64"), 0.30)
+	telegraph = _disc_telegraph(locked_point, SLAM_RADIUS, Color("d46b64"), 0.30)
 	telegraph.scale = Vector3(0.15, 1.0, 0.15)
 	game.state.notice.emit("Hollow Regent is gathering power. Leave the red circle!")
 	var tween := create_tween()
 	tween.tween_property(telegraph, "scale", Vector3.ONE, 1.7)
 	tween.tween_callback(func():
 		if not dead:
-			game.burst(locked_point + Vector3.UP * 0.1, Color("ba7dc4"), 5.5)
+			game.burst(locked_point + Vector3.UP * 0.1, Color("ba7dc4"), SLAM_RADIUS)
 			var offset: Vector3 = game.player.global_position - locked_point
 			offset.y = 0.0
-			if offset.length() < 5.8:
+			if offset.length() <= SLAM_RADIUS:
 				game.damage_player(36.0 * damage_scale, self, "area")
 		slam_active = false
 		if is_instance_valid(telegraph):
@@ -545,6 +570,7 @@ func take_damage(amount: float) -> void:
 	tween.tween_property(visual, "scale", Vector3.ONE * (1.0 if kind == "normal" else (1.35 if kind == "quest" else 2.45)), 0.12)
 	if hp <= 0:
 		dead = true
+		_cancel_attack()
 		collision_layer = 0
 		winding_up = false
 		charge_active = false

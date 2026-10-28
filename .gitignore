@@ -9,7 +9,10 @@
 # Effekseer is required by the game and is versioned. Other addons stay local.
 /addons/*
 !/addons/effekseer/
+!/addons/skill_distribution/
 /tools/
 /assets/animations/Ultimate Animation Collection/
 Godot_v4.7.2-stable_win64.exe
 Godot_v4.7.2-stable_win64_console.exe
+# Temporary copies created while the Effekseer DLL is in use.
+/addons/effekseer/bin/windows/~*.TMP

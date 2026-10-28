@@ -33,7 +33,21 @@ func _run() -> void:
 	var partial: HBoxContainer=rows[2].get_child(1).get_child(0).get_child(0)
 	check(partial.get_child_count()==6 and partial.get_child(5).text=="+\n5 / 10","Partial count")
 	await capture("res://.godot/skill-panel-preview.png")
-	game.hud.skill_view._choose("cast",5)
+	var installed_before: Array = game.state.skills["melee"].evolutions.duplicate(true)
+	var offers_before: Dictionary = game.state.skill_offers.duplicate(true)
+	var points_before: int = game.state.skill_points
+	for stage in range(2):
+		choices.get_child(stage).pressed.emit()
+		for i in range(3): await process_frame
+		var picker: PanelContainer = game.hud.skill_view.picker
+		var details := picker.find_child("EnchantmentDetails", true, false) as Label
+		check(picker.visible and details != null, "Installed stage opens its inspector")
+		if details != null:
+			check(details.text == game.state.skill_catalog.describe(installed_before[stage], "melee", installed_before), "Inspector displays selected installed enchantment")
+		check(picker.find_children("*", "Button", true, false).size() == 1, "Inspector contains only a close button")
+		check(game.state.skills["melee"].evolutions == installed_before and game.state.skill_offers == offers_before and game.state.skill_points == points_before, "Inspection does not change choices or points")
+		if stage == 1: await capture("res://.godot/skill-inspection-preview.png")
+	partial.get_child(5).pressed.emit()
 	for i in range(4): await process_frame
 	check(game.hud.skill_view.picker.visible,"Picker opens")
 	check(game.state.get_skill_offers("cast",5).size()==5,"Five saved choices")

@@ -66,7 +66,7 @@ starting camp all the way to the foothills.
   panels for regions, legend, compass and a 50 m scale bar. No zone outlines.
 - **Chat:** bottom-left World / Local / Party / Guild panel with timestamps;
   `Enter` focuses the input and typing does not move the character.
-- **HUD:** bare five-slot skill bar with no frame, clock/menu top right, quest
+- **HUD:** bare ten-slot skill bar with no frame, clock/menu top right, quest
   journal right, status left, system log bottom right.
 - **Visuals:** generated grass/bark/leaf/needle/road textures, Blender low-poly
   trees, softer sunlight shadows, dimmer pools, rebuilt tents and a smaller
@@ -216,3 +216,48 @@ starting camp all the way to the foothills.
 - Remaining: Map II is still unbuilt; the waygate stays decorative. In-game
   review should confirm the new creature silhouettes and fur at combat distance
   and the lamp spacing at night on a slower machine.
+## 2026-10-28 - Inspect installed enchantments
+
+- Clicking an installed enchantment opens a read-only view of its exact saved effect and rolls. The `+` tile still presents the next stage's choices; inspection changes neither points nor offers. Individual replacement is no longer exposed through installed tiles; Reset All remains available.
+- Skill-panel integration checks passed for the first and second installed stages and the `+` picker. The Direct3D 12 inspection window was visually checked at 1600×900.
+
+## 2026-10-28 - Debug panel shortcut
+
+- F1 opens or closes the debug menu during gameplay. Change it under Debug Menu → Keyboard Shortcuts. Existing custom bindings are retained when upgrading; if F1 is already in use, an unused default is selected.
+- The debug integration test passed, including opening, closing, rebinding, chat suppression and migrating a conflicting older binding; the Direct3D 12 layout was inspected.
+
+## 2026-10-28 - Authored enchantment tiers
+
+- Enchantments now have authored Basic, Rare, Epic, Legendary and Mythical tiers. The 47 current definitions are classified by their existing effect strength and complexity. Offers and installed-stage inspection show the tier in text, with restrained tier colors; existing rolls and their values remain unchanged.
+- Tier names do not apply automatic power multipliers or alter offer weights. Both ranges and distribution remain explicitly authored. Old saved rolls without a tier display their definition's current tier, or Basic when the definition is unavailable.
+- Relocated the distribution-editor plugin to `addons/skill_distribution/` so Godot can discover it in Project Settings → Plugins. Restart the editor, enable Skill Distribution Editor if needed, then use Project → Tools → Skill & Modifier Distribution. The catalog's tier field is editable there.
+- Catalog, distribution editor, skill UI, progression, combat effects, skill runtime and chance/debug tests passed. The tiered choice window was inspected at 1600×900 under Direct3D 12. The editor window itself could not be visually captured by the computer-use helper; check discovery after restarting the currently open editor.
+
+## 2026-10-28 - Local character selection
+
+- Create a named Human, Orc, Elf, Dark Elf or Dwarf as a Fighter or Mystic; race/class are currently identity only and all characters use the same model and starting gameplay.
+- Existing `saves/journey.json` appears as Original journey and stays in place. New characters use separate files in `saves/characters/`. Options → Log out saves and returns to selection. Recover dropped gear and wait for respawn before logout, since ground loot is not persisted.
+- Character files are written through a temporary file before replacement. Integration tests cover legacy preservation, new saves, all choices, selected-save routing and logout; the selector was inspected at 1600×900. Normal startup left the original save unchanged.
+
+## 2026-10-28 - Automatic character login
+
+- Normal startup loads the last successfully selected character. With no remembered character, a single existing save is loaded; otherwise the roster opens. Missing, invalid or unreadable last saves return to the roster without overwriting them. Options → Log out still explicitly opens character selection.
+- The last-character pointer is stored separately in `saves/last_character.cfg`; character integration, progression and skill-panel tests passed with isolated saves.
+
+## 2026-10-28 - Remote merge
+
+- Fast-forwarded to `69acc1bc` and reapplied the preserved local character, skill and debug changes. The stash remains as a backup. World assets were imported.
+- The incoming enemy rules and implementation initially disagreed about direction-locked attacks; the user chose telegraphed attacks, implemented in the following pass.
+- Progression, skill panel, skill runtime, combat effects, training minions, characters and world tests passed, as did a normal Direct3D 12 test-mode launch. `test_hud_snapping.gd` retains its documented pre-existing saved-placement failure.
+
+## 2026-10-28 - Direction-locked enemy telegraphs
+
+- Normal, quest and boss basic attacks show a terrain-fitted red cone during their 0.8 / 0.9 / 1.0 second windup. The origin, direction and reach are fixed; only players inside that cone at impact are hit. Dying interrupts the attack.
+- The boss slam retains its circular warning and now uses the same 5.5 m radius for its hit check. Combat events log windup and hit/miss.
+- World, progression, combat-effects, training-minion and dedicated telegraph tests passed. Direct3D 12 test-mode launch passed; the cone was visually inspected at 1600×900. A 20-cone headless microbenchmark was about 6 ms on this machine after sampling the rendered terrain grid.
+
+## 2026-10-29 - Merge conflict resolution
+
+- Merge local `84a19b1` with remote `c544b2c`. The user chose to retain locked-point attacks for wolves and boars, including the boar charge and the boss's locked slam; the older direction-locked cone description in the implementation history is superseded by that decision.
+- Retained the combined character-selection, graphics, enemy combat logging, skill and world changes. Kept the local training-minion test UID and excluded an Effekseer temporary file without deleting it from disk.
+- Headless tests passed: enemy telegraphs, training minions, characters, world, progression, combat effects, skill panel, skill catalog, skill runtime and distribution editor. A 300-frame headless test-mode launch exited successfully. Visual playtesting and the previously documented HUD snapping issue remain follow-ups.

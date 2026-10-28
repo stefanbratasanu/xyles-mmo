@@ -15,6 +15,13 @@ file is the shorter contract used during implementation.
 4. **Classic presentation:** Lineage 2 style HUD, dark bronze frames, compact
    information, readable combat feedback.
 
+## Character selection
+
+- Normal startup loads the last successfully selected character. With no usable last character, choose a save or create one with a name, race and starting class. Available races are Human, Orc, Elf, Dark Elf and Dwarf; each may choose Fighter or Mystic.
+- Race and class are identity only for this prototype. The current model, starting stats, skills and location are shared; race-specific art, classes and balance are future work.
+- Each new character has an independent local save. The existing `saves/journey.json` remains available as the original journey. Saving uses a temporary file before replacement.
+- Options → Log out saves the active character and returns to selection. Logout is blocked while dead or while dropped equipment remains in the world, because ground loot is not currently persisted.
+
 ## 2. Controls
 
 | Input | Action |
@@ -165,9 +172,10 @@ file is the shorter contract used during implementation.
   - Quest enemy: **5** points
   - World boss: **3** points
 - Lifetime skill points are capped at **50**.
+- Enchantment definitions have authored Basic, Rare, Epic, Legendary or Mythical tiers describing effect power and complexity. Tier labels do not themselves alter values or offer weights.
 - Each skill has at most **10** evolution stages. Each stage presents saved
-  modifier offers; compatible choices can be replaced, or all stages reset for
-  a refund. Discovered offers retain their rolls.
+  modifier offers. Clicking an installed stage inspects its saved effect; all
+  stages can be reset for a refund. Discovered offers retain their rolls.
 - Skill points are never awarded twice for the same region/category.
 
 ## 5. Enemies
@@ -206,7 +214,8 @@ file is the shorter contract used during implementation.
   Briarwolf in the sanctum is not the tutorial wolf from the vale. The level band
   is shown next to the enemy name.
 - The boss telegraphs its slam with a red ring; leaving the ring avoids damage.
-  The slam only starts while the boss is engaged.
+  The slam only starts while the boss is engaged, and its hit radius matches
+  the 5.5 m warning circle.
 
 ## 6. Death and recovery
 
@@ -272,3 +281,5 @@ Visual language:
 - Options → Debug Menu opens a draggable test popup with batch count and level sliders, an active count and a clear button. These hostile temporary enemies use normal scaling but grant no rewards, progression or respawns; the active cap is 50. The menu also restores vitals, resets cooldowns, toggles session-only invulnerability, and pauses or sets world time.
 
 - The debug window permits gameplay while open. Configurable physical-key shortcuts default to F2 for invulnerability, F3 for restoring vitals and F4 for spawning the selected training minion batch. They are disabled while chat or blocking panels have focus.
+
+- F1 opens or closes the debug menu by default; the key can be changed in the menu. The shortcut is suppressed while chat or blocking panels are active.
