@@ -1,2 +1,14 @@
 # Normalize EOL for all files that Git considers text files.
 * text=auto eol=lf
+# Binary game assets and large runtime animations are stored in Git LFS.
+assets/**/*.glb filter=lfs diff=lfs merge=lfs -text
+assets/**/*.png filter=lfs diff=lfs merge=lfs -text
+assets/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+assets/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
+assets/**/*.wav filter=lfs diff=lfs merge=lfs -text
+assets/**/*.ogg filter=lfs diff=lfs merge=lfs -text
+assets/**/*.mp3 filter=lfs diff=lfs merge=lfs -text
+assets/**/*.res filter=lfs diff=lfs merge=lfs -text
+assets/**/*.scn filter=lfs diff=lfs merge=lfs -text
+assets/animations/player_runtime/protof_animations.tres filter=lfs diff=lfs merge=lfs -text
+assets/animations/player_runtime/action_animations.tres filter=lfs diff=lfs merge=lfs -text
