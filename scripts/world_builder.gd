@@ -57,6 +57,10 @@ var boss_spawn: Vector3 = Vector3(-138.0, 0.0, -138.0)
 ## Empty means unrestricted (the current Hollow Regent rule). A future timed
 ## boss may set [start_hour, end_hour], including a window crossing midnight.
 var boss_spawn_window: Array[float] = []
+## The Hollow Regent is being reworked. Its spawn slot, map marker and quest
+## stage stay in the data so the future boss can reuse them; this flag keeps the
+## enemy out of the world in the meantime.
+var boss_spawn_enabled: bool = false
 ## Original, non-interactive exploration landmarks on the extended roads.
 var frontier_landmarks: Array[Dictionary] = [
 	{"name": "THORN WATCH", "at": Vector2(-194.0, 128.0), "style": 0},
@@ -96,7 +100,7 @@ var zones: Array[Dictionary] = [
 		"id": "vale", "name": "EMBERFALL VALE", "subtitle": "The wayfarer's hearth",
 		"level_min": 1, "level_max": 3, "center": Vector2(0.0, 16.0),
 		"radius": 104.0, "phase": 0.4, "elevation": 0.0, "relief": 0.95,
-		"tree_count": 680, "rock_count": 18, "grass_count": 13500,
+		"tree_count": 680, "rock_count": 18, "grass_count": 22000,
 		"ground": Color("7c8a53"), "accent": Color("c7a96b"),
 		"trees": {"oak": 0.58, "birch": 0.42},
 		"description": "Rolling meadow and the survivor camp. Safe for new wayfarers.",
@@ -105,7 +109,7 @@ var zones: Array[Dictionary] = [
 		"id": "thornwood", "name": "THORNWOOD", "subtitle": "Where the old forest closes",
 		"level_min": 4, "level_max": 6, "center": Vector2(-145.0, 12.0),
 		"radius": 106.0, "phase": 2.2, "elevation": 0.9, "relief": 1.15,
-		"tree_count": 760, "rock_count": 24, "grass_count": 16000,
+		"tree_count": 760, "rock_count": 24, "grass_count": 24000,
 		"ground": Color("445f37"), "accent": Color("8a6a4a"),
 		"trees": {"oak": 0.54, "birch": 0.46},
 		"description": "Dense oak and birch. The canopy keeps the ground dark.",
@@ -123,7 +127,7 @@ var zones: Array[Dictionary] = [
 		"id": "arch", "name": "THE BROKEN ARCH", "subtitle": "A monastery that lost its oath",
 		"level_min": 10, "level_max": 12, "center": Vector2(120.0, -130.0),
 		"radius": 105.0, "phase": 1.1, "elevation": 3.0, "relief": 1.30,
-		"tree_count": 550, "rock_count": 48, "grass_count": 7600,
+		"tree_count": 550, "rock_count": 48, "grass_count": 12000,
 		"ground": Color("857a5c"), "accent": Color("b09a6c"),
 		"trees": {"pine": 1.0},
 		"description": "High stone terraces, broken columns and cold pines.",
@@ -132,7 +136,7 @@ var zones: Array[Dictionary] = [
 		"id": "sanctum", "name": "CROWNLESS SANCTUM", "subtitle": "The sealed gate watches",
 		"level_min": 13, "level_max": 15, "center": Vector2(-140.0, -145.0),
 		"radius": 118.0, "phase": 5.3, "elevation": 4.2, "relief": 1.05,
-		"tree_count": 480, "rock_count": 42, "grass_count": 6500,
+		"tree_count": 480, "rock_count": 42, "grass_count": 10000,
 		"ground": Color("3f5257"), "accent": Color("79a79b"),
 		"trees": {"pine": 1.0},
 		"description": "The highest ground. The dormant waygate stands in its corner.",
@@ -205,6 +209,7 @@ var _portal_material: StandardMaterial3D
 var _portal_ring: MeshInstance3D
 var _flames: Array[Node3D] = []
 var _night_lights: Array[OmniLight3D] = []
+var _camp_embers: Array[Node3D] = []
 var road_lamps: Array[Vector3] = []
 var _elapsed: float = 0.0
 var _last_stream_warning: float = -10.0
@@ -290,6 +295,7 @@ func build_procedural() -> void:
 	_materials.clear()
 	_flames.clear()
 	_night_lights.clear()
+	_camp_embers.clear()
 	road_lamps.clear()
 	_tree_points.clear()
 	_tree_spacing_cells.clear()
@@ -530,7 +536,6 @@ func _init_sites() -> void:
 	_sites = [
 		{"center": Vector2(-36.0, 32.0), "radius": 9.5, "blend": 7.0, "kind": "camp"},
 		{"center": Vector2(100.0, -95.0), "radius": 10.0, "blend": 7.0, "kind": "quest"},
-		{"center": Vector2(-138.0, -138.0), "radius": 11.5, "blend": 8.0, "kind": "boss"},
 		{"center": Vector2(-215.0, -215.0), "radius": 8.5, "blend": 7.0, "kind": "waygate"},
 		# The hand-built monastery and sanctum need their own flat pads and a
 		# tree-free apron, or the forest grows through the terrace and pillars.
@@ -924,6 +929,11 @@ func _create_materials() -> void:
 	_material("stone_blue", Color("626f6c"))
 	_material("wood", Color("4a382b"))
 	_material("wood_light", Color("796044"))
+	var camp_timber := _textured(load("res://assets/textures/polyhaven/jolcham_oak_bark_01_diff_1k.jpg"), 0.96)
+	camp_timber.normal_enabled = true
+	camp_timber.normal_texture = load("res://assets/textures/polyhaven/jolcham_oak_bark_01_nor_gl_1k.jpg")
+	camp_timber.normal_scale = 0.65
+	_materials["camp_timber"] = camp_timber
 	_material("iron", Color("333e40"))
 	_material("copper", Color("ad8554"), 0.55)
 	# Cloth is double sided: the bigger tents are walk-in shelters now, so the
@@ -1183,13 +1193,34 @@ func _apply_time_of_day() -> void:
 	_environment.ambient_light_energy = lerpf(0.15, 0.48, daylight) + dusk * 0.05
 	_environment.fog_light_color = Color("1c2b3a").lerp(Color("8a9c8d"), daylight).lerp(Color("b78a63"), dusk * 0.55)
 	_environment.fog_density = lerpf(0.0058, 0.0029, daylight)
-	# Street lamps and braziers keep burning through the day but are only worth
-	# their fill rate after dusk, so they fade to a faint ember at noon.
+	# Fires fade in at dusk and out after dawn, including their local sound.
+	var night_amount := 1.0 - daylight
 	for light: OmniLight3D in _night_lights:
 		if not is_instance_valid(light):
 			continue
 		var base_energy: float = float(light.get_meta("night_energy", light.light_energy))
-		light.light_energy = base_energy * lerpf(1.0, 0.20, daylight)
+		light.light_energy = base_energy * night_amount
+	for flame: Node3D in _flames:
+		if not is_instance_valid(flame):
+			continue
+		flame.visible = night_amount > 0.01
+		var particles := flame.get_node_or_null("FireParticles") as GPUParticles3D
+		if particles != null:
+			particles.emitting = night_amount > 0.01
+		var sound := flame.get_node_or_null("FireSound") as AudioStreamPlayer3D
+		if sound != null:
+			var director := get_node_or_null("../Audio")
+			var volume := 1.0
+			if director != null:
+				volume = 0.0 if director.muted else float(director.master_volume)
+			sound.volume_db = float(sound.get_meta("base_db")) + linear_to_db(maxf(night_amount * volume, 0.0001))
+			if night_amount > 0.01 and not sound.playing:
+				sound.play()
+			elif night_amount <= 0.01 and sound.playing:
+				sound.stop()
+	for ember: Node3D in _camp_embers:
+		if is_instance_valid(ember):
+			ember.visible = night_amount > 0.01
 
 
 func _create_terrain() -> void:
@@ -1423,7 +1454,8 @@ func _create_roads() -> void:
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
 	var lanes: Array[float] = [-1.0, -0.55, 0.0, 0.55, 1.0]
-	for polyline: PackedVector2Array in roads:
+	for original: PackedVector2Array in roads:
+		var polyline := _road_outside_camp(original)
 		var rows: int = polyline.size()
 		if rows < 2:
 			continue
@@ -1478,6 +1510,79 @@ func _create_roads() -> void:
 	instance.mesh = mesh
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(instance)
+	_create_camp_ground()
+
+
+## Keep the network data intact for gates and the map, but start its visible
+## ribbons at the camp clearing rather than crossing the hearth and tents.
+func _road_outside_camp(original: PackedVector2Array) -> PackedVector2Array:
+	var center := Vector2(camp_position.x, camp_position.z)
+	var points := original.duplicate()
+	if points.size() < 2:
+		return points
+	if points[points.size() - 1].distance_to(center) < 2.0:
+		points.reverse()
+	if points[0].distance_to(center) >= 2.0:
+		return points
+	var result := PackedVector2Array()
+	var radius := 12.5
+	for index: int in range(1, points.size()):
+		var a := points[index - 1]
+		var b := points[index]
+		if result.is_empty() and b.distance_to(center) >= radius:
+			var low := 0.0
+			var high := 1.0
+			for step: int in range(16):
+				var mid := (low + high) * 0.5
+				if a.lerp(b, mid).distance_to(center) < radius:
+					low = mid
+				else:
+					high = mid
+			result.append(a.lerp(b, high))
+		if not result.is_empty():
+			result.append(b)
+	return result
+
+
+func _create_camp_ground() -> void:
+	var vertices := PackedVector3Array()
+	var colors := PackedColorArray()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	var center := Vector2(camp_position.x, camp_position.z)
+	var normals := PackedVector3Array()
+	var segments := 96
+	var radii: Array[float] = [0.0, 3.0, 6.0, 9.0, 11.5, 13.5]
+	for ring: int in range(radii.size()):
+		for i: int in range(segments):
+			var angle := TAU * float(i) / float(segments)
+			var p := center + Vector2(cos(angle), sin(angle)) * radii[ring]
+			vertices.append(Vector3(p.x, height_at(p.x, p.y) + ROAD_LIFT - 0.01, p.y))
+			normals.append(Vector3.UP)
+			colors.append(Color(1, 1, 1, 0.0 if ring == radii.size() - 1 else 1.0))
+			uvs.append((p - center) * 0.3)
+	for ring: int in range(radii.size() - 1):
+		for i: int in range(segments):
+			var a := ring * segments + i
+			var b := ring * segments + (i + 1) % segments
+			var c := a + segments
+			var d := b + segments
+			indices.append_array(PackedInt32Array([a, c, b, b, c, d]))
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.surface_set_material(0, _materials["road"])
+	var ground := MeshInstance3D.new()
+	ground.name = "CampRoadClearing"
+	ground.mesh = mesh
+	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(ground)
 
 
 func _mark_road_cells(polyline: PackedVector2Array) -> void:
@@ -1594,6 +1699,10 @@ func _create_road_lamps() -> void:
 			var side := Vector2(-tangent.y, tangent.x)
 			var sign_value: float = 1.0 if (int(candidate["index"]) + slot) % 2 == 0 else -1.0
 			var verge: Vector2 = at + side * sign_value * (ROAD_WIDTH * 0.5 + 1.35)
+			# The camp gates have their own paired lights; a roadside light here
+			# would overlap one of those stands on closely spaced approaches.
+			if verge.distance_to(Vector2(camp_position.x, camp_position.z)) < 21.0:
+				continue
 			if absf(verge.x) > BOUNDS - 7.0 or absf(verge.y) > BOUNDS - 7.0:
 				continue
 			# Branched roads pass close to one another. A verge on one route can
@@ -1771,7 +1880,7 @@ func _create_pond_dressing() -> void:
 		var center: Vector2 = pond["center"]
 		var placed: int = 0
 		var attempts: int = 0
-		while placed < 46 and attempts < 260:
+		while placed < 80 and attempts < 420:
 			attempts += 1
 			var angle: float = _rng.randf_range(0.0, TAU)
 			var t: float = _rng.randf_range(1.5, 1.9)
@@ -2011,8 +2120,13 @@ func stream_cell(at: Vector3) -> Vector2i:
 
 func _refresh_baked_dynamic_nodes() -> void:
 	_flames.clear()
-	for flame: Node in find_children("Flame*", "Node3D", true, false):
-		_flames.append(flame as Node3D)
+	for flame: Node in get_tree().get_nodes_in_group("world_flames"):
+		if is_ancestor_of(flame):
+			_flames.append(flame as Node3D)
+	_camp_embers.clear()
+	for ember: Node in get_tree().get_nodes_in_group("campfire_embers"):
+		if is_ancestor_of(ember):
+			_camp_embers.append(ember as Node3D)
 	_night_lights.clear()
 	for light: Node in find_children("*", "OmniLight3D", true, false):
 		if light.has_meta("night_energy"):
@@ -2329,7 +2443,7 @@ func _create_grass() -> void:
 			placed += 1
 	# Same for the meadow: grass has to reach the foothills, not stop at an
 	# invisible zone boundary.
-	var outskirt_target: int = 13950
+	var outskirt_target: int = 21000
 	var outskirt_placed: int = 0
 	var outskirt_attempts: int = 0
 	while outskirt_placed < outskirt_target and outskirt_attempts < outskirt_target * 8:
@@ -2577,9 +2691,6 @@ func _create_frontier_landmarks() -> void:
 			var beam := _add_mesh(place, "FallenBeam", _box_mesh(Vector3(3.2, 0.45, 0.5)), "stone_light")
 			beam.position = Vector3(0.1, 0.42, 2.1)
 			beam.rotation.y = 0.35 * style
-		elif style == 2 or style == 4:
-			var altar := _add_mesh(place, "OldAltar", _box_mesh(Vector3(1.4, 0.7, 0.8)), "stone_light")
-			altar.position = Vector3(0.0, 0.65, 0.0)
 		var marker := _add_mesh(place, "LandmarkMarker", _box_mesh(Vector3(2.8, 0.55, 0.16)), "wood")
 		marker.position = Vector3(0.0, 1.25, 2.7)
 		_text(place, Vector3(0.0, 1.3, 2.8), str(landmark["name"]), 48, Color("cdbb92"))
@@ -2769,26 +2880,63 @@ func _text(parent: Node3D, at: Vector3, message: String, font_size: int = 72, co
 	return label
 
 
-## Layered additive flame: a wide orange tongue, a bright core and a small tip.
-## The overlap hides each cone's silhouette, which is what made the old single
-## cone read as a paper pyramid.
-func _flame(parent: Node3D, at: Vector3, scale_value: float = 1.0) -> void:
+## Soft animated fire sprites, authored in Blender and shared by all fires.
+func _flame(parent: Node3D, at: Vector3, scale_value: float = 1.0, local_particles: bool = false) -> void:
 	var group := Node3D.new()
 	group.name = "Flame"
 	group.position = at
 	group.scale = Vector3.ONE * scale_value
 	parent.add_child(group)
-	var outer := _add_mesh(group, "FlameOuter", _cone_mesh(0.32, 0.98, 9), "fire_outer")
-	outer.position.y = 0.49
-	outer.rotation.y = _rng.randf_range(0.0, TAU)
-	var inner := _add_mesh(group, "FlameInner", _cone_mesh(0.19, 0.66, 8), "fire_core")
-	inner.position = Vector3(0.03, 0.33, 0.015)
-	inner.rotation.y = _rng.randf_range(0.0, TAU)
-	var tip := _add_mesh(group, "FlameTip", _cone_mesh(0.10, 0.44, 7), "fire_core")
-	tip.position = Vector3(-0.055, 0.84, 0.0)
-	tip.rotation.z = 0.14
-	for piece: MeshInstance3D in [outer, inner, tip]:
-		piece.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	group.add_to_group("world_flames", true)
+	var material := StandardMaterial3D.new()
+	material.albedo_texture = load("res://assets/textures/fire_sprite.png")
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	material.vertex_color_use_as_albedo = true
+	material.emission_enabled = true
+	material.emission = Color("ff7626")
+	material.emission_energy_multiplier = 0.65 if local_particles else 1.4
+	if local_particles:
+		material.albedo_color = Color(0.85, 0.7, 0.6, 0.65)
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.45, 0.8) if local_particles else Vector2(0.62, 1.0)
+	quad.material = material
+	var process := ParticleProcessMaterial.new()
+	process.direction = Vector3.UP
+	process.spread = 20.0
+	process.gravity = Vector3(0, 0.25, 0)
+	process.initial_velocity_min = 0.25
+	process.initial_velocity_max = 0.65
+	process.scale_min = 0.65
+	process.scale_max = 1.15
+	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	process.emission_sphere_radius = 0.18
+	var particles := GPUParticles3D.new()
+	particles.name = "FireParticles"
+	particles.amount = 8 if local_particles else 18
+	particles.lifetime = 0.85
+	particles.preprocess = 1.0
+	# The lowest possible sprite edge (half-height * max scale plus the
+	# emission radius) remains just above the rim, rather than under the bowl.
+	particles.position.y = 0.66 if local_particles else 0.32
+	particles.local_coords = local_particles
+	particles.process_material = process
+	particles.draw_pass_1 = quad
+	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	group.add_child(particles)
+	var fire_sound := AudioStreamPlayer3D.new()
+	fire_sound.name = "FireSound"
+	var stream: AudioStreamWAV = load("res://assets/audio/campfire_crackle.wav" if scale_value > 1.0 else "res://assets/audio/torch_crackle.wav").duplicate()
+	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	stream.loop_begin = 0
+	stream.loop_end = stream.data.size() / 2
+	fire_sound.stream = stream
+	fire_sound.max_distance = 16.0 if scale_value > 1.0 else 8.0
+	fire_sound.unit_size = 3.0 if scale_value > 1.0 else 1.5
+	fire_sound.set_meta("base_db", -10.0 if scale_value > 1.0 else -15.0)
+	group.add_child(fire_sound)
 	_flames.append(group)
 
 
@@ -2807,20 +2955,18 @@ func _campfire(parent: Node3D, at: Vector3) -> void:
 		var stone_scale := stone_size / (0.32 if index % 2 == 0 else 0.22)
 		stone.scale = Vector3(stone_scale, stone_scale * 0.9, stone_scale)
 		stone.rotation.y = angle
-	# Split logs lean into a teepee over a bed of embers.
-	for index: int in range(6):
-		var angle: float = TAU * float(index) / 6.0 + 0.4
-		var foot := at + Vector3(cos(angle) * 0.74, 0.10, sin(angle) * 0.74)
-		var tip := at + Vector3(cos(angle) * 0.13, 1.02, sin(angle) * 0.13)
-		_strut(parent, foot, tip, 0.082, "wood", "FireLog")
+	# Original charred and bark-covered firewood, built around the same flame.
+	_camp_model(parent, "camp_firewood.glb", "Firewood", at)
 	for index: int in range(12):
 		var angle: float = TAU * float(index) / 12.0 + 0.2
 		var radius: float = _rng.randf_range(0.18, 0.62)
 		var ember := _add_mesh(parent, "FireEmber", _sphere_mesh(0.055, 5, 3), "fire")
+		ember.add_to_group("campfire_embers", true)
 		ember.position = at + Vector3(cos(angle) * radius, 0.10, sin(angle) * radius)
 		ember.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_camp_embers.append(ember)
 	_flame(parent, at + Vector3(0.0, 0.16, 0.0), 1.42)
-	var fire_light := _light(parent, at + Vector3(0.0, 1.55, 0.0), Color("ffb266"), 2.4, 14.0)
+	var fire_light := _night_light(parent, at + Vector3(0.0, 1.55, 0.0), Color("ffb266"), 2.4, 14.0)
 	fire_light.name = "CampfireLight"
 
 
@@ -2831,18 +2977,27 @@ func _sitting_log(parent: Node3D, at: Vector3, rotation_y: float) -> void:
 	log_node.position = at
 	log_node.rotation.y = rotation_y
 	parent.add_child(log_node)
-	var trunk := _add_mesh(log_node, "LogSeat", _cylinder_mesh(0.31, 2.5, 9), "wood")
-	trunk.rotation.z = PI * 0.5
-	trunk.position.y = 0.28
-	for end: float in [-1.0, 1.0]:
-		var face := _add_mesh(log_node, "LogEnd", _cylinder_mesh(0.315, 0.035, 9), "wood_light")
-		face.rotation.z = PI * 0.5
-		face.position = Vector3(end * 1.25, 0.28, 0.0)
-	# Two wedge chocks stop the seat from reading as a floating pipe.
-	for side: float in [-1.0, 1.0]:
-		var chock := _add_mesh(log_node, "LogChock", _box_mesh(Vector3(0.34, 0.16, 0.5)), "wood")
-		chock.position = Vector3(side * 0.86, 0.08, 0.0)
-		chock.rotation.z = side * 0.12
+	log_node.add_to_group("camp_seats", true)
+	var body := StaticBody3D.new()
+	body.name = "SeatCollision"
+	log_node.add_child(body)
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(2.5, 0.55, 0.58)
+	collision.name = "CollisionShape3D"
+	collision.shape = shape
+	collision.position.y = 0.275
+	body.add_child(collision)
+	_camp_model(log_node, "camp_log_seat.glb", "LogSeat", Vector3.ZERO)
+
+
+func _camp_model(parent: Node3D, file_name: String, node_name: String, at: Vector3) -> Node3D:
+	var scene: PackedScene = load("res://assets/models/props/" + file_name)
+	var model := scene.instantiate() as Node3D
+	model.name = node_name
+	model.position = at
+	parent.add_child(model)
+	return model
 
 
 func _ground_bed(tent: Node3D, at: Vector3, rotation_y: float) -> void:
@@ -2851,14 +3006,7 @@ func _ground_bed(tent: Node3D, at: Vector3, rotation_y: float) -> void:
 	bed.position = at
 	bed.rotation.y = rotation_y
 	tent.add_child(bed)
-	var frame := _add_mesh(bed, "BedFrame", _box_mesh(Vector3(1.06, 0.10, 2.16)), "wood_light")
-	frame.position.y = 0.05
-	var tick := _add_mesh(bed, "BedStraw", _box_mesh(Vector3(0.94, 0.16, 2.02)), "straw")
-	tick.position.y = 0.17
-	var blanket := _add_mesh(bed, "BedBlanket", _box_mesh(Vector3(0.98, 0.07, 1.30)), "cloth_dark")
-	blanket.position = Vector3(0.0, 0.28, 0.35)
-	var pillow := _add_mesh(bed, "BedPillow", _box_mesh(Vector3(0.58, 0.16, 0.34)), "cloth")
-	pillow.position = Vector3(0.0, 0.30, -0.74)
+	_camp_model(bed, "camp_bed.glb", "Bedding", Vector3.ZERO)
 
 
 ## Walk-in A-frame. The front is open; both sloped sides and the rear wall are
@@ -2872,16 +3020,7 @@ func _tent(parent: Node3D, at: Vector3, rotation_y: float, cloth_key: String = "
 	var width: float = 4.0
 	var height_value: float = 2.7
 	var depth: float = 5.6
-	var canopy := PrismMesh.new()
-	canopy.size = Vector3(width, height_value, depth)
-	canopy.left_to_right = 0.5
-	var body := _add_mesh(tent, "TentCanopy", canopy, cloth_key)
-	body.position.y = height_value * 0.5
-	var back := PrismMesh.new()
-	back.size = Vector3(width - 0.06, height_value - 0.04, 0.12)
-	back.left_to_right = 0.5
-	var rear := _add_mesh(tent, "TentBack", back, cloth_key)
-	rear.position = Vector3(0.0, height_value * 0.5, -depth * 0.5 + 0.06)
+	_camp_model(tent, "camp_tent.glb", "TentCanopy", Vector3.ZERO)
 	# A rigid floor cloth and a pegged skirt hide the ground seam on the blend
 	# slope beyond the flattened camp pad.
 	var floor_cloth := _add_mesh(tent, "TentFloor", _box_mesh(Vector3(width * 0.92, 0.04, depth * 0.92)), "cloth_dark")
@@ -2891,25 +3030,12 @@ func _tent(parent: Node3D, at: Vector3, rotation_y: float, cloth_key: String = "
 		skirt.position = Vector3(side * width * 0.5, -0.18, 0.0)
 	var back_skirt := _add_mesh(tent, "TentBackSkirt", _box_mesh(Vector3(width, 0.44, 0.05)), cloth_key)
 	back_skirt.position = Vector3(0.0, -0.18, -depth * 0.5)
-	# Ridge pole and seam strips break up the two large canvas slopes.
-	var ridge := _add_mesh(tent, "TentRidge", _cylinder_mesh(0.07, depth + 0.55, 6), "wood")
-	ridge.rotation.x = PI * 0.5
-	ridge.position = Vector3(0.0, height_value + 0.02, 0.0)
 	var slope: float = sqrt(pow(width * 0.5, 2.0) + pow(height_value, 2.0))
 	var slope_angle: float = atan2(height_value, width * 0.5)
 	for side: float in [-1.0, 1.0]:
-		var seam := _add_mesh(tent, "TentSeam", _box_mesh(Vector3(slope * 0.94, 0.05, depth + 0.02)), "cloth_dark")
-		seam.position = Vector3(side * width * 0.25, height_value * 0.5, 0.0)
-		seam.rotation.z = -side * slope_angle
 		# Guy ropes pulled to pegs fore and aft.
 		for end: float in [-1.0, 1.0]:
 			_strut(tent, Vector3(0.0, height_value, end * depth * 0.5), Vector3(side * (width * 0.5 + 1.15), 0.02, end * (depth * 0.5 + 0.95)), 0.014, "cloth_dark", "GuyRope")
-		# A-frame legs at the mouth.
-		_strut(tent, Vector3(side * width * 0.5, 0.0, depth * 0.5 + 0.02), Vector3(0.0, height_value + 0.02, depth * 0.5 + 0.02), 0.055, "wood", "TentLeg")
-	# One curtain tied open so the entrance reads as a way in, not a wall.
-	var curtain := _add_mesh(tent, "TentCurtain", _box_mesh(Vector3(1.35, 2.35, 0.05)), cloth_key)
-	curtain.position = Vector3(-1.12, 1.18, depth * 0.5 + 0.03)
-	curtain.rotation.y = 0.2
 	# Two ground beds at the back, one on either side, leave a clear aisle from
 	# the entrance to the fire pit.
 	_ground_bed(tent, Vector3(-0.98, 0.0, -0.55), 0.0)
@@ -2957,16 +3083,7 @@ func _banner(parent: Node3D, at: Vector3, rotation_y: float, cloth_key: String =
 
 
 func _lamp(parent: Node3D, at: Vector3) -> void:
-	var pole := _add_mesh(parent, "LampPole", _cylinder_mesh(0.07, 2.5, 6), "iron")
-	pole.position = at + Vector3(0.0, 1.25, 0.0)
-	var arm := _add_mesh(parent, "LampArm", _box_mesh(Vector3(0.55, 0.07, 0.07)), "iron")
-	arm.position = at + Vector3(0.24, 2.42, 0.0)
-	var cage := _add_mesh(parent, "LampCage", _box_mesh(Vector3(0.34, 0.42, 0.34)), "iron")
-	cage.position = at + Vector3(0.5, 2.18, 0.0)
-	var glow := _add_mesh(parent, "LampGlow", _sphere_mesh(0.13, 6, 3), "fire")
-	glow.position = at + Vector3(0.5, 2.18, 0.0)
-	glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_night_light(parent, at + Vector3(0.5, 2.1, 0.0), Color("ffc27a"), 0.9, 7.0)
+	_road_lamp(parent, at, 0.0)
 
 
 ## Medieval verge lamp: stone footing, iron post, one arm reaching over the road
@@ -2976,42 +3093,24 @@ func _road_lamp(parent: Node3D, at: Vector3, rotation_y: float) -> void:
 	lamp.name = "RoadLamp"
 	lamp.position = at
 	lamp.rotation.y = rotation_y
+	# The complete lit silhouette is approximately the height of the player.
+	lamp.scale = Vector3.ONE * 0.60
 	parent.add_child(lamp)
-	var footing := _add_mesh(lamp, "LampFooting", _cylinder_mesh(0.25, 0.30, 8), "stone")
-	footing.position.y = 0.15
-	var pole := _add_mesh(lamp, "LampPole", _cylinder_mesh(0.075, 3.15, 8), "iron")
-	pole.position.y = 1.72
-	for collar_y: float in [0.42, 1.62, 2.72]:
-		var collar := _add_mesh(lamp, "LampCollar", _cylinder_mesh(0.115, 0.07, 8), "iron")
-		collar.position.y = collar_y
-	var arm := _add_mesh(lamp, "LampArm", _box_mesh(Vector3(0.98, 0.08, 0.08)), "iron")
-	arm.position = Vector3(0.40, 3.24, 0.0)
-	_strut(lamp, Vector3(0.02, 2.62, 0.0), Vector3(0.64, 3.20, 0.0), 0.028, "iron", "LampBrace")
-	var hook := _add_mesh(lamp, "LampHook", _cylinder_mesh(0.022, 0.18, 6), "iron")
-	hook.position = Vector3(0.82, 3.14, 0.0)
-	var hood := _add_mesh(lamp, "LampHood", _cone_mesh(0.30, 0.24, 6), "iron")
-	hood.position = Vector3(0.82, 2.98, 0.0)
-	var floor_plate := _add_mesh(lamp, "LampFloor", _cylinder_mesh(0.18, 0.06, 6), "iron")
-	floor_plate.position = Vector3(0.82, 2.42, 0.0)
-	for bar: int in range(4):
-		var angle: float = TAU * float(bar) / 4.0 + PI * 0.25
-		var bar_x: float = 0.82 + cos(angle) * 0.155
-		var bar_z: float = sin(angle) * 0.155
-		_strut(lamp, Vector3(bar_x, 2.45, bar_z), Vector3(bar_x, 2.87, bar_z), 0.016, "iron", "LampBar")
-	var glass := _add_mesh(lamp, "LampGlass", _sphere_mesh(0.135, 8, 4), "fire")
-	glass.position = Vector3(0.82, 2.64, 0.0)
-	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_flame(lamp, Vector3(0.82, 2.56, 0.0), 0.28)
-	_night_light(lamp, Vector3(0.82, 2.62, 0.0), Color("ffc27a"), 1.45, 11.0)
+	var model: PackedScene = load("res://assets/models/props/road_cresset.glb")
+	var cresset := model.instantiate() as Node3D
+	cresset.name = "TripodCresset"
+	lamp.add_child(cresset)
+	_flame(lamp, Vector3(0.0, 2.28, 0.0), 0.60, true)
+	_night_light(lamp, Vector3(0.0, 2.5, 0.0), Color("ffc27a"), 1.45, 11.0)
 	# The post is solid: a player cannot walk through a lamp on the verge.
 	var body := StaticBody3D.new()
 	body.name = "LampBody"
 	var collision := CollisionShape3D.new()
 	var shape := CylinderShape3D.new()
-	shape.radius = 0.22
-	shape.height = 3.3
+	shape.radius = 0.48
+	shape.height = 2.5
 	collision.shape = shape
-	collision.position.y = 1.65
+	collision.position.y = 1.25
 	body.add_child(collision)
 	lamp.add_child(body)
 
@@ -3125,17 +3224,31 @@ func _create_camp_fence(parent: Node3D) -> void:
 	var walls := StaticBody3D.new()
 	walls.name = "CampFenceBody"
 	parent.add_child(walls)
+	var gate_torch_positions: Array[Vector3] = []
 	# Gate frames first: two tall posts and a lintel beam across the opening.
 	for angle: float in gate_angles:
 		var left := angle - gate_half
 		var right := angle + gate_half
 		_camp_fence_post(parent, left, radius, true)
 		_camp_fence_post(parent, right, radius, true)
+		# Outside the gate posts, with a clear pedestrian opening between them.
+		for side: float in [-1.0, 1.0]:
+			var torch_angle := angle + side * (gate_half + 0.085)
+			var torch_at := _camp_fence_point(torch_angle, radius + 1.0)
+			var overlaps := false
+			for existing: Vector3 in gate_torch_positions:
+				if Vector2(existing.x, existing.z).distance_to(Vector2(torch_at.x, torch_at.z)) < 2.0:
+					overlaps = true
+					break
+			if overlaps:
+				continue
+			gate_torch_positions.append(torch_at)
+			_road_lamp(parent, torch_at, torch_angle)
 		var from := _camp_fence_point(left, radius) + Vector3.UP * 2.42
 		var to := _camp_fence_point(right, radius) + Vector3.UP * 2.42
-		_strut(parent, from, to, 0.075, "wood", "GateBeam")
-		_strut(parent, from, from + Vector3.DOWN * 0.62, 0.045, "wood", "GateBrace")
-		_strut(parent, to, to + Vector3.DOWN * 0.62, 0.045, "wood", "GateBrace")
+		_strut(parent, from, to, 0.075, "camp_timber", "GateBeam")
+		_strut(parent, from, from + Vector3.DOWN * 0.62, 0.045, "camp_timber", "GateBrace")
+		_strut(parent, to, to + Vector3.DOWN * 0.62, 0.045, "camp_timber", "GateBrace")
 	# Then fill each arc between consecutive gates with posts and two rails.
 	for gate_index: int in range(gate_angles.size()):
 		var start_angle: float = gate_angles[gate_index] + gate_half
@@ -3154,7 +3267,7 @@ func _create_camp_fence(parent: Node3D) -> void:
 			var from := _camp_fence_point(a0, radius)
 			var to := _camp_fence_point(a1, radius)
 			for rail_height: float in [0.52, 1.02]:
-				_strut(parent, from + Vector3.UP * rail_height, to + Vector3.UP * rail_height, 0.05, "wood", "FenceRail")
+				_strut(parent, from + Vector3.UP * rail_height, to + Vector3.UP * rail_height, 0.07, "camp_timber", "FenceRail")
 			var shape := BoxShape3D.new()
 			var segment := to - from
 			shape.size = Vector3(Vector2(segment.x, segment.z).length(), 1.16, 0.16)
@@ -3173,14 +3286,20 @@ func _camp_fence_point(angle: float, radius: float) -> Vector3:
 
 func _camp_fence_post(parent: Node3D, angle: float, radius: float, tall: bool) -> void:
 	var at := _camp_fence_point(angle, radius)
-	var height_value: float = 2.34 if tall else 1.52
+	var height_value: float = 2.34 if tall else 1.46 + 0.10 * sin(angle * 11.0)
 	var thickness: float = 0.15 if tall else 0.10
-	var post := _add_mesh(parent, "FencePost", _cylinder_mesh(thickness, height_value, 6), "wood")
+	var post_mesh := _cylinder_mesh(thickness, height_value, 8)
+	post_mesh.top_radius = thickness * 0.78
+	var post := _add_mesh(parent, "FencePost", post_mesh, "camp_timber")
 	post.position = at + Vector3.UP * (height_value * 0.5)
 	post.rotation.y = angle
 	if tall:
 		var cap := _add_mesh(parent, "GateFinial", _cone_mesh(thickness * 1.5, 0.22, 6), "wood_light")
 		cap.position = at + Vector3.UP * (height_value + 0.11)
+	else:
+		for rail_height: float in [0.52, 1.02]:
+			var lashing := _add_mesh(parent, "FenceLashing", _cylinder_mesh(thickness * 1.10, 0.07, 8), "straw")
+			lashing.position = at + Vector3.UP * rail_height
 
 
 func _create_camp() -> void:
@@ -3216,8 +3335,6 @@ func _create_camp() -> void:
 	_crate(camp, Vector3(6.9, 0.7, -3.1), 0.55, -0.2)
 	_banner(camp, Vector3(0.0, 0.0, 10.3), PI, "banner")
 	_banner(camp, Vector3(0.0, 0.0, -10.3), 0.0, "banner")
-	_lamp(camp, Vector3(-3.4, 0.0, 2.4))
-	_lamp(camp, Vector3(3.4, 0.0, -2.4))
 	# Wayfarer sign just inside the eastern road gate, read from both sides.
 	var sign_root := Vector3(10.1, 0.0, -4.9)
 	var facing: float = atan2(-sign_root.x, -sign_root.z)
@@ -3253,9 +3370,6 @@ func _create_broken_arch() -> void:
 		if spot.z < -4.4:
 			continue
 		_pillar(site, spot, 0.34, _rng.randf_range(1.5, 2.8), "stone_light" if index % 3 == 0 else "stone", index % 3 == 1, _rng.randf_range(-0.05, 0.05))
-	var altar := _add_mesh(site, "Altar", _box_mesh(Vector3(1.7, 0.7, 1.0)), "stone_dark")
-	altar.position = Vector3(0.0, 0.92, 1.4)
-	altar.rotation.y = 0.1
 	_brazier(site, Vector3(-4.4, 0.52, 5.2))
 	_brazier(site, Vector3(4.4, 0.52, 5.2))
 	for index: int in range(9):
@@ -3273,12 +3387,7 @@ func _create_sanctum() -> void:
 	dais.position.y = 0.25
 	var step := _add_mesh(site, "DaisStep", _cylinder_mesh(3.2, 0.36, 16), "stone")
 	step.position.y = 0.68
-	var altar := _add_mesh(site, "SanctumAltar", _box_mesh(Vector3(1.9, 1.0, 1.2)), "stone_light")
-	altar.position.y = 1.36
-	var crown := _add_mesh(site, "CrownShard", _cone_mesh(0.5, 1.5, 5), "rune")
-	crown.position.y = 2.6
-	crown.rotation.y = 0.3
-	_light(site, Vector3(0.0, 2.4, 0.0), Color("79c3b5"), 1.3, 10.0)
+	_light(site, Vector3(0.0, 1.6, 0.0), Color("79c3b5"), 1.1, 9.0)
 	for index: int in range(9):
 		var angle: float = TAU * float(index) / 9.0
 		var radius: float = 7.4 if index % 2 == 0 else 8.6

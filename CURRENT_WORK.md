@@ -3,6 +3,59 @@
 Last updated: **2026-10-29**
 Branch: `main`
 
+## Camp and road-fire pass (2026-10-29)
+
+- Replaced the old road lanterns with original Blender-authored timber tripods,
+  rope lashings and fire bowls. Each camp exit has a pair outside the fence; no
+  tripod stands are inside the camp.
+- Camp ground now has a circular road-textured clearing, and the rendered road
+  ribbons begin at the clearing edge toward the existing fence openings.
+- Camp logs have collision and an E-to-sit interaction; movement stands the
+  player up. The existing campfire sitting animation is reused on the log.
+- Particle fire and original synthesized positional crackles fade in at dusk
+  and out after dawn. Campfire embers and lights also go dark in the day.
+- A rendered seat check, world/traversal/integrity, progression, combat and skill
+  panel checks pass. Confirm the synthesized sound and seat transition in an
+  interactive session, and review performance with all gate fires at night.
+
+## Camp rebuild follow-up (2026-10-29)
+
+- Rebuilt tents as separate open canvas sheets with tied-back entrances, and
+  made original beds with straw ticks, pillows and blankets. Added bark-textured
+  fence timbers, rough log seats with separate cut-end grain, and charred wood
+  for the existing stone-ring campfire. Sources and regeneration instructions
+  are in `assets/models/props/generate_camp_assets.py` and the Poly Haven README.
+- Shared nearby gate torch placements and excluded roadside torches near the
+  camp to prevent overlapping stands.
+- Replaced the log's elevated floor-sitting animation with a rig-derived seated
+  pose, and return the visual to the body's side of the log before movement.
+- Per user request the latest revision was not launched or gameplay-tested.
+  The world was rebaked headlessly. Review the pose, foot placement and stand-up,
+  tent interiors, fire and sound mix when the user next plays.
+
+## Seat and torch follow-up (2026-10-29)
+
+- Log sitting uses the relaxed campfire upper body and a rig-derived leg pose,
+  aligning the pelvis to the log surface. A reversible sit/stand transition runs
+  before movement resumes; it preserves the separate X ground-sitting behavior.
+- Torch stands, flames and colliders are scaled to roughly player height. The
+  authored world snapshot has been rebaked.
+- No game launch or gameplay tests were performed at the user's direction. The
+  seated alignment, feet, relaxed arms and transition still need in-game review.
+
+## Seat position and torch flame correction (2026-10-29)
+
+- Sitting now retains the approached position along the log and side. During
+  the sit transition the collision body moves to a nearby standing point there;
+  getting up returns to that point rather than the original interaction point.
+- Torch particles use local coordinates so they scale with the stand. Their
+  sprites and emission point were adjusted to begin above the bowl, and their
+  size, particle count and brightness were reduced.
+- The off-center seat/stand test passed in the real renderer. One torch test
+  confirmed the local-coordinate setup; its image revealed sprite overlap under
+  the bowl, so the emission height and size were subsequently corrected and
+  the world rebaked. The final visual adjustment was not re-tested in-game.
+
 ## Current state
 
 Map I is playable as a real 3D forest continent. The old flat baked arena and the

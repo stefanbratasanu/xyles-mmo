@@ -102,7 +102,11 @@ func _draw() -> void:
 	var gate: Vector3 = world.waygate_position
 	_draw_camp(_map_point(Vector2(camp.x, camp.z)), font)
 	_draw_diamond(_map_point(Vector2(quest.x, quest.z)), Color("d7b46a"), "ARCH")
-	_draw_diamond(_map_point(Vector2(boss.x, boss.z)), Color("b8645c"), "REGENT")
+	# The sanctum boss spawn sits close to its zone plate, so its caption is
+	# centred above the marker instead of running into the zone label.
+	var boss_at: Vector2 = _map_point(Vector2(boss.x, boss.z))
+	_draw_diamond(boss_at, Color("b8645c"), "")
+	_centered_text(font, boss_at + Vector2(0.0, -20.0), "REGENT", 9, Color(0.78, 0.72, 0.62, 0.9))
 	_draw_gate(_map_point(Vector2(gate.x, gate.z)), font)
 
 	# Zone name plates sit on the land they describe, with a plate so the text

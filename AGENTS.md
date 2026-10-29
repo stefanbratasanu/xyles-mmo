@@ -38,7 +38,9 @@ Run the game:
 .\Godot_v4.7.2-stable_win64.exe --path .
 ```
 
-Run a headless import after adding or moving assets:
+Run a headless import after adding, moving or pulling assets (a pulled `.glb`,
+`.png`, `.res` or `.scn` can be newer than this PC's `.godot` cache and break
+preloads even when the file is present):
 
 ```powershell
 .\Godot_v4.7.2-stable_win64_console.exe --headless --path . --import

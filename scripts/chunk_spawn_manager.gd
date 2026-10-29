@@ -81,6 +81,12 @@ func advance(delta: float) -> void:
 		var slot: Dictionary = slots[index]
 		var species: String = current_species if slot["kind"] == "normal" else "guardian"
 		var enemy: Node = active.get(index)
+		# The boss slot is retained for save compatibility and the future boss
+		# rework, but stays dormant while world.boss_spawn_enabled is false.
+		if slot["kind"] == "boss" and not bool(game.world.boss_spawn_enabled):
+			if is_instance_valid(enemy):
+				_remove(index, false)
+			continue
 		if slot["kind"] == "quest" and (not bool(game.state.quests[0]["active"]) or int(game.state.quests[0]["stage"]) != 2):
 			if is_instance_valid(enemy):
 				_remove(index, false)

@@ -231,6 +231,10 @@ func _ready() -> void:
 ## for the frame to settle, writes a PNG into res://screenshots and quits.
 ## Run windowed with:  .\Godot_v4.7.2-stable_win64.exe --path . -- --screenshot
 func _run_screenshot_tour() -> void:
+	# Pin the tour to daylight so every landmark is readable regardless of the
+	# hour stored in the save the tour happened to load. The night frame at the
+	# end still sets 22:00 explicitly.
+	world.set_time_of_day(10.0)
 	await get_tree().create_timer(1.8).timeout
 	var shots: Array[Dictionary] = [
 		{"name": "01_camp", "at": Vector3(-36.0, 0.0, 34.0), "yaw": 0.0, "pitch": 0.44, "distance": 10.0},
@@ -870,6 +874,10 @@ func _drop_satchel(at: Vector3, items: Array) -> void:
 func interact() -> void:
 	if is_dead:
 		return
+	var seat := _nearby_camp_seat()
+	if seat != null and player.sit_on_log(seat):
+		game_log.gameplay("camp_seat_used", {"position": str(seat.global_position)})
+		return
 	if player.position.distance_to(world.waygate_position) < 10.0:
 		game_log.gameplay("waygate_examined", {"sealed": true, "target": "map_ii"})
 		_on_notice("The waygate is sealed. Beyond it lies Map II, which has not been built yet.")
@@ -906,7 +914,23 @@ func interact() -> void:
 			audio.cue("reward")
 			game_log.gameplay("resource_gathered", {"type": resource["type"], "amount": 35, "wood": state.wood, "iron": state.iron})
 			return
-	_fail_notice("Move closer to the blacksmith, a resource deposit, or dropped equipment.")
+	_fail_notice("Move closer to a camp seat, the blacksmith, a resource deposit, or dropped equipment.")
+
+
+func _nearby_camp_seat() -> Node3D:
+	if player.sitting:
+		return null
+	var nearest: Node3D = null
+	var best := 2.0
+	for node: Node in get_tree().get_nodes_in_group("camp_seats"):
+		var seat := node as Node3D
+		if seat == null:
+			continue
+		var distance := Vector2(player.global_position.x - seat.global_position.x, player.global_position.z - seat.global_position.z).length()
+		if distance < best:
+			best = distance
+			nearest = seat
+	return nearest
 
 func _update_region_and_context() -> void:
 	var zone: Dictionary = world.zone_at(player.global_position)
@@ -926,7 +950,9 @@ func _update_region_and_context() -> void:
 	var near_camp: bool = player.global_position.distance_to(world.camp_position) < 9.5
 	region_name = "EMBERFALL CAMP" if near_camp else str(zone.get("name", "ASHEN FRONTIER"))
 	context_hint = ""
-	if player.position.distance_to(world.waygate_position) < 10.0:
+	if _nearby_camp_seat() != null:
+		context_hint = "[ E ]  Sit by the fire  ·  Move to stand"
+	elif player.position.distance_to(world.waygate_position) < 10.0:
 		context_hint = "[ E ]  Examine the sealed waygate  ·  safe ground"
 	elif player.position.distance_to(smith_position) < 5.5:
 		context_hint = "[ E ]  Speak to Torven, the blacksmith"

@@ -113,6 +113,8 @@ func run() -> void:
 	manager.advance(1800.0)
 	assert(manager.active[0] != wolf and is_equal_approx(manager.active[0].hp, manager.active[0].max_hp), "crossed windows must be caught up even when species matches again")
 	var boss_index: int = world.normal_spawns.size()
+	# Boss content is dormant in normal play; this section exercises the slot.
+	world.boss_spawn_enabled = true
 	if manager.active.has(boss_index):
 		manager._remove(boss_index, false)
 	manager.slots[boss_index]["hp"] = -1.0
@@ -134,6 +136,7 @@ func run() -> void:
 	manager.advance(0.0)
 	assert(manager.active.has(boss_index), "a boss window passed offscreen should be caught up")
 	world.boss_spawn_window.clear()
+	world.boss_spawn_enabled = false
 	var quest_index := boss_index + 1
 	game.state.quests[0]["active"] = true
 	game.state.quests[0]["stage"] = 2

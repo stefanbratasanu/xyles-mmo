@@ -30,7 +30,7 @@ file is the shorter contract used during implementation.
 | Right mouse | Capture mouse / orbit camera |
 | Mouse wheel | Zoom camera |
 | `1` - `9`, `0` | Use skill slot |
-| `E` | Interact (blacksmith, resource, dropped loot) |
+| `E` | Interact (camp seat, blacksmith, resource, dropped loot) |
 | `Tab` | Cycle nearby enemy target |
 | Left click | Select enemy or move to ground point |
 | `X` | Sit / stand |
@@ -49,6 +49,10 @@ file is the shorter contract used during implementation.
 | `F12` | Save a screenshot to `screenshots/` |
 
 ## 2a. World, zones and presentation
+
+- The two campfire logs are solid seats: approach one and press E to sit; moving
+  with WASD starts the stand-up animation. The campfire and roadside/gate
+  torches burn at night, fading at dawn and dusk, with quiet positional crackling.
 
 - Before a new mob is implemented, ask Alin or Stefan for its spawn time or
   day/night window and the map, zones or biomes where it belongs. Record their

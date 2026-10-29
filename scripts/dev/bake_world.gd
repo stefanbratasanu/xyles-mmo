@@ -121,7 +121,7 @@ func _bake_static_chunks(world: Node, streamed_nodes: Array) -> Dictionary:
 		if not node is Node3D or node is MultiMeshInstance3D or node in streamed_nodes:
 			continue
 		var node_name := str(node.name)
-		if node_name in ["FrontierSun", "RollingTerrain", "RoadNetwork"] or node_name.begins_with("FenPool") or node_name.begins_with("FrontierBoundary") or node is StaticBody3D:
+		if node_name in ["FrontierSun", "RollingTerrain", "RoadNetwork", "CampRoadClearing"] or node_name.begins_with("FenPool") or node_name.begins_with("FrontierBoundary") or node is StaticBody3D:
 			continue
 		var cell: Vector2i = world.stream_cell((node as Node3D).position)
 		if not chunks.has(cell):

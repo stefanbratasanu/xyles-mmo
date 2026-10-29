@@ -36,6 +36,13 @@ var jump_started := false
 var roll_elapsed := 0.0
 var rolling := false
 var sitting := false
+var seat_offset := Vector3.ZERO
+var stand_requested := false
+var seat_returning := false
+var seat_entering := false
+var seat_hip_local := Vector3.ZERO
+var seat_anchor_start := Vector3.ZERO
+var seat_anchor_target := Vector3.ZERO
 const SIT_ANIMATIONS = preload("res://assets/animations/player_runtime/sit_animations.tres")
 const WALK_SPEED_FACTOR := 0.55
 const BACKWARD_SPEED_FACTOR := 0.60
@@ -98,6 +105,7 @@ func _ready() -> void:
 		process_priority = 100
 	var skeleton := character.find_child("Skeleton3D", true, false) as Skeleton3D
 	if skeleton != null:
+		_build_log_seat_pose(skeleton)
 		weapon_attachment = BoneAttachment3D.new()
 		weapon_attachment.name = "EquippedWeapon"
 		skeleton.add_child(weapon_attachment)
@@ -140,9 +148,20 @@ func _physics_process(delta: float) -> void:
 	var controls_enabled: bool = not game.hud.blocks_gameplay() and not game.is_dead and not bool(game.get("ui_text_input"))
 	if controls_enabled:
 		input_dir = Vector2(float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)), float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W)))
+	if seat_returning:
+		var progress := clampf(animation_player.current_animation_position / maxf(animation_player.current_animation_length, 0.001), 0.0, 1.0)
+		visual.position = seat_offset * smoothstep(0.0, 1.0, progress)
+		input_dir = Vector2.ZERO
+		controls_enabled = false
 	if sitting:
 		if controls_enabled and (input_dir.length_squared() > 0 or Input.is_physical_key_pressed(KEY_SPACE) or moving_to_click):
+			stand_requested = true
 			stand_up()
+		if seat_entering:
+			var progress := clampf(animation_player.current_animation_position / maxf(animation_player.current_animation_length, 0.001), 0.0, 1.0)
+			visual.position = seat_offset * smoothstep(0.0, 1.0, progress)
+		elif animation_player.current_animation == "seat/idle":
+			visual.position = seat_offset
 		input_dir = Vector2.ZERO
 		controls_enabled = false
 	var walking: bool = controls_enabled and Input.is_key_pressed(KEY_ALT)
@@ -160,7 +179,7 @@ func _physics_process(delta: float) -> void:
 	if input_dir.length() > 0.0:
 		moving_to_click = false
 		direction = Vector3(input_dir.x, 0, input_dir.y).rotated(Vector3.UP, game.camera_yaw).normalized()
-	elif moving_to_click and not sitting and not game.hud.blocks_gameplay() and not game.is_dead and not bool(game.get("ui_text_input")):
+	elif moving_to_click and not sitting and not seat_returning and not game.hud.blocks_gameplay() and not game.is_dead and not bool(game.get("ui_text_input")):
 		var offset := destination - global_position
 		offset.y = 0
 		if offset.length() > 0.3:
@@ -201,6 +220,11 @@ func _physics_process(delta: float) -> void:
 			clampf(wade_depth / WADE_MAX_DEPTH, 0.0, 1.0))
 	velocity.x = direction.x * speed_value
 	velocity.z = direction.z * speed_value
+	if seat_entering:
+		var progress := clampf(animation_player.current_animation_position / maxf(animation_player.current_animation_length, 0.001), 0.0, 1.0)
+		var wanted := seat_anchor_start.lerp(seat_anchor_target, smoothstep(0.0, 1.0, progress))
+		velocity.x = (wanted.x - global_position.x) / maxf(delta, 0.001)
+		velocity.z = (wanted.z - global_position.z) / maxf(delta, 0.001)
 	velocity.y -= 20.0 * delta
 	if on_ground and not jump_started:
 		velocity.y = -0.2
@@ -416,12 +440,56 @@ func toggle_sit() -> void:
 			weapon_visual.hide()
 		_play_action("sit/enter")
 
+## Sit at the nearest point along the log, preserving the approach side. Move
+## the collision body to a standing position beside that same point as we sit.
+func sit_on_log(seat: Node3D) -> bool:
+	if sitting or seat_returning or not is_on_floor() or action_active or is_dying or not animation_player.has_animation("seat/transition"):
+		return false
+	stand_requested = false
+	var approach := seat.to_local(global_position)
+	var along := clampf(approach.x, -0.95, 0.95)
+	var side := 1.0 if approach.z >= 0.0 else -1.0
+	var outward := (seat.global_basis * Vector3(0.0, 0.0, side)).normalized()
+	visual.rotation.y = atan2(-outward.x, -outward.z) - rotation.y
+	seat_anchor_start = global_position
+	seat_anchor_target = seat.to_global(Vector3(along, 0.0, side * 0.72))
+	seat_anchor_target.y = global_position.y
+	# Align the actual pelvis bone to the seat top, accounting for model rotation
+	# and the hip offset in the seated animation rather than guessing root height.
+	var hip_target := seat.to_global(Vector3(along, 0.57, 0.0))
+	seat_offset = (hip_target - seat_anchor_target).rotated(Vector3.UP, -rotation.y) - visual.basis * seat_hip_local
+	sitting = true
+	seat_entering = true
+	moving_to_click = false
+	dash_time = 0.0
+	velocity.x = 0.0
+	velocity.z = 0.0
+	if is_instance_valid(weapon_visual):
+		weapon_visual.hide()
+	_play_action("seat/transition")
+	return sitting
+
 func stand_up() -> void:
+	if sitting and (animation_player.current_animation == "seat/idle" or seat_entering):
+		var was_entering := seat_entering
+		var at_time := animation_player.current_animation_position if was_entering else animation_player.get_animation("seat/transition").length
+		sitting = false
+		stand_requested = false
+		seat_entering = false
+		seat_returning = true
+		action_active = true
+		animation_player.play_backwards("seat/transition", 0.12)
+		animation_player.seek(at_time, true)
+		return
 	if sitting and animation_player.current_animation == "sit/idle":
 		_play_action("sit/exit")
 
 func death_animation() -> void:
 	sitting = false
+	seat_offset = Vector3.ZERO
+	stand_requested = false
+	seat_returning = false
+	seat_entering = false
 	if is_instance_valid(weapon_visual):
 		weapon_visual.show()
 	rolling = false
@@ -429,6 +497,95 @@ func death_animation() -> void:
 	visual.position = Vector3.ZERO
 	is_dying = true
 	play_profile_action("death")
+
+
+## Adapt the relaxed campfire idle for a log and build a reversible transition
+## from the existing campfire animation's standing frame. Ground sitting on X
+## keeps its original animation library.
+func _build_log_seat_pose(skeleton: Skeleton3D) -> void:
+	if animation_player == null or not animation_player.has_animation("sit/idle") or not animation_player.has_animation("sit/enter"):
+		return
+	animation_player.play("sit/enter", 0.0)
+	animation_player.seek(0.0, true)
+	skeleton.force_update_all_bone_transforms()
+	var standing_feet := {}
+	for side: String in ["R", "L"]:
+		var foot := skeleton.find_bone("humanoid_ %s Foot" % side)
+		if foot < 0:
+			return
+		standing_feet[side] = skeleton.get_bone_global_pose(foot).basis.get_rotation_quaternion()
+	animation_player.play("sit/idle", 0.0)
+	animation_player.seek(0.0, true)
+	skeleton.force_update_all_bone_transforms()
+	var pose := animation_player.get_animation("sit/idle").duplicate(true) as Animation
+	var replacements := {}
+	for side: String in ["R", "L"]:
+		var thigh := skeleton.find_bone("humanoid_ %s Thigh" % side)
+		var calf := skeleton.find_bone("humanoid_ %s Calf" % side)
+		var foot := skeleton.find_bone("humanoid_ %s Foot" % side)
+		if thigh < 0 or calf < 0 or foot < 0:
+			return
+		var foot_global: Quaternion = standing_feet[side]
+		for entry: Array in [[thigh, Vector3.BACK], [calf, Vector3.DOWN]]:
+			var bone: int = entry[0]
+			var direction: Vector3 = entry[1]
+			var current := skeleton.get_bone_global_pose(bone).basis
+			var desired := Quaternion(current.x.normalized(), direction) * current.get_rotation_quaternion()
+			var parent := skeleton.get_bone_parent(bone)
+			var parent_rotation := skeleton.get_bone_global_pose(parent).basis.get_rotation_quaternion()
+			var local := parent_rotation.inverse() * desired
+			skeleton.set_bone_pose_rotation(bone, local)
+			skeleton.force_update_all_bone_transforms()
+			replacements[skeleton.get_bone_name(bone)] = local
+		var calf_rotation := skeleton.get_bone_global_pose(calf).basis.get_rotation_quaternion()
+		replacements[skeleton.get_bone_name(foot)] = calf_rotation.inverse() * foot_global
+	for track: int in range(pose.get_track_count()):
+		var path := pose.track_get_path(track)
+		var bone := String(path.get_subname(0)) if path.get_subname_count() > 0 else ""
+		if pose.track_get_type(track) == Animation.TYPE_ROTATION_3D and replacements.has(bone):
+			for key: int in range(pose.track_get_key_count(track)):
+				pose.track_set_key_value(track, key, replacements[bone])
+	pose.loop_mode = Animation.LOOP_LINEAR
+	var library := AnimationLibrary.new()
+	library.add_animation("idle", pose)
+	animation_player.add_animation_library(&"seat", library)
+	animation_player.play("seat/idle", 0.0)
+	animation_player.seek(0.0, true)
+	skeleton.force_update_all_bone_transforms()
+	var pelvis := skeleton.find_bone("humanoid_ Pelvis")
+	if pelvis < 0:
+		return
+	seat_hip_local = visual.to_local(skeleton.to_global(skeleton.get_bone_global_pose(pelvis).origin))
+	var transition := _make_seat_transition(animation_player.get_animation("sit/enter"), pose)
+	library.add_animation("transition", transition)
+	animation_player.stop()
+	_play_locomotion("protof/unarmed_idle")
+
+
+## Both clips use the same skeleton. Interpolate their keyed local transforms
+## over time, so playing this backwards produces a real rising motion.
+func _make_seat_transition(standing: Animation, seated: Animation) -> Animation:
+	var result := Animation.new()
+	result.length = 0.85
+	var tracks := {}
+	for source: Animation in [standing, seated]:
+		for index: int in range(source.get_track_count()):
+			var kind := source.track_get_type(index)
+			if kind not in [Animation.TYPE_POSITION_3D, Animation.TYPE_ROTATION_3D, Animation.TYPE_SCALE_3D] or source.track_get_key_count(index) == 0:
+				continue
+			var path := source.track_get_path(index)
+			var key := "%d:%s" % [kind, str(path)]
+			if not tracks.has(key):
+				tracks[key] = {"kind": kind, "path": path}
+			tracks[key]["standing" if source == standing else "seated"] = source.track_get_key_value(index, 0)
+	for entry: Dictionary in tracks.values():
+		var start: Variant = entry.get("standing", entry.get("seated"))
+		var finish: Variant = entry.get("seated", start)
+		var track := result.add_track(entry["kind"])
+		result.track_set_path(track, entry["path"])
+		result.track_insert_key(track, 0.0, start)
+		result.track_insert_key(track, result.length, finish)
+	return result
 
 func revive_animation() -> void:
 	is_dying = false
@@ -470,14 +627,34 @@ func _play_action(animation_name: String) -> void:
 	animation_player.play(animation_name, 0.1)
 
 func _on_animation_finished(animation_name: StringName) -> void:
+	if animation_name == &"seat/transition":
+		if seat_returning:
+			seat_returning = false
+			seat_offset = Vector3.ZERO
+			visual.position = Vector3.ZERO
+			action_active = false
+			if is_instance_valid(weapon_visual):
+				weapon_visual.show()
+			_play_locomotion(str(animation_entry("idle").clip))
+		elif sitting and seat_entering:
+			seat_entering = false
+			visual.position = seat_offset
+			_play_action("seat/idle")
+		return
 	if sitting:
 		match str(animation_name):
 			"sit/enter": _play_action("sit/down")
-			"sit/down": _play_action("sit/idle")
+			"sit/down":
+				_play_action("sit/idle")
+				if stand_requested:
+					stand_up()
 			"sit/exit": _play_action("sit/stand")
 			"sit/stand":
 				sitting = false
 				action_active = false
+				seat_offset = Vector3.ZERO
+				stand_requested = false
+				visual.position = Vector3.ZERO
 				if is_instance_valid(weapon_visual):
 					weapon_visual.show()
 		return

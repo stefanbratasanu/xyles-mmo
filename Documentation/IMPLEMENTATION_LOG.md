@@ -746,3 +746,247 @@ Added a live integer 20–60 FPS slider in `game_hud.gd`; `main.gd` clamps, appl
 Grass retains one batched MultiMesh group per cell: each patch combines three smaller clumps with varied shapes, and instances vary their scale, orientation and tint. Placement counts are 90% of the previous targets. Meadow patches and dry-shore grass reject locations near pond water; the former reed instances were knowingly placed in shallow water, so they now stand beyond the pond with extra clearance. The baked world was rebuilt; a pre-change backup is in `logs/nature_before_20261029/` and is excluded from Godot import. `AGENTS.md` and `GAME_RULES.md` now require asking Alin or Stefan for each new mob's day/night schedule and map, zones or biomes before implementation, then recording the decisions.
 
 **Verification and limits.** The baked-integrity test checks all grass audit points and dry-shore placement, ground tangents/normal textures, tree bark and bush foliage; world, streaming and traversal tests and a headless smoke run were exercised. Direct3D background streaming and in-engine camp, pond and individual prop previews were inspected. In separate same-setup stationary camp runs, grass patch instances fell from 25,112 to 22,547 and GPU render time measured 13.0–13.3 ms before and 10.3–12.8 ms after across separate runs; this is a single-machine scene comparison, not a guarantee or a clean isolation of grass, rock, material and shadow costs. The existing missing-editor-addon warning and editor empty-name diagnostic remain. Other viewpoints, night, interactive gameplay and slower computers require further review.
+
+## 2026-10-29 13:34 - Remote changes from another machine (automatic)
+
+**Source.** `origin/main` moved from `ee4aaca3` to `8cbf1f8f`. Local HEAD is `8cbf1f8f`.
+
+**Commits not authored on this PC** (local identity: `xylesmargera@gmail.com`):
+
+- `8cbf1f8f` 2026-10-29T11:32:20+02:00 **XyLeS** - 4 (475 files, +2048/-296) [already in local HEAD]
+- `0c4fc49f` 2026-10-29T01:23:32+02:00 **XyLeS** - Update 3 (37 files, +920/-38) [already in local HEAD]
+- `c1e904dc` 2026-10-29T00:35:56+02:00 **XyLeS** - Merge branch 'main' of https://github.com/stefanbratasanu/xyles-mmo (33 files, +1089/-42) [already in local HEAD]
+- `84a19b19` 2026-10-29T00:15:33+02:00 **XyLeS** - Update 2 (50 files, +3957/-361) [already in local HEAD]
+- `c544b2cd` 2026-10-28T21:48:56+02:00 **Stefan Bratasanu** - merges (35 files, +1117/-45) [already in local HEAD]
+- `69acc1bc` 2026-10-28T21:31:11+02:00 **XyLeS** - Merge branch 'main' of https://github.com/stefanbratasanu/xyles-mmo (8 files, +492/-18) [already in local HEAD]
+- `03deb0a0` 2026-10-28T21:30:16+02:00 **XyLeS** - Xyle update 28 oct (29 files, +1605/-307) [already in local HEAD]
+- `2f2f4c59` 2026-10-28T20:13:19+02:00 **Stefan Bratasanu** - spawner (8 files, +492/-18) [already in local HEAD]
+- `9e65a2d8` 2026-10-28T19:50:47+02:00 **Stefan Bratasanu** - my changes (66 files, +20825/-496) [already in local HEAD]
+
+**New commits authored on this PC:** 9 (not reported as external).
+
+**Files touched by the external commits:**
+
+- `.gitignore`
+- `{editor_plugins => addons}/skill_distribution/plugin.cfg`
+- `{editor_plugins => addons}/skill_distribution/plugin.gd`
+- `addons/effekseer/bin/windows/~libeffekseer.x86_64.dll~RF633b90.TMP`
+- `AGENTS.md`
+- `assets/animations/player_runtime/action_animations.tres`
+- `assets/animations/player_runtime/README.md`
+- `assets/animations/player_runtime/spear.tscn`
+- `assets/models/creatures/boar.glb`
+- `assets/models/creatures/boar_boar_hide.png`
+- `assets/models/creatures/boar_fur_card.png`
+- `assets/models/creatures/boar_rigged.glb`
+- `assets/models/creatures/boar_rigged_boar_hide.png`
+- `assets/models/creatures/boar_rigged_fur_card.png`
+- `assets/models/creatures/generate_creatures.py`
+- `assets/models/creatures/make_creature_textures.py`
+- `assets/models/creatures/rig_creatures.py`
+- `assets/models/creatures/wolf.glb`
+- `assets/models/creatures/wolf_fur_card.png`
+- `assets/models/creatures/wolf_rigged.glb`
+- `assets/models/creatures/wolf_rigged_fur_card.png`
+- `assets/models/creatures/wolf_rigged_wolf_fur.png`
+- `assets/models/creatures/wolf_wolf_fur.png`
+- `assets/models/props/bush.glb`
+- `assets/models/props/generate_props.py`
+- `assets/models/props/rock_1.glb`
+- `assets/models/props/rock_2.glb`
+- `assets/models/props/rock_3.glb`
+- `assets/models/props/stone_1.glb`
+- `assets/models/props/stone_2.glb`
+- `assets/models/trees/generate_trees.py`
+- `assets/models/trees/make_foliage_textures.py`
+- `assets/models/trees/tree_birch.glb`
+- `assets/models/trees/tree_dead.glb`
+- `assets/models/trees/tree_oak.glb`
+- `assets/models/trees/tree_pine.glb`
+- `assets/models/weapons/build_ornate_sword.py`
+- `assets/models/weapons/ornate_silver_sword.glb`
+- `assets/models/weapons/ornate_silver_sword_BrushedSilver.png`
+- `assets/textures/boar_hide.png`
+- `assets/textures/fur_card.png`
+- `assets/textures/grass_blades.png`
+- `assets/textures/leaf_card.png`
+- `assets/textures/needle_card.png`
+- `assets/textures/polyhaven/forest_ground_04-Diffuse.jpg`
+- `assets/textures/polyhaven/forest_ground_04-nor_gl.jpg`
+- `assets/textures/polyhaven/forest_ground_tinted.png`
+- `assets/textures/polyhaven/README.md`
+- `assets/textures/polyhaven/rock_face_03-Diffuse.jpg`
+- `assets/textures/polyhaven/rock_face_03-nor_gl.jpg`
+- `assets/textures/polyhaven/tint_ground.py`
+- `assets/textures/wolf_fur.png`
+- `assets/ui/equipment/spear.svg`
+- `assets/world/baked_world.res`
+- `assets/world/static/cell_0_0.scn`
+- `assets/world/static/cell_0_1.scn`
+- `assets/world/static/cell_0_-1.scn`
+- `assets/world/static/cell_0_2.scn`
+- `assets/world/static/cell_0_-2.scn`
+- `assets/world/static/cell_0_-3.scn`
+- ... and 480 more source file(s)
+- Generated Godot metadata: 70 `.uid`/`.import` file(s) (regenerate with a headless import)
+
+**Flags.**
+
+- New or changed addon outside addons/effekseer: `addons/skill_distribution/plugin.cfg`. Review before running.
+- New or changed addon outside addons/effekseer: `addons/skill_distribution/plugin.gd`. Review before running.
+- Core file changed: `project.godot`. Re-run the game and the tests before trusting it.
+- Executable/script added or changed: `scripts/dev/check_remote_changes.ps1`. Do not run it until reviewed.
+- Core file changed: `scripts/enemy.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/game_hud.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/game_state.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/main.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/player.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/world_builder.gd`. Re-run the game and the tests before trusting it.
+- Debug leftovers on 4 added line(s).
+- Hard failure calls on 355 added line(s).
+- Merge conflict markers on 1 added line(s).
+
+**Proposed actions (not applied).**
+
+- **Block:** resolve the conflict markers before running or committing.
+- **Re-verify:** launch the game, run the tests, and re-read the changed core files against `GAME_RULES.md`.
+- **Ask first:** review the addon/executable diff with the user before it is allowed to run.
+- **Modify:** remove or gate debug leftovers after the user agrees.
+- Nothing was changed automatically. Confirm each action with the user before editing or reverting.
+
+**Status.** Awaiting the user's decision. This report did not modify any game code.
+
+## 2026-10-29 13:57 - Post-pull asset cache rebuild
+
+**Symptom.** After pulling `8cbf1f8`, the project failed to compile:
+`scripts/player.gd` could not preload
+`res://assets/models/weapons/ornate_silver_sword.glb`, and `scripts/main.gd`
+reported "Failed to compile depended scripts". The pulled GLBs and textures were
+newer than this PC's `.godot` import cache, so Godot kept stale remaps for the
+old binary files.
+
+**Fix.** Ran the headless import:
+
+```powershell
+.\Godot_v4.7.2-stable_win64_console.exe --headless --path . --import
+```
+
+The parse gate (`tests/_parse.gd`) then returned `failures=0`, all scripts parsed,
+and a windowed launch loaded the saved Wayfarer at Emberfall Camp with
+`errors: 0` in the runtime log. No game code, scene, asset or remote commit was
+changed. The watcher's "merge conflict markers" flag was a false positive: the
+only match was the watcher's own regex on `scripts/dev/check_remote_changes.ps1`
+line 202; a repository-wide scan found no markers.
+
+**Remaining, deliberately not changed (user decision).** The new oak/birch
+crowns start at 3.6 m with 1.45-2.1 m cards and can fill the camera in dense
+forest; `test_hud_snapping` still fails because `WindowSnap.settle` is not
+idempotent (a saved window at x=670 is moved to x=658 on restore). Both are
+remote-authored behaviour and were left untouched at the user's request.
+
+## 2026-10-29 - Camp seats, paths and night fires
+
+**Intent.** Replace modern-looking lamps with tripod fire bowls, provide seating
+at the campfire, connect a circular camp clearing to the fence gates, and make
+fires and their local audio night-only.
+
+**Changed.** `assets/models/props/generate_road_cresset.py` creates the original
+wooden tripod, rope, iron bowl and fire sprite in Blender, based on the user's
+tripod image and the Auckland Museum's pole cresset and GameGuru outdoor fire
+basket references. It uses the project's existing bark texture. The generator
+`generate_fire_audio.py` creates original looped campfire and smaller torch
+crackles. The world builder places paired tripods outside each road-derived gate
+and replaces sparse road lanterns. It renders a terrain-following road-textured
+camp clearing and clips the visible camp-bound road ribbons to its edge. The
+authored world was rebaked. Fire particles, light, camp embers and positional
+sound follow the sun, and the sound follows the game's master volume and mute.
+Both camp logs have collision and persistent seat groups. E selects a nearby seat,
+uses the existing sitting animation and WASD requests a stand-up; the physics
+body stays outside the log while the visual sits on it.
+
+**Verified.** Headless import and parse gate; world, traversal, baked integrity,
+progression, combat effects and skill panel checks passed. The new real-renderer
+`test_camp_seating.gd` checks the baked seats, gate torches, day/night visibility
+and audio playback, E sitting and W standing; the seated daytime close-up and
+night camp screenshot were inspected. The runtime screenshot log reported zero
+errors. Godot still prints resource/RID leak diagnostics at test process exit;
+these need further investigation. The editor import also emits its previously
+documented missing local addon warning and empty-name diagnostic.
+
+**Follow-up.** Audition the synthesized loops on speakers/headphones and adjust
+their mix if necessary; visually review seating transitions, all gate approaches,
+and night performance during interactive play. The sitting clip is a floor
+campfire pose elevated onto a log, not a purpose-made bench animation.
+
+## 2026-10-29 - Rebuilt camp assets and log seating follow-up
+
+**Intent.** Improve the camp's material detail and open tent entrances, replace
+the poorly textured logs, remove overlapping gate lights, and stop the elevated
+floor-sitting pose from leaving the feet floating or crossing the log on exit.
+
+**Changed.** `generate_camp_assets.py` builds separate open canvas tent panels,
+frames, beds, rough hewn seat logs and charred firewood in Blender. Original
+canvas, wool and end-grain textures are generated by that script; the log bark
+and fence use Poly Haven's CC0 Jolcham Oak Bark 01 diffuse and normal maps,
+credited in the texture README. Beds have slatted frames, straw ticks, wool
+blankets and pillows. The fence keeps its existing gate layout and collision,
+with tapered posts, bindings and bark material. Torch positions are deduplicated
+and road lights stay away from the camp. `player.gd` derives a separate
+log-seat pose from the existing rig, directing the thighs forward and shins
+down, lowering the root to the log height and blending the visual back to the
+standing body's position before movement. Ground sitting with X remains separate.
+The world snapshot was rebuilt using the headless authoring script.
+
+**Verification and limits.** An earlier in-engine preview showed the open tent
+interior, but the user rejected the first log texture; that preview predates the
+new bark, end grain and seating changes. At the user's direction no further game
+launch or gameplay test was performed. The revised pose, both feet on ground,
+stand-up behavior, final materials, sound quality and performance remain
+unverified in play. Godot's earlier test-run exit leak diagnostics remain open.
+
+## 2026-10-29 - Seating alignment and smaller torches
+
+**Symptom.** User screenshots show the log sitter floating away from the seat,
+holding its fists up and sliding into movement without a stand-up animation.
+The previous custom pose inherited the unarmed combat idle and used an assumed
+root offset; its exit blended directly to locomotion.
+
+**Changed.** The log pose now starts from the existing relaxed campfire idle,
+retains the rig-adjusted leg orientation and computes the seated pelvis position
+from the animated skeleton. Seat placement aligns that point to the log top.
+An authored-at-runtime transition interpolates from the campfire animation's
+standing frame to the seated pose and plays backward to stand; movement remains
+blocked until the transition finishes. Ground sitting retains its existing
+clips. Tripod scenes, collision, flame and light are scaled together to 60%,
+making the lit stand approximately player height. The authored world was rebaked.
+
+**Verification and limits.** Per the user's instruction, no game launch or
+gameplay test was run for this revision. The final pose, foot placement and
+transition require in-game review; the height calculation uses the animated
+pelvis and the log's 0.56 m top, not foot IK. Earlier exit leak diagnostics
+remain unresolved.
+
+## 2026-10-29 - Local torch flames and off-center log seating
+
+**Symptom.** User reports that resized torches retained oversized, misplaced
+flames, and the seat moved the player to the log center and returned them to
+their original interaction location on standing.
+
+**Changed.** Torch particle simulation now uses local coordinates and a smaller,
+less intense sprite and particle count; the emitter height accounts for the
+particle radius and sprite extent, keeping the lowest edge above the fire bowl.
+The campfire's particle settings are unchanged. Log seating projects the approach
+onto the log's length, chooses the same side, and moves the collision body during
+the sit transition to a safe standing point at that position. The pelvis aligns
+to that point on the log, and the reverse animation ends next to it. The authored
+world was rebaked.
+
+**Verification and limits.** The real-renderer `test_camp_seating.gd` passed an
+off-center approach, pelvis alignment, W stand-up and final body position. The
+`test_camp_torch_flame.gd` passed the local-coordinate and scale checks, but its
+image showed the sprite extending under the bowl; the final sprite dimensions,
+brightness and raised emitter were adjusted afterward based on their calculated
+minimum extent and rebaked without a second in-game run. Inspect the resulting
+torch in play. Both tests printed the previously observed renderer resource
+cleanup diagnostics at process exit.
+
