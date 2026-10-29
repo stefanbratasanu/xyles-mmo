@@ -50,16 +50,23 @@ file is the shorter contract used during implementation.
 
 ## 2a. World, zones and presentation
 
+- Before a new mob is implemented, ask Alin or Stefan for its spawn time or
+  day/night window and the map, zones or biomes where it belongs. Record their
+  decisions here; do not assume a new mob's spawn schedule or location.
+
 - **Map I - The Ashen Frontier** is one continent of five uneven zones of roughly
   equal area. Emberfall Vale is the central starting zone; the others ring it.
-- The playable square is **296 m across** (`BOUNDS` 148). Zone shapes are wavy
-  blobs, not circles. One zone table in `scripts/world_builder.gd` drives the
-  terrain, the ground colour, elevation, vegetation density, enemy levels, the
-  HUD region label and the world map.
-- The **mountain rim is terrain, not props**: past 160 m the shared height field
-  rises into a ridged range (crest at 200 m, `RIM_HEIGHT` 32) and falls away
-  again behind the crest. There are no separate mountain meshes, so collision,
-  rock colour and the horizon always agree.
+- The playable square is approximately **512.7 m across** (`BOUNDS` 256.3435),
+  three times the previous map's area. Five irregular zones are spread across
+  the map; their shared zone table drives terrain, vegetation, enemy levels, the
+  region label and the world map. Connected outer roads lead to five small
+  exploration landmarks. The world is authored offline and loaded from baked
+  assets, rather than procedurally regenerated when the game starts.
+- The **mountain rim is terrain, not props**: outside the playable area the
+  height field rises toward a crest around 308 m and falls behind it. High-detail
+  terrain and collision stream in buffered tiles, with a lighter distant version
+  maintaining the horizon. The playable ground stays gently uneven, without
+  exaggerated desert-like dunes.
 - Each zone is physically different: the fen sits low and wet, the Broken Arch
   and Crownless Sanctum sit on high ground, and tree, rock and grass density
   differ per zone. The forest also continues past the zone blobs to the
@@ -72,7 +79,8 @@ file is the shorter contract used during implementation.
   Thornwood) contain only oak and birch; the fen's living trees are pines and its
   dead trunks stand alone. Outskirts inherit the nearest zone family. A pine in
   the vale or a broadleaf in the sanctum is a regression.
-- Trees, bushes and stones are original Blender GLBs. Every tree is exported
+- Trees, bushes and stones use project Blender GLBs; texture sources and
+  licenses are recorded under `assets/textures/polyhaven/`. Every tree is exported
   with its pivot at the base and planted on the sampled terrain height, so roots
   and trunks are never buried or floating.
 - Forest and foothill tree centres keep at least 3.2 m of clearance, including
@@ -86,6 +94,10 @@ file is the shorter contract used during implementation.
   silhouette is a defect.
 - Grass uses `shaders/grass.gdshader`: alpha-to-coverage (not scissor) with 4x
   MSAA so blade edges stay smooth, plus a slow world-space wind bend.
+- Grass uses small clumps grouped into reusable, batched patches. Keep the
+  entire grass patch and shore grass out of water, including the shallows.
+- Tree bark stays dark, including birch and dead trees; do not introduce
+  light-brown trunks. Bush foliage should fill the silhouette down to its base.
 - **Nothing grows on the road ribbon.** Grass, flowers and bushes test
   `_road_distance()` / `_on_road()` before placement; tufts on the road are a
   regression.
@@ -117,8 +129,8 @@ file is the shorter contract used during implementation.
 | The Broken Arch | 10-12 | Ruined stone terrace and altar |
 | Crownless Sanctum | 13-15 | Highest ground, pillars, world boss |
 
-- The **sealed waygate** stands in the north-west corner of the Crownless
-  Sanctum. It leads to Map II, **which does not exist yet**: it must never
+- The **sealed waygate** stands near the north-west corner of the map at the end
+  of a road, within the Crownless Sanctum. It leads to Map II, **which does not exist yet**: it must never
   teleport the player. The waygate pad and the camp are safe zones with faster
   regeneration.
 - The terrain is a real 3D height field shared by the render mesh, collision,
@@ -126,7 +138,8 @@ file is the shorter contract used during implementation.
 - Sunlight uses a wide angular diameter and blurred shadow splits so shadows are
   soft and diffuse, never hard cut-outs.
 - The day/night cycle is automatic: one in-game day lasts 15 real minutes and
-  starts at 08:15 on day 1. The HUD clock shows the time, day and phase
+  a new world starts at 08:15 on day 1. Saved world time resumes after closing
+  the game. The HUD clock shows the time, day and phase
   (Dawn / Day / Dusk / Night).
 - **The sky moves with the clock.** Cloud noise is sampled in 3D on the view
   direction and scrolls with time; the sky uses a realtime radiance update. A
@@ -140,6 +153,9 @@ file is the shorter contract used during implementation.
   number or UI element depend on either effect.
 - Ambient occlusion strength is selectable at 1×, 2× or 3×, with 1× preserving
   the original intensity. Its selection persists even while the effect is off.
+- Settings → Graphics provides a persistent frame-rate limit from 20 to 60 FPS,
+  applied immediately and defaulting to 60 for older settings. The cap limits
+  frame rate; performance and display synchronization may keep it lower.
 - There is **no minimap**. `M` opens a full-screen, square **painted map**
   rendered from the same height and colour grids as the terrain: hillshade,
   contours every 4 m, forest canopy from real tree positions, ponds, roads and
@@ -191,9 +207,17 @@ file is the shorter contract used during implementation.
 | Quest (Oathbound Guardian) | 200 | Quest stage target |
 | Boss (Hollow Regent) | 850 | World boss with telegraphed slam |
 
-- **Map I normal spawns are wolves and boars only**, alternating deterministically
-  along the spawn list. No other normal species, and no AoE or cone attacks on
-  normals. Respawns keep the species of the enemy that died.
+- **Map I normal spawns are wolves and boars only.** Boars occupy normal spawn
+  points from 05:00 up to 17:30, and wolves from 17:30 up to 05:00. At a change
+  of window, the old species is removed, including while engaged. A defeated
+  spawn retains its 28-second respawn deadline across the change. The boss
+  retains its existing unconditional 180-second respawn. No other normal
+  species, and no AoE or cone attacks on normals.
+- Nearby spawn cells are active with a buffer; inactive cells keep lightweight
+  state and calculate expired deadlines on return rather than running AI. A
+  living unloaded enemy keeps its health and position until its species window
+  ends. The world clock and spawn deadlines are saved with the character and
+  pause while the game is closed. Training enemies remain temporary.
 - Enemies aggro inside their detection radius and leash back to their home point.
 - **Every attack commits to a world-space point.** The enemy picks its target at
   the windup start, locks that point, and tests the hit against it. The player
@@ -233,7 +257,7 @@ file is the shorter contract used during implementation.
 
 ## 7. Quest, resources, crafting
 
-- **A Debt of Iron** stages: speak to Torven, defeat 3 Briarwolves, defeat the
+- **A Debt of Iron** stages: speak to Torven, defeat 3 wolves or boars, defeat the
   Oathbound Guardian, defeat the Hollow Regent, complete.
 - Wood and iron deposits give **+35** and replenish after **60 seconds**.
 - Crafting cost multipliers: basic `1.0`, rare `1.5`, epic `2.2`, legendary `3.2`.

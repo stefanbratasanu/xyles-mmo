@@ -685,7 +685,7 @@ func _render_bestiary() -> void:
 	var s: Node = game.state
 	overlay_title.text = "Bestiary — Ashen Reach"
 	overlay_subtitle.text = "Knowledge is power. The first completion of each category in each region grants skill points, up to 50 over your character's life. Repeated kills provide materials and experience."
-	var categories: Array = [["normal", "01", "Briarwolves", "The local predators along the old road", 2], ["quest", "02", "Oathbound Guardian", "A unique target in the blacksmith's chronicle", 5], ["boss", "03", "The Hollow Regent", "A world boss within the ancient sanctuary", 3]]
+	var categories: Array = [["normal", "01", "Wolves and boars", "The creatures along the old road", 2], ["quest", "02", "Oathbound Guardian", "A unique target in the blacksmith's chronicle", 5], ["boss", "03", "The Hollow Regent", "A world boss within the ancient sanctuary", 3]]
 	for category: Array in categories:
 		var data: Dictionary = _bestiary_entry(str(category[0]))
 		var kills: int = int(data.get("kills", 0))
@@ -834,6 +834,27 @@ func _render_settings() -> void:
 	overlay_content.add_child(graphics_card)
 	var graphics_column: VBoxContainer = _column(graphics_card, 20, 16)
 	graphics_column.add_child(_label("GRAPHICS", 11, GOLD))
+	var fps_row := HBoxContainer.new()
+	fps_row.add_theme_constant_override("separation", 14)
+	graphics_column.add_child(fps_row)
+	var fps_label := _label("FRAME RATE LIMIT", 11, MUTED)
+	fps_label.custom_minimum_size.x = 170
+	fps_row.add_child(fps_label)
+	var fps_slider := HSlider.new()
+	fps_slider.name = "FrameRateLimit"
+	fps_slider.min_value = 20
+	fps_slider.max_value = 60
+	fps_slider.step = 1
+	fps_slider.value = int(game.fps_limit)
+	fps_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fps_slider.custom_minimum_size.x = 220
+	fps_row.add_child(fps_slider)
+	var fps_value := _label("%d FPS" % int(game.fps_limit), 11, TEXT)
+	fps_value.custom_minimum_size.x = 65
+	fps_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	fps_row.add_child(fps_value)
+	fps_slider.value_changed.connect(_set_fps_limit.bind(fps_value))
+	fps_slider.drag_ended.connect(_commit_settings)
 	var glow_check: CheckButton = CheckButton.new()
 	glow_check.text = "Glow on fire, lanterns and runes"
 	glow_check.button_pressed = bool(game.glow_enabled)
@@ -1065,7 +1086,7 @@ func _render_guide() -> void:
 		["FIVE WAYS TO SURVIVE", "1  Iron Cleave: your close combat attack.  2  Ember Bolt: a ranged mana attack.  3  Iron Guard: mitigate incoming damage.  4  Wayfarer's Step: reposition quickly.  5  Restoring Light: spend mana to restore vitality. Watch mana and cooldowns."],
 		["POWER THROUGH DISCOVERY", "Open B for the regional bestiary. Your first normal, quest and boss completions grant 2, 5 and 3 skill points. Leveling alone grants no skill points. Spend them with K, choosing from five compatible enchantments at each of ten stages. Equip ten abilities with the slot buttons; keys 1–0 activate them. Channel skills slow movement and turn gradually."],
 		["RISK & REPAIR", "Death damages random pieces of equipment. Below 50% durability, gear can drop; at 0%, it always drops. Return to Emberfall and repair through I. Craft better equipment through C. F5 saves your journey, and progress also saves automatically. Use Options to log out and choose another character; recover dropped equipment first."],
-		["THE CHRONICLE", "Begin at the Emberfall blacksmith. Cull the Briarwolves, confront the Oathbound Guardian, then follow the clue toward the Hollow Regent. Powerful foes reward preparation and careful movement."]
+		["THE CHRONICLE", "Begin at the Emberfall blacksmith. Cull wolves or boars, confront the Oathbound Guardian, then follow the clue toward the Hollow Regent. Powerful foes reward preparation and careful movement."]
 	]
 	for section: Array in sections:
 		var card: PanelContainer = _panel(Color("121f25"))
@@ -1133,6 +1154,11 @@ func _set_ssao_strength(index: int) -> void:
 func _set_camera_sensitivity(value: float, readout: Label) -> void:
 	game.camera_sensitivity = value
 	readout.text = "%.2f° / px" % rad_to_deg(value)
+
+
+func _set_fps_limit(value: float, readout: Label) -> void:
+	game.set_fps_limit(roundi(value))
+	readout.text = "%d FPS" % int(game.fps_limit)
 
 
 func _set_master_volume(value: float, readout: Label) -> void:

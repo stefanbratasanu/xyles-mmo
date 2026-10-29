@@ -46,6 +46,7 @@ var xp: int = 0
 var skill_points: int = 0
 var earned_skill_points: int = 0
 var current_region: String = "ashen_reach"
+var world_session: Dictionary = {}
 var skills: Dictionary = {}
 var bestiary: Dictionary = {}
 var equipment: Array[Dictionary] = []
@@ -94,7 +95,7 @@ func _define_quests() -> void:
 		"stages": [
 			{"id": "meet_smith", "title": "Speak with the blacksmith", "tasks": [
 				{"kind": "interact", "target": "blacksmith", "required": 1, "count": 0}], "next": 1},
-			{"id": "clear_road", "title": "Defeat the Briarwolves", "tasks": [
+			{"id": "clear_road", "title": "Defeat wolves or boars", "tasks": [
 				{"kind": "kill", "target": "normal", "required": 3, "count": 0}], "next": 2},
 			{"id": "break_ward", "title": "Defeat the Oathbound Guardian", "tasks": [
 				{"kind": "kill", "target": "quest", "required": 1, "count": 0}], "next": 3},
@@ -124,7 +125,7 @@ func start_quest() -> void:
 	quest["active"] = true
 	quest["stages"][0]["tasks"][0]["count"] = 1
 	quest["stage"] = 1
-	_notify("Quest accepted · A Debt of Iron. Defeat 3 Briarwolves on the old road.")
+	_notify("Quest accepted · A Debt of Iron. Defeat 3 wolves or boars on the old road.")
 	changed.emit()
 
 
@@ -623,7 +624,7 @@ func save_game(path: String = SAVE_PATH) -> bool:
 		"bestiary": bestiary, "equipment": equipment, "inventory": inventory,
 		"evolutions": _evolution_save(), "skill_offers": skill_offers, "skill_seed": skill_seed, "loadout": loadout, "learned_skills": learned_skills,
 		"equipment_schema_version": equipment_schema_version,
-		"quests": quests, "current_region": current_region}, "", true, true))
+		"quests": quests, "current_region": current_region, "world_session": world_session}, "", true, true))
 	file.flush()
 	var write_ok := file.get_error() == OK
 	file.close()
@@ -752,6 +753,7 @@ func load_game(path: String = SAVE_PATH) -> bool:
 				if saved_tasks[task_index] is Dictionary:
 					tasks[task_index]["count"] = clampi(int(saved_tasks[task_index].get("count", 0)), 0, int(tasks[task_index]["required"]))
 	current_region = str(parsed.get("current_region", "ashen_reach"))
+	world_session = parsed.get("world_session", {}).duplicate(true) if parsed.get("world_session", {}) is Dictionary else {}
 	equipment_schema_version = int(parsed.get("equipment_schema_version", 0))
 	if equipment_schema_version < 1:
 		_add_equipment_examples()

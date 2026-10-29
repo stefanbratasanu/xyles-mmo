@@ -48,6 +48,7 @@ var master_volume: float = 1.0
 var glow_enabled: bool = true
 var ssao_enabled: bool = true
 var ssao_strength: int = 1
+var fps_limit: int = 60
 var camera_focus := Vector3.ZERO
 var region_name: String = "EMBERFALL VALE"
 var context_hint: String = ""
@@ -59,6 +60,7 @@ var in_safe_zone: bool = false
 var gather_nodes: Array[Dictionary] = []
 var ground_loot: Array[Dictionary] = []
 var respawns: Array[Dictionary] = []
+var chunk_spawns: RefCounted
 var boss_respawn: float = 0.0
 var quest_spawned: bool = false
 var hud_tick: float = 0.0
@@ -90,6 +92,7 @@ func _ready() -> void:
 	if not test_mode:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://saves"))
 	_load_settings()
+	Engine.max_fps = fps_limit
 	var save_loaded := false
 	var show_selector := select_character_on_next_start
 	select_character_on_next_start = false
@@ -130,6 +133,9 @@ func _ready() -> void:
 		add_child(world)
 	if world.get_child_count() == 0:
 		world.build()
+	if not state.world_session.is_empty():
+		world.day_number = maxi(1, int(state.world_session.get("day", 1)))
+		world.set_time_of_day(float(state.world_session.get("hour", 8.25)))
 	if world.has_method("apply_graphics_settings"):
 		world.apply_graphics_settings(glow_enabled, ssao_enabled, ssao_strength)
 	game_log.world("world_ready", {
@@ -186,9 +192,9 @@ func _ready() -> void:
 	cooldowns.fill(0.0)
 	_build_smith()
 	_build_resources()
-	for spawn: Vector3 in world.normal_spawns:
-		_spawn_enemy("normal", spawn)
-	_spawn_enemy("boss", world.boss_spawn)
+	chunk_spawns = preload("res://scripts/chunk_spawn_manager.gd").new()
+	chunk_spawns.setup(self, state.world_session)
+	chunk_spawns.advance(0.0)
 	hud = get_node_or_null("HUD") as CanvasLayer
 	if not is_instance_valid(hud):
 		hud = HUDScript.new()
@@ -229,12 +235,12 @@ func _run_screenshot_tour() -> void:
 	var shots: Array[Dictionary] = [
 		{"name": "01_camp", "at": Vector3(-36.0, 0.0, 34.0), "yaw": 0.0, "pitch": 0.44, "distance": 10.0},
 		{"name": "02_vale_road", "at": Vector3(0.0, 0.0, 12.0), "yaw": 0.9, "pitch": 0.68, "distance": 36.0},
-		{"name": "03_thornwood", "at": Vector3(-76.9, 0.0, 19.1), "yaw": 0.97, "pitch": 0.30, "distance": 16.0},
-		{"name": "04_ashen_fen", "at": Vector3(88.0, 0.0, 16.0), "yaw": 1.6, "pitch": 0.34, "distance": 22.0},
-		{"name": "11_pond", "at": Vector3(60.9, 0.0, 15.5), "yaw": 2.88, "pitch": 0.65, "distance": 16.0},
-		{"name": "05_broken_arch", "at": Vector3(72.0, 0.0, -68.0), "yaw": 0.12, "pitch": 0.36, "distance": 20.0},
-		{"name": "06_sanctum", "at": Vector3(-52.0, 0.0, -84.0), "yaw": 0.08, "pitch": 0.40, "distance": 16.0},
-		{"name": "07_waygate", "at": Vector3(-104.0, 0.0, -114.0), "yaw": 0.45, "pitch": 0.36, "distance": 24.0},
+		{"name": "03_thornwood", "at": Vector3(-145.0, 0.0, 19.1), "yaw": 0.97, "pitch": 0.30, "distance": 16.0},
+		{"name": "04_ashen_fen", "at": Vector3(145.0, 0.0, 16.0), "yaw": 1.6, "pitch": 0.34, "distance": 22.0},
+		{"name": "11_pond", "at": Vector3(120.0, 0.0, 10.0), "yaw": 2.88, "pitch": 0.65, "distance": 16.0},
+		{"name": "05_broken_arch", "at": Vector3(122.0, 0.0, -104.0), "yaw": 0.12, "pitch": 0.36, "distance": 20.0},
+		{"name": "06_sanctum", "at": Vector3(-142.0, 0.0, -134.0), "yaw": 0.08, "pitch": 0.40, "distance": 16.0},
+		{"name": "07_waygate", "at": Vector3(-215.0, 0.0, -197.0), "yaw": 0.45, "pitch": 0.36, "distance": 24.0},
 		{"name": "10_frontier", "at": Vector3(0.0, 0.0, 62.0), "yaw": PI, "pitch": 0.60, "distance": 78.0},
 	]
 	for shot: Dictionary in shots:
@@ -299,6 +305,10 @@ func _process(delta: float) -> void:
 			state.mana = minf(state.max_mana + float(mods["max_mana"]), state.mana + delta * 1.6)
 		_process_pending_skill()
 	_update_camera(delta)
+	world.update_streamed_visuals(player.global_position)
+	world.update_terrain_chunks(player.global_position)
+	world.update_static_chunks(player.global_position)
+	chunk_spawns.advance(delta)
 	_process_respawns(delta)
 	for gather: Dictionary in gather_nodes:
 		gather["timer"] = maxf(0, float(gather["timer"]) - delta)
@@ -378,6 +388,8 @@ func _notification(what: int) -> void:
 func _save_journey() -> bool:
 	if test_mode: return true
 	if current_save_path.is_empty(): return false
+	if chunk_spawns != null:
+		state.world_session = chunk_spawns.snapshot()
 	return state.save_game(current_save_path)
 
 func logout_to_characters() -> void:
@@ -411,6 +423,7 @@ func _load_graphics_settings(config: ConfigFile) -> void:
 	glow_enabled = bool(config.get_value("graphics", "glow", glow_enabled))
 	ssao_enabled = bool(config.get_value("graphics", "ambient_occlusion", ssao_enabled))
 	ssao_strength = clampi(int(config.get_value("graphics", "ambient_occlusion_strength", 1)), 1, 3)
+	fps_limit = clampi(int(config.get_value("graphics", "fps_limit", 60)), 20, 60)
 
 func _load_debug_keys(config: ConfigFile) -> void:
 	var saved_keys: Dictionary = debug_keys.duplicate()
@@ -449,6 +462,7 @@ func _store_graphics_settings(config: ConfigFile) -> void:
 	config.set_value("graphics", "glow", glow_enabled)
 	config.set_value("graphics", "ambient_occlusion", ssao_enabled)
 	config.set_value("graphics", "ambient_occlusion_strength", ssao_strength)
+	config.set_value("graphics", "fps_limit", fps_limit)
 
 func _debug_key_available(key: int) -> bool:
 	if key == KEY_NONE or (key >= KEY_0 and key <= KEY_9): return false
@@ -486,6 +500,7 @@ func reset_settings() -> void:
 	glow_enabled = true
 	ssao_enabled = true
 	ssao_strength = 1
+	fps_limit = 60
 	if is_instance_valid(audio):
 		audio.set_master_volume(master_volume)
 	_apply_graphics_settings()
@@ -493,6 +508,7 @@ func reset_settings() -> void:
 
 
 func _apply_graphics_settings() -> void:
+	Engine.max_fps = fps_limit
 	if is_instance_valid(world) and world.has_method("apply_graphics_settings"):
 		world.apply_graphics_settings(glow_enabled, ssao_enabled, ssao_strength)
 
@@ -515,6 +531,10 @@ func set_ssao_strength(strength: int) -> void:
 	_apply_graphics_settings()
 	save_settings()
 	game_log.ui("graphics_option", {"option": "ambient_occlusion_strength", "strength": ssao_strength})
+
+func set_fps_limit(limit: int) -> void:
+	fps_limit = clampi(limit, 20, 60)
+	Engine.max_fps = fps_limit
 
 
 func _update_camera(delta: float) -> void:
@@ -732,7 +752,9 @@ func enemy_defeated(enemy: CharacterBody3D) -> void:
 	if target == enemy:
 		target = null
 	enemies.erase(enemy)
-	if enemy.kind == "normal":
+	if enemy.has_meta("world_spawn_slot"):
+		chunk_spawns.defeated(enemy)
+	elif enemy.kind == "normal":
 		respawns.append({"kind": "normal", "position": enemy.home, "timer": 28.0, "species": enemy.species})
 	elif enemy.kind == "boss":
 		boss_respawn = 180.0
@@ -752,7 +774,6 @@ func _on_state_changed() -> void:
 		player.update_equipment(state.equipment)
 	if not quest_spawned and bool(state.quests[0]["active"]) and int(state.quests[0]["stage"]) == 2:
 		quest_spawned = true
-		_spawn_enemy("quest", world.quest_spawn)
 		_on_notice("The broken arch stirs. The Oathbound Guardian has appeared to the northeast.")
 	if is_instance_valid(hud):
 		hud.refresh()

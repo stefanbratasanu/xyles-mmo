@@ -227,6 +227,16 @@ def build_bush():
         (Vector((-0.05, 0.28, 0.56)), 0.48, Vector((-0.1, 0.9, 0.4))),
         (Vector((0.18, -0.02, 0.82)), 0.46, Vector((0.5, 0.0, 0.8))),
         (Vector((-0.17, -0.10, 0.78)), 0.44, Vector((-0.5, -0.2, 0.8))),
+        (Vector((0.27, -0.26, 0.34)), 0.50, Vector((0.7, -0.7, 0.2))),
+        (Vector((-0.29, -0.24, 0.34)), 0.51, Vector((-0.7, -0.7, 0.2))),
+        (Vector((0.32, 0.23, 0.37)), 0.48, Vector((0.7, 0.6, 0.2))),
+        (Vector((-0.30, 0.25, 0.37)), 0.49, Vector((-0.7, 0.6, 0.2))),
+        (Vector((0.00, 0.00, 0.34)), 0.57, Vector((0.0, 0.0, 1.0))),
+        (Vector((0.00, -0.16, 0.67)), 0.48, Vector((0.0, -0.6, 0.6))),
+        (Vector((0.24, 0.00, 0.22)), 0.48, Vector((0.8, 0.0, 0.2))),
+        (Vector((-0.24, 0.00, 0.22)), 0.48, Vector((-0.8, 0.0, 0.2))),
+        (Vector((0.00, 0.24, 0.22)), 0.48, Vector((0.0, 0.8, 0.2))),
+        (Vector((0.00, -0.24, 0.22)), 0.48, Vector((0.0, -0.8, 0.2))),
     ]
     foliage = card_mesh("BushLeaves", bush_cards(clusters), leaves)
     # Join with the twigs active so surface 0 stays bark and surface 1 stays
@@ -244,6 +254,22 @@ def build_bush():
 
 def build_rock(name, seeds, radius, scale_x, scale_z, lumpy, material_name):
     stone = material(material_name, (0.42, 0.44, 0.40), 0.94)
+    # Keep the shared CC0 maps on the Blender material as well as in Godot, so
+    # the exported GLBs remain textured when an artist opens them independently.
+    tex_dir = os.path.join(os.path.dirname(os.path.dirname(OUT_DIR)), "textures", "polyhaven")
+    nodes = stone.node_tree.nodes
+    links = stone.node_tree.links
+    bsdf = nodes.get("Principled BSDF")
+    color = nodes.new("ShaderNodeTexImage")
+    color.image = bpy.data.images.load(os.path.join(tex_dir, "rock_face_03-Diffuse.jpg"), check_existing=True)
+    links.new(color.outputs["Color"], bsdf.inputs["Base Color"])
+    normal_texture = nodes.new("ShaderNodeTexImage")
+    normal_texture.image = bpy.data.images.load(os.path.join(tex_dir, "rock_face_03-nor_gl.jpg"), check_existing=True)
+    normal_texture.image.colorspace_settings.name = "Non-Color"
+    normal = nodes.new("ShaderNodeNormalMap")
+    normal.inputs["Strength"].default_value = 0.65
+    links.new(normal_texture.outputs["Color"], normal.inputs["Color"])
+    links.new(normal.outputs["Normal"], bsdf.inputs["Normal"])
     parts = []
     for index in range(seeds):
         offset = Vector((
@@ -253,12 +279,16 @@ def build_rock(name, seeds, radius, scale_x, scale_z, lumpy, material_name):
         ))
         size = radius * random.uniform(0.55, 1.0)
         obj = ico("%sChunk%02d" % (name, index), offset, size,
-                  (scale_x, 1.0, scale_z), stone, subdivision=2, lumpy=lumpy)
+                  (scale_x, 1.0, scale_z), stone, subdivision=3 if radius >= 0.9 else 2, lumpy=lumpy)
         # Break the sphere with low-frequency noise so the boulder has planes,
         # not a smooth balloon silhouette.
         for vert in obj.data.vertices:
             sample = noise.noise_vector(vert.co * 1.7 + offset) * size * 0.16
             vert.co += sample
+            # Chipped, weathered planes break the original round silhouette;
+            # finer cracks and mineral grain come from the shared rock texture.
+            vert.co.z = min(vert.co.z, size * random.uniform(0.68, 0.74))
+            vert.co.x = max(vert.co.x, -size * scale_x * 0.83)
         parts.append(obj)
     joined = join(parts, name)
     ground_flat(joined, base_z=0.0)

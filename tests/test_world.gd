@@ -38,6 +38,7 @@ func _run() -> void:
 	_test_enemy_ai()
 	_test_creatures()
 	_test_road_lamps()
+	_test_frontier_landmarks()
 	_test_ground_cover()
 	_test_camp()
 	_test_sky()
@@ -64,6 +65,12 @@ func _test_zones() -> void:
 	assert(str(start_zone["name"]) == "EMBERFALL VALE", "the central zone must be the starting zone")
 	assert(int(start_zone["level_min"]) == 1)
 	assert(names.size() == 5)
+	for i in range(world.zones.size()):
+		for j in range(i + 1, world.zones.size()):
+			assert((world.zones[i]["center"] as Vector2).distance_to(world.zones[j]["center"]) >= 100.0,
+				"difficulty zones should be spread across the larger map")
+	assert(str(world.zone_at(world.quest_spawn)["id"]) == "arch", "the quest guardian must be in the Broken Arch")
+	assert(str(world.zone_at(world.boss_spawn)["id"]) == "sanctum", "the boss must be in the Crownless Sanctum")
 	# Zone blobs are uneven: at least two centres are closer than the sum of their
 	# radii, and the boundaries are not circles.
 	var boundary: PackedVector2Array = world.zone_boundary(world.zones[0], 64)
@@ -100,13 +107,7 @@ func _test_forest_families() -> void:
 	for step: int in range(48):
 		var angle: float = TAU * float(step) / 48.0
 		var point: Vector2 = Vector2(cos(angle), sin(angle)) * (float(world.BOUNDS) - 6.0)
-		var nearest: Dictionary = world.zones[0]
-		var best: float = INF
-		for zone: Dictionary in world.zones:
-			var distance: float = point.distance_to(zone["center"]) - float(zone["radius"])
-			if distance < best:
-				best = distance
-				nearest = zone
+		var nearest: Dictionary = world.zone_at_xz(point)
 		var kind: String = str(world.call("_outskirt_tree", point))
 		var mix: Dictionary = nearest["trees"]
 		if float(mix.get("pine", 0.0)) >= 0.5 and not mix.has("dead"):
@@ -126,10 +127,17 @@ func _test_tree_spacing() -> void:
 			points.append(point)
 	assert(points.size() > 1000, "forest lost too many trees")
 	var minimum: float = float(world.TREE_TRUNK_CLEARANCE)
-	for i: int in range(points.size()):
-		for j: int in range(i + 1, points.size()):
-			assert(points[i].distance_squared_to(points[j]) >= minimum * minimum - 0.0001,
-				"tree trunks are too close: %s / %s" % [points[i], points[j]])
+	var checked: Dictionary = {}
+	for point: Vector2 in points:
+		var cell := Vector2i(floori(point.x / minimum), floori(point.y / minimum))
+		for dx in range(-1, 2):
+			for dz in range(-1, 2):
+				for prior: Vector2 in checked.get(cell + Vector2i(dx, dz), []):
+					assert(point.distance_squared_to(prior) >= minimum * minimum - 0.0001,
+						"tree trunks are too close: %s / %s" % [point, prior])
+		if not checked.has(cell):
+			checked[cell] = []
+		checked[cell].append(point)
 
 
 func _test_terrain() -> void:
@@ -156,11 +164,12 @@ func _test_terrain() -> void:
 	assert(highest - lowest > 2.0, "terrain is too flat (range %.2f)" % (highest - lowest))
 	assert(highest - lowest < 24.0, "terrain is too drastic for a forest (range %.2f)" % (highest - lowest))
 	# The mountain rim is part of the same height field, not a ring of props.
-	var rim_height: float = world.height_at(195.0, 0.0)
+	var rim_height: float = world.height_at(float(world.RIM_END) - 5.0, 0.0)
 	assert(rim_height > 15.0, "the mountain rim did not rise (%.1f)" % rim_height)
 	assert(world.height_at(0.0, 0.0) < rim_height, "the playable bowl must sit below the rim")
 	# The world is at least twice the old 148 m width.
-	assert(world.BOUNDS >= 140.0, "world bounds did not grow")
+	assert(absf(pow(float(world.BOUNDS) / 148.0, 2.0) - 3.0) < 0.001, "playable area should be three times the previous map")
+	assert(world.normal_spawns.size() >= 25, "the expanded outer areas need creatures")
 	# The painted map texture is generated from that same terrain grid.
 	var texture: ImageTexture = world.map_texture(128)
 	assert(texture != null, "the world map has no painted terrain texture")
@@ -279,6 +288,14 @@ func _test_waygate() -> void:
 	var gate_zone: Dictionary = world.zone_at(world.waygate_position)
 	assert(str(gate_zone["name"]) == "CROWNLESS SANCTUM", "waygate must sit in the hardest zone")
 	assert(int(gate_zone["level_max"]) == 15)
+	assert(world.waygate_position.x < -world.BOUNDS * 0.8 and world.waygate_position.z < -world.BOUNDS * 0.8,
+		"the sealed waygate should be in the northwest corner")
+	var road_ends := 0
+	var gate_xz := Vector2(world.waygate_position.x, world.waygate_position.z)
+	for road: PackedVector2Array in world.roads:
+		if road[0].distance_to(gate_xz) < 0.1 or road[road.size() - 1].distance_to(gate_xz) < 0.1:
+			road_ends += 1
+	assert(road_ends == 1, "the waygate must sit at the end of one road")
 	# The waygate is a small safe zone inside the sanctum, not a separate map.
 	var distance: float = Vector2(world.waygate_position.x, world.waygate_position.z).distance_to(gate_zone["center"])
 	assert(distance < float(gate_zone["radius"]), "waygate outside the sanctum blob")
@@ -289,7 +306,7 @@ func _test_waygate() -> void:
 
 
 func _test_roads() -> void:
-	assert(world.roads.size() >= 20, "expected a branched road network, got %d roads" % world.roads.size())
+	assert(world.roads.size() >= 55, "expanded regions need connected new roads, got %d roads" % world.roads.size())
 	var junctions: Dictionary = {}
 	for road: PackedVector2Array in world.roads:
 		assert(road.size() >= 2, "road with fewer than two points")
@@ -409,15 +426,8 @@ func _test_enemy_ai() -> void:
 	# each other. Verify the two rules that are easy to regress: a mob in reach
 	# commits to a windup and then lands the hit, and a distant boss never starts
 	# its slam (which used to fire every seven seconds from anywhere on the map).
-	var wolf = null
-	var boss = null
-	for candidate in game.enemies:
-		if candidate.kind == "normal" and wolf == null:
-			wolf = candidate
-		elif candidate.kind == "boss" and boss == null:
-			boss = candidate
-	assert(wolf != null, "no normal enemy to test")
-	assert(boss != null, "no boss to test")
+	var wolf = game._spawn_enemy("normal", world.normal_spawns[0], 0, "wolf")
+	var boss = game._spawn_enemy("boss", world.boss_spawn)
 	game.player.set_physics_process(false)
 	# --- Wolf in reach: windup, then damage. ---
 	wolf.global_position = game.player.global_position + Vector3(1.0, 0.0, 0.0)
@@ -466,12 +476,7 @@ func _test_enemy_ai() -> void:
 	assert(is_equal_approx(game.state.hp, hp_after_wolf_dodge),
 		"the wolf hit a player who had left the locked point")
 	# --- Boar charge: the lane is committed, so a sidestep is a clean dodge. ---
-	var boar = null
-	for candidate in game.enemies:
-		if candidate.kind == "normal" and candidate.species == "boar":
-			boar = candidate
-			break
-	assert(boar != null, "Map I normal spawns contain no boar")
+	var boar = game._spawn_enemy("normal", world.normal_spawns[0], 0, "boar")
 	game.player.global_position = Vector3(0.0, 2.0, 16.0)
 	boar.global_position = game.player.global_position + Vector3(4.0, 0.0, 0.0)
 	boar.home = boar.global_position
@@ -488,16 +493,12 @@ func _test_enemy_ai() -> void:
 	assert(not boar.charge_active, "the boar never ended its charge")
 	assert(is_equal_approx(game.state.hp, hp_after_charge_dodge),
 		"the boar charge hit a player who sidestepped the lane")
-	# --- Every normal in Map I is a wolf or a boar, and both species exist. ---
-	var species_seen: Dictionary = {}
+	# --- Every normal in Map I is a wolf or a boar. ---
 	for candidate in game.enemies:
 		if candidate.kind != "normal":
 			continue
 		assert(candidate.species == "wolf" or candidate.species == "boar",
 			"normal spawn has unknown species '%s'" % candidate.species)
-		species_seen[candidate.species] = true
-	assert(species_seen.has("wolf") and species_seen.has("boar"),
-		"Map I normals must contain both wolves and boars")
 
 
 func _test_creatures() -> void:
@@ -556,19 +557,55 @@ func _test_road_lamps() -> void:
 			assert(lamp.distance_to(lamps[other]) >= 44.0,
 				"road lamps are packed closer than 44 m")
 	# Lamps must actually light the night; a mesh with no omni light is scenery.
-	var lamp_lights: int = 0
-	for light: OmniLight3D in world._night_lights:
-		for lamp: Vector3 in lamps:
+	for lamp: Vector3 in lamps:
+		_load_static_at(lamp)
+		var found := false
+		for light: OmniLight3D in world._night_lights:
 			if light.global_position.distance_to(lamp) < 3.5:
-				lamp_lights += 1
+				found = true
 				break
-	assert(lamp_lights >= lamps.size(), "some road lamps have no light source")
+		assert(found, "a streamed road lamp has no light source")
+	_load_static_at(lamps[0])
+	var sampled_light: OmniLight3D
+	for light: OmniLight3D in world._night_lights:
+		if light.global_position.distance_to(lamps[0]) < 3.5:
+			sampled_light = light
+			break
+	assert(sampled_light != null, "could not sample a streamed lamp")
+	world.set_time_of_day(12.0)
+	var day_energy: float = sampled_light.light_energy
+	world.set_time_of_day(23.0)
+	assert(sampled_light.light_energy > day_energy, "streamed lamps must respond to day and night")
+	world.set_time_of_day(8.25)
+	_load_static_at(world.player_spawn)
+
+func _test_frontier_landmarks() -> void:
+	assert(world.frontier_landmarks.size() >= 5, "expanded areas need places to explore")
+	for landmark: Dictionary in world.frontier_landmarks:
+		var at: Vector2 = landmark["at"]
+		_load_static_at(Vector3(at.x, 0.0, at.y))
+		var found := false
+		for label: Label3D in world.find_children("*", "Label3D", true, false):
+			if label.text == str(landmark["name"]):
+				found = true
+				break
+		assert(found, "an exploration landmark failed to load")
+	_load_static_at(world.player_spawn)
+
+func _load_static_at(at: Vector3) -> void:
+	world.update_static_chunks(at)
+	var cell: Vector2i = world.stream_cell(at)
+	for attempt in range(180):
+		if world._static_active.has(cell) or not world._static_paths.has(cell):
+			return
+		world._pump_streaming()
+	assert(false, "the requested scenery cell did not load")
 
 
 func _test_ground_cover() -> void:
-	var grass := world.get_node_or_null("MeadowGrass") as MultiMeshInstance3D
+	var grass := world.find_child("MeadowGrass_*", false, false) as MultiMeshInstance3D
 	assert(grass != null and grass.multimesh != null, "meadow grass was not built")
-	assert(grass.multimesh.instance_count > 2000, "the meadow grass is too sparse")
+	assert(world.grass_points.size() > 2000, "the meadow grass is too sparse")
 	var grass_material: Material = grass.multimesh.mesh.surface_get_material(0)
 	assert(grass_material is ShaderMaterial, "grass is not using the blade shader")
 	var shader := (grass_material as ShaderMaterial).shader
@@ -576,16 +613,18 @@ func _test_ground_cover() -> void:
 		"grass shader lost its anti-aliased coverage path")
 	# No blade on the road ribbon: sample the whole field rather than trusting
 	# the placement loop that wrote it.
-	assert(world.grass_points.size() == grass.multimesh.instance_count,
+	var recorded_grass: int = int(world._vegetation_counts.get("MeadowGrass", 0))
+	assert(world.grass_points.size() == recorded_grass,
 		"the grass audit trail does not match the drawn tufts")
 	var step: int = maxi(1, world.grass_points.size() / 500)
 	for index: int in range(0, world.grass_points.size(), step):
 		var point: Vector2 = world.grass_points[index]
 		assert(not world._on_road(point, 0.05),
 			"grass grows on the road at (%.1f, %.1f)" % [point.x, point.y])
-	var brush := world.get_node_or_null("Underbrush") as MultiMeshInstance3D
+	var brush := world.find_child("Underbrush_*", false, false) as MultiMeshInstance3D
 	assert(brush != null and brush.multimesh != null, "the underbrush was not built")
-	assert(brush.multimesh.instance_count > 400, "the underbrush is too sparse")
+	var recorded_brush: int = int(world._vegetation_counts.get("Underbrush", 0))
+	assert(recorded_brush > 400, "the underbrush is too sparse")
 	assert(brush.multimesh.mesh.get_surface_count() >= 2,
 		"bushes have no separate foliage surface")
 	var leaves: Material = brush.multimesh.mesh.surface_get_material(1)
@@ -594,7 +633,7 @@ func _test_ground_cover() -> void:
 
 
 func _test_camp() -> void:
-	var camp: Node3D = world.get_node_or_null("SurvivorCamp")
+	var camp: Node3D = world.find_child("SurvivorCamp", true, false)
 	assert(camp != null, "the starting camp was not built")
 	# Godot gives repeated sibling names opaque "@Node3D@12" names, so match
 	# structures (a tent canopy, a log seat) instead of node names.

@@ -137,6 +137,11 @@ Keep these layers separate:
 | HUD | `scripts/game_hud.gd`, `scripts/world_map.gd`, `skill_panel.gd`, `inventory_panel.gd` | Read state and render UI |
 | Audio | `scripts/audio_director.gd` | Cues and volume |
 
+Before implementing a new mob, ask Alin or Stefan when it should spawn during
+the day/night cycle and which map, zones or biomes it belongs in. Do not invent
+these decisions when they have not been specified; record the agreed spawn
+rules in `GAME_RULES.md` and use them when implementing the mob.
+
 Rules:
 
 - Gameplay state belongs in `game_state.gd`, not in the HUD or visuals.

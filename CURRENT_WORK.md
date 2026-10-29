@@ -6,31 +6,31 @@ Branch: `main`
 ## Current state
 
 Map I is playable as a real 3D forest continent. The old flat baked arena and the
-minimap are gone; the world is built at runtime from one zone table, the game has
+minimap are gone; a single zone table drives the authored world, and the game has
 a day/night cycle, MMO chat and a full-screen painted map, and the HUD has been
-re-laid-out around a bare skill bar. The world is about 296 m across, ringed by
-mountains that are part of the same height field, and the forest runs from the
-starting camp all the way to the foothills.
+re-laid-out around a bare skill bar. The redesigned world is about 512.7 m
+across, with spread-out level regions, an expanded road network and a sealed
+waygate near the north-west corner. Authored world assets are baked offline;
+terrain, vegetation and scenery stream in buffered chunks during play.
 
 ## Completed in this pass
 
 - **World:** five uneven zones (Emberfall Vale 1-3, Thornwood 4-6, Ashen Fen 7-9,
-  The Broken Arch 10-12, Crownless Sanctum 13-15) in a 296 m square
-  (`BOUNDS` 148). Rolling height-field terrain with collision, a branched
-  34-edge road network, fen ponds, a camp, ruins, a sanctum and a sealed
-  waygate. All of it lives in `scripts/world_builder.gd`.
+  The Broken Arch 10-12, Crownless Sanctum 13-15) in a 512.7 m square
+  (`BOUNDS` 256.3435). Rolling baked terrain, streamed collision, an expanded
+  road network, fen ponds, a camp, ruins, a sanctum and a sealed waygate.
 - **Mountains:** the square edge of the world rises into a real ridge
-  (`RIM_START` 160, crest at `RIM_END` 200, `RIM_HEIGHT` 32) built from two
-  ridged-noise fields, then falls away again at 206-223 so the mesh edge hides
+  (`RIM_START` 268.34, crest at `RIM_END` 308.34, `RIM_HEIGHT` 32) built from two
+  ridged-noise fields, then falls away again at 314.34-331.34 so the mesh edge hides
   behind the crest. No separate cone/crag props remain; rock and alpine colour
-  climb with altitude, and a pine belt covers the 140-170 m foothills.
+  climb with altitude, and a pine belt covers the outer foothills.
 - **Biomes:** each zone now has its own `elevation`, `relief`, `tree_count`,
   `rock_count` and `grass_count`, so the fen is a wet lowland, the arch and
   sanctum sit on high ground, and the colour/vegetation change is physical, not
   only painted on the map.
 - **Vegetation:** taller Blender trees (oak ~11 m, birch ~11.5 m, pine ~11.8 m,
-  dead ~10 m) with smooth-shaded crowns; a 760-tree outskirt pass and 7000
-  outskirt grass tufts continue the forest past the zone blobs to the rim; grass
+  dead ~10 m) with smooth-shaded crowns; additional forest and grass continue
+  past the zone blobs to the rim; grass
   is a three-card alpha-scissor tuft (`grass_blades.png`) in the thousands per
   zone; rocks and logs are smaller, sunk into the ground and kept two road cells
   clear.
@@ -145,9 +145,9 @@ starting camp all the way to the foothills.
   that do not have it. This is an editor warning only and does not affect play.
 - A headless quit can report 2 leaked ObjectDB instances at exit; tests still
   exit 0 and gameplay is unaffected. Investigate only if the count grows.
-- The world rebuild costs about 2.5 s at startup (terrain, ~2,000 trees and
-  ~31,000 grass tufts); it is logged as
-  `[WORLD] world_ready {"build_ms": ...}`.
+- World load timing is logged as `[WORLD] world_ready {"build_ms": ...}`;
+  the old procedural startup figures in the historical entries are superseded
+  by the baked-world work below.
 
 ## 2026-10-28 - Skill stash integration
 
@@ -268,3 +268,36 @@ starting camp all the way to the foothills.
 - The selected local `journey.json` character now carries an original modeled, longer silver sword inspired by the supplied front-view reference. Its former equipped sword was moved intact to inventory; a pre-change save is in `logs/sword_swap_backup/`. Other character saves were not changed.
 - SSAO settings and toggle are connected; a static Direct3D 12 comparison shows contact darkening, while the effect in the forest is subtle. Settings → Graphics now offers 1×, 2× and 3× intensity, with 1× preserving the previous default and the choice saved independently of the on/off toggle. The world test and Direct3D 12 settings preview verified the control.
 - Headless sword, enemy telegraph, world spacing, training minion, combat effects, progression and animation-selection tests passed. Godot previews of the sword, pine and creature walk poses were inspected. Creature rigging is approximate and needs interactive movement/combat playtesting; the reference image does not show every surface of the sword. The editor import still emits an existing empty-name diagnostic.
+
+## 2026-10-29 - Streamed vegetation and spawn catch-up
+
+- Vegetation instance buffers are allocated for a buffered 5×5 grid of 48 m cells around the player. Normal, boss and quest spawn slots activate in a buffered 3×3 grid; engaged enemies remain active while chased. Living unloaded enemies retain health and position. Catch-up uses stored respawn deadlines, not per-frame creature simulation, and supports configured boss windows without changing the Hollow Regent's existing unrestricted schedule.
+- Boars spawn 05:00–17:30 and wolves 17:30–05:00; the other species is removed at the boundary as requested. World clock, spawn deadlines and slot state save with each local character and pause while the game is closed. The existing normal-kill quest already counted both species, so its text now says so.
+- Terrain, landmarks and whole-map procedural placement data still build at startup; this is not full terrain streaming. The starting-area test allocated 26,821 of 35,260 vegetation instances, not an FPS benchmark. The map and terrain stay complete. Measure startup, frame times, memory and boundary transitions on target hardware before claiming a performance improvement; full streaming, asynchronous generation and multiplayer server ownership remain future work.
+
+## 2026-10-29 - Larger authored world and buffered terrain
+
+- The previous entry's startup limitation is superseded. Map I now has three times the former playable area, five level regions distributed around the map, new outer roads and 22 additional normal spawn points. The waygate is at the end of a road near the north-west corner; its sanctum, boss, guardian, fen pools and level-region centers were placed for the new layout. Five small named landmarks are decorative exploration points, not new quests.
+- The landscape, roads, vegetation placements, static scenery and painted map are baked offline into `assets/world/`; normal play loads the snapshot instead of rebuilding it. Terrain and collision, vegetation and scenery use buffered cells. Distant low-detail terrain, its fallback collision, roads, water and map metadata remain available globally. With a normal renderer, the loader prepares one nearby cell resource at a time in the background; headless tests use main-thread staging to avoid a dummy-renderer race. Rebuild the authored assets after changing the world design with `Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://scripts/dev/bake_world.gd`.
+- Older spawn saves preserve slot identity, deadlines and health when the unique enemies move; stored pre-redesign positions reset to the new homes. New saves retain their current positions. Day/night and offline-pause rules are unchanged.
+- Integrity, world, chunk, actual player boundary traversal, character, enemy, training, progression, combat and skill checks passed; the final headless test-mode launch had no script/parse/runtime errors. A Direct3D 12 map and five landmark views were inspected. Import still reports the existing missing local editor addon warning and empty-name diagnostic.
+- On this i5-9300HF / RTX 2060, one headless world initialization measurement was about 318 ms for the baked build versus 28.6 s for the offline procedural builder; the baked figure excludes later staged loading and rendering. In a 15-second scripted 1280×720 Direct3D 12 traversal with game logic active, the sampled portion after the first 1.5 seconds averaged about 60 FPS with a 38 ms worst frame, but an earlier frame stalled for about 551 ms. A stationary no-prefetch run also stalled early. Test on slower PCs and investigate the startup stall; this remains a local single-player system, not a server-authoritative MMO.
+
+## 2026-10-29 - Background chunk loading and stutter investigation
+
+- The reported session recorded chunk activations taking as long as 210 ms. Further timing showed synchronous scenery reads taking 321–346 ms. Normal rendering now loads terrain, scenery and vegetation resources in the background, with one request in flight and no synchronous wait when crossing a chunk boundary. Fallback ground and collision remain until the detailed tile arrives. Headless tests retain synchronous staging because the dummy renderer has shown a concurrent resource race. Long activation diagnostics are throttled.
+- Chunk tests check fallback collision, detailed collision after loading, and that distant terrain nodes, their meshes and vegetation nodes are freed. A Direct3D test moved the target twice during an outstanding load and verified that the latest neighborhood loaded without activating stale terrain. World, traversal, baked integrity, enemy telegraph and character checks and a headless smoke launch passed.
+- In one scripted 1280×720 traversal, comparing the measured portion after the first 1.5 seconds, the 95th-percentile frame time fell from 34.6 to 17.1 ms and the worst frame from 373 to 48.5 ms. A separate 1600×900 run averaged 59.6 FPS in that portion but still had a 124 ms worst frame. Early startup stalls of roughly 0.3–0.5 seconds remain unexplained. Teleporting can temporarily show fallback ground and missing scenery while the new area loads. Interactive gameplay and slower computers still need testing; results are single runs, not guarantees.
+
+## 2026-10-29 - Resource profiling and frame limit
+
+- The reported 154-second session held around 60 FPS but logged several 59–133 ms frames; its log has no GPU utilization or per-process memory measurements. A 1600×900 camp profile showed 25 active vegetation cells with approximately 1,311 trees, 25,112 grass tufts, 619 flowers and 207 bushes; scenery counts vary by location.
+- Two soft-shadow cascades now cover 100 m rather than four covering 150 m. A paired stationary Direct3D 12 run on the RTX 2060 measured roughly 16.4–16.5 ms GPU render time and 1,768–1,770 draws before, versus 13.0–13.3 ms and 1,033 draws after. This is one scene on one machine; distant shadows fade sooner and other locations may differ. Camp screenshots were compared. The renderer's reported allocation and working-set samples are not dedicated per-process VRAM measurements.
+- Settings → Graphics now offers a live, persistent 20–60 FPS slider with a 60 FPS default and reset. Actual frame rate can be below the cap. A Direct3D run measured approximately 30 and 20 FPS at those limits. Further interactive testing, slower hardware profiling, distant/night shadow review and memory optimization remain.
+
+## 2026-10-29 - Nature assets, terrain detail and spawn-design rule
+
+- The bush and five rock/stone variants were rebuilt with `assets/models/props/generate_props.py` in Blender, with fuller foliage, varied weathered forms and shared color/normal maps. The rock maps are also embedded in each GLB for independent Blender use. Campfire stones use the new models. Ground uses a neutral-tinted, tiled forest-floor photograph and normal map, with tangents in baked terrain. Asset source, author and CC0 license details are in `assets/textures/polyhaven/README.md`.
+- Birch and dead-tree bark no longer receive brightening. Grass instances now each contain three differently shaped small clumps, with random rotation, scaling and tint; meadow patch targets were reduced to 90% and wider shoreline exclusion prevents the full patch overlapping water. The former shallow-water grass-like reeds now grow on dry shore. Roads stay clear. The authored world was rebuilt, preserving a pre-change copy in `logs/nature_before_20261029/`.
+- An in-engine camp, shoreline and prop preview was inspected; the baked integrity test validates terrain tangents, bush foliage, bark tint, and every recorded meadow and shoreline patch's water clearance. World, chunk and player traversal tests and a headless smoke test were run, plus Direct3D background streaming. In separate stationary camp runs at 1600×900, loaded meadow patches fell from about 25,112 to 22,547; complete-scene GPU render time was 13.0–13.3 ms in the earlier run and 10.3–12.8 ms in the new runs. Other locations, slower systems, and interactive gameplay have not been benchmarked or playtested.
+- AGENTS.md and GAME_RULES.md require asking Alin or Stefan about spawn time and map/zone/biome before implementing a new mob, and recording their decision.

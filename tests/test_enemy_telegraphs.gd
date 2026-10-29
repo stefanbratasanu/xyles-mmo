@@ -26,7 +26,8 @@ func _run() -> void:
 	game.player.set_physics_process(false)
 	for enemy in game.enemies:
 		enemy.set_physics_process(false)
-	var wolf: CharacterBody3D = game.enemies[0]
+	var wolf: CharacterBody3D = game._spawn_enemy("normal", game.world.normal_spawns[0], 0, "wolf")
+	wolf.set_physics_process(false)
 	wolf.global_position = game.player.global_position + Vector3(2.0, 0.0, 0.0)
 	wolf.home = wolf.global_position
 	wolf._begin_attack()
@@ -76,7 +77,8 @@ func _run() -> void:
 	wolf._finish_attack()
 	check(is_equal_approx(game.state.hp, before), "A player behind the wolf is safe")
 
-	var boar: CharacterBody3D = game.enemies[1]
+	var boar: CharacterBody3D = game._spawn_enemy("normal", game.world.normal_spawns[0], 0, "boar")
+	boar.set_physics_process(false)
 	boar.global_position = point
 	game.player.global_position = point + Vector3(1.6, 0.0, 0.0)
 	boar._begin_attack()
@@ -96,7 +98,8 @@ func _run() -> void:
 	check(not wolf.winding_up and not is_instance_valid(wolf.telegraph),
 		"Death cancels the windup and telegraph")
 
-	var boss: CharacterBody3D = game.enemies.back()
+	var boss: CharacterBody3D = game._spawn_enemy("boss", game.world.boss_spawn)
+	boss.set_physics_process(false)
 	boss.global_position = point
 	game.player.global_position = point + Vector3(4.0, 0.0, 0.0)
 	boss._begin_slam()

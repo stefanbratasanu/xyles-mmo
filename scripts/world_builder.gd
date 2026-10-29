@@ -5,34 +5,42 @@ class_name XylesWorldBuilder
 ##
 ## Every visual is original Godot geometry, one of the generated nature textures
 ## in res://assets/textures, or one of the low-poly trees exported from Blender
-## into res://assets/models/trees. The world is rebuilt at startup so terrain,
-## roads, vegetation, landmarks and lighting always agree with gameplay data.
+## into res://assets/models/trees. Terrain, roads, vegetation and landmarks are
+## baked offline from this design and loaded in chunks during play.
 ##
 ## Zones are organic blobs defined by a centre, a radius and a wavy edge. The
 ## same definitions drive region detection, terrain colour, enemy levels, tree
 ## selection and the full-screen world map: one source of truth.
 
-## Map I is ~296 m across, roughly four times the area of the first pass. All
-## authored coordinates below are written at this scale; the terrain mesh simply
-## covers more ground around them.
-const BOUNDS := 148.0
-const TERRAIN_EXTENT := 224.0
-const TERRAIN_SEGMENTS := 288
+## Three times the former playable area, without stretching character scale.
+const BOUNDS := 256.3435
+## Preserve roughly the old terrain sampling density across the larger map.
+const TERRAIN_EXTENT := 332.8888888889
+const TERRAIN_SEGMENTS := 428
 ## Beyond the playable square the height field rises into a mountain rim. The rim
 ## is part of the terrain mesh, not a ring of separate cones, so peaks, slopes and
 ## collision all agree with the ground the player sees.
-const RIM_START := 160.0
-const RIM_END := 200.0
+const RIM_START := 268.3435
+const RIM_END := 308.3435
 const RIM_HEIGHT := 32.0
 ## After the crest the height falls away again so the square edge of the terrain
 ## mesh hides behind the range instead of cutting a straight line across the sky.
-const RIM_FALL_START := 206.0
-const RIM_FALL_END := 223.0
+const RIM_FALL_START := 314.3435
+const RIM_FALL_END := 331.3435
 const ROAD_WIDTH := 3.7
 const ROAD_LIFT := 0.055
 const DAY_SECONDS := 900.0
+## Nearby cells are instantiated with a buffer for the orbit camera; distant
+## terrain and landmarks remain visible beyond the streamed vegetation.
+const STREAM_CELL_SIZE := 48.0
+const STREAM_CELL_RADIUS := 2
+const TERRAIN_TILE_SEGMENTS := 32
+const TERRAIN_TILE_RADIUS := 2
 
-const GRASS_TEXTURE := preload("res://assets/textures/terrain_grass.png")
+const GRASS_TEXTURE := preload("res://assets/textures/polyhaven/forest_ground_tinted.png")
+const GROUND_NORMAL := preload("res://assets/textures/polyhaven/forest_ground_04-nor_gl.jpg")
+const ROCK_TEXTURE := preload("res://assets/textures/polyhaven/rock_face_03-Diffuse.jpg")
+const ROCK_NORMAL := preload("res://assets/textures/polyhaven/rock_face_03-nor_gl.jpg")
 const GRASS_BLADES := preload("res://assets/textures/grass_blades.png")
 const ROAD_TEXTURE := preload("res://assets/textures/terrain_road.png")
 const BARK_TEXTURE := preload("res://assets/textures/bark.png")
@@ -44,17 +52,39 @@ const NEEDLE_CARD_TEXTURE := preload("res://assets/textures/needle_card.png")
 
 var player_spawn: Vector3 = Vector3(-33.4, 0.0, 32.4)
 var camp_position: Vector3 = Vector3(-36.0, 0.0, 32.0)
-var quest_spawn: Vector3 = Vector3(60.0, 0.0, -52.0)
-var boss_spawn: Vector3 = Vector3(-48.0, 0.0, -88.0)
+var quest_spawn: Vector3 = Vector3(100.0, 0.0, -95.0)
+var boss_spawn: Vector3 = Vector3(-138.0, 0.0, -138.0)
+## Empty means unrestricted (the current Hollow Regent rule). A future timed
+## boss may set [start_hour, end_hour], including a window crossing midnight.
+var boss_spawn_window: Array[float] = []
+## Original, non-interactive exploration landmarks on the extended roads.
+var frontier_landmarks: Array[Dictionary] = [
+	{"name": "THORN WATCH", "at": Vector2(-194.0, 128.0), "style": 0},
+	{"name": "WINDWARD CIRCLE", "at": Vector2(78.0, 157.0), "style": 1},
+	{"name": "FENWARD SHRINE", "at": Vector2(214.0, 105.0), "style": 2},
+	{"name": "THE FALLEN WATCH", "at": Vector2(198.0, -148.0), "style": 3},
+	{"name": "PILGRIM'S REST", "at": Vector2(-68.0, -202.0), "style": 4},
+]
 var smith_position: Vector3 = Vector3(-30.8, 0.0, 23.2)
-var waygate_position: Vector3 = Vector3(-104.0, 0.0, -132.0)
+var waygate_position: Vector3 = Vector3(-215.0, 0.0, -215.0)
 var waygate_radius: float = 8.0
 var normal_spawns: Array[Vector3] = [
 	Vector3(-12.0, 0.0, 20.0), Vector3(24.0, 0.0, 36.0),
-	Vector3(-68.0, 0.0, 4.0), Vector3(-92.0, 0.0, -36.0),
-	Vector3(76.0, 0.0, 36.0), Vector3(92.0, 0.0, -12.0),
-	Vector3(64.0, 0.0, -36.0), Vector3(84.0, 0.0, -72.0),
-	Vector3(-16.0, 0.0, -120.0), Vector3(-72.0, 0.0, -68.0)]
+	Vector3(-118.0, 0.0, 4.0), Vector3(-164.0, 0.0, -36.0),
+	Vector3(126.0, 0.0, 36.0), Vector3(172.0, 0.0, -12.0),
+	Vector3(112.0, 0.0, -88.0), Vector3(160.0, 0.0, -118.0),
+	Vector3(-112.0, 0.0, -165.0), Vector3(-165.0, 0.0, -130.0),
+	Vector3(-146.0, 0.0, 63.0), Vector3(-186.0, 0.0, 120.0),
+	Vector3(-125.0, 0.0, 178.0), Vector3(-64.0, 0.0, 202.0),
+	Vector3(4.0, 0.0, 155.0), Vector3(78.0, 0.0, 165.0),
+	Vector3(145.0, 0.0, 67.0), Vector3(204.0, 0.0, 113.0),
+	Vector3(224.0, 0.0, 40.0), Vector3(190.0, 0.0, -25.0),
+	Vector3(166.0, 0.0, -90.0), Vector3(204.0, 0.0, -138.0),
+	Vector3(130.0, 0.0, -189.0), Vector3(65.0, 0.0, -183.0),
+	Vector3(-60.0, 0.0, -209.0), Vector3(-119.0, 0.0, -174.0),
+	Vector3(-188.0, 0.0, -164.0), Vector3(-228.0, 0.0, -118.0),
+	Vector3(-202.0, 0.0, -69.0), Vector3(-157.0, 0.0, -44.0),
+	Vector3(-68.0, 0.0, 4.0), Vector3(-70.0, 0.0, 48.0)]
 
 ## Level band and visual identity of each region. Areas are uneven but
 ## comparable; the central vale is the starting zone. `relief` scales the local
@@ -65,44 +95,44 @@ var zones: Array[Dictionary] = [
 	{
 		"id": "vale", "name": "EMBERFALL VALE", "subtitle": "The wayfarer's hearth",
 		"level_min": 1, "level_max": 3, "center": Vector2(0.0, 16.0),
-		"radius": 68.0, "phase": 0.4, "elevation": 0.0, "relief": 0.95,
-		"tree_count": 320, "rock_count": 10, "grass_count": 7000,
+		"radius": 104.0, "phase": 0.4, "elevation": 0.0, "relief": 0.95,
+		"tree_count": 680, "rock_count": 18, "grass_count": 13500,
 		"ground": Color("7c8a53"), "accent": Color("c7a96b"),
 		"trees": {"oak": 0.58, "birch": 0.42},
 		"description": "Rolling meadow and the survivor camp. Safe for new wayfarers.",
 	},
 	{
 		"id": "thornwood", "name": "THORNWOOD", "subtitle": "Where the old forest closes",
-		"level_min": 4, "level_max": 6, "center": Vector2(-92.0, -4.0),
-		"radius": 66.0, "phase": 2.2, "elevation": 0.9, "relief": 1.15,
-		"tree_count": 384, "rock_count": 14, "grass_count": 8500,
+		"level_min": 4, "level_max": 6, "center": Vector2(-145.0, 12.0),
+		"radius": 106.0, "phase": 2.2, "elevation": 0.9, "relief": 1.15,
+		"tree_count": 760, "rock_count": 24, "grass_count": 16000,
 		"ground": Color("445f37"), "accent": Color("8a6a4a"),
 		"trees": {"oak": 0.54, "birch": 0.46},
 		"description": "Dense oak and birch. The canopy keeps the ground dark.",
 	},
 	{
 		"id": "fen", "name": "ASHEN FEN", "subtitle": "Still water, patient things",
-		"level_min": 7, "level_max": 9, "center": Vector2(84.0, 28.0),
-		"radius": 64.0, "phase": 4.1, "elevation": -1.6, "relief": 0.32,
-		"tree_count": 192, "rock_count": 8, "grass_count": 1900,
+		"level_min": 7, "level_max": 9, "center": Vector2(140.0, 35.0),
+		"radius": 102.0, "phase": 4.1, "elevation": -1.6, "relief": 0.32,
+		"tree_count": 400, "rock_count": 16, "grass_count": 4200,
 		"ground": Color("55665b"), "accent": Color("7f9a86"),
 		"trees": {"dead": 0.62, "pine": 0.38},
 		"description": "Shallow black ponds and dead trees. Movement is exposed.",
 	},
 	{
 		"id": "arch", "name": "THE BROKEN ARCH", "subtitle": "A monastery that lost its oath",
-		"level_min": 10, "level_max": 12, "center": Vector2(72.0, -80.0),
-		"radius": 64.0, "phase": 1.1, "elevation": 3.0, "relief": 1.30,
-		"tree_count": 264, "rock_count": 30, "grass_count": 3800,
+		"level_min": 10, "level_max": 12, "center": Vector2(120.0, -130.0),
+		"radius": 105.0, "phase": 1.1, "elevation": 3.0, "relief": 1.30,
+		"tree_count": 550, "rock_count": 48, "grass_count": 7600,
 		"ground": Color("857a5c"), "accent": Color("b09a6c"),
 		"trees": {"pine": 1.0},
 		"description": "High stone terraces, broken columns and cold pines.",
 	},
 	{
 		"id": "sanctum", "name": "CROWNLESS SANCTUM", "subtitle": "The sealed gate watches",
-		"level_min": 13, "level_max": 15, "center": Vector2(-52.0, -100.0),
-		"radius": 74.0, "phase": 5.3, "elevation": 4.2, "relief": 1.05,
-		"tree_count": 232, "rock_count": 26, "grass_count": 3200,
+		"level_min": 13, "level_max": 15, "center": Vector2(-140.0, -145.0),
+		"radius": 118.0, "phase": 5.3, "elevation": 4.2, "relief": 1.05,
+		"tree_count": 480, "rock_count": 42, "grass_count": 6500,
 		"ground": Color("3f5257"), "accent": Color("79a79b"),
 		"trees": {"pine": 1.0},
 		"description": "The highest ground. The dormant waygate stands in its corner.",
@@ -129,6 +159,7 @@ var _terrain_heights: PackedFloat32Array = PackedFloat32Array()
 var _terrain_colors: PackedColorArray = PackedColorArray()
 var _terrain_grid_size: int = 0
 var _map_cache: ImageTexture
+var _authored_map: Image
 var _tree_points: Array[Vector2] = []
 ## Shared spatial grid for every forest and foothill trunk. The conservative
 ## clearance covers the widest scaled trunk flare and the authored trunk lean.
@@ -140,6 +171,29 @@ var _tree_spacing_cells: Dictionary = {}
 var grass_points: PackedVector2Array = PackedVector2Array()
 var _tree_base: Dictionary = {}
 var _prop_meshes: Dictionary = {}
+var _streamed_visual_data: Dictionary = {}
+var _streamed_visual_nodes: Dictionary = {}
+var _stream_center := Vector2i(2147483647, 2147483647)
+var _vegetation_paths: Dictionary = {}
+var _vegetation_counts: Dictionary = {}
+var _vegetation_meshes: Dictionary = {}
+var _vegetation_pending: Dictionary = {}
+var _vegetation_desired: Dictionary = {}
+var _terrain_paths: Dictionary = {}
+var _terrain_active: Dictionary = {}
+var _terrain_far: Dictionary = {}
+var _terrain_pending: Dictionary = {}
+var _terrain_desired: Dictionary = {}
+var _terrain_center := Vector2i(2147483647, 2147483647)
+var _static_paths: Dictionary = {}
+var _static_active: Dictionary = {}
+var _static_pending: Dictionary = {}
+var _static_desired: Dictionary = {}
+var _static_center := Vector2i(2147483647, 2147483647)
+var _stream_running_kind: String = ""
+var _stream_running_path: String = ""
+var _stream_running_cell := Vector2i.ZERO
+var _stream_next_kind: int = 0
 var _sites: Array[Dictionary] = []
 var _ponds: Array[Dictionary] = []
 var _road_cells: Dictionary = {}
@@ -153,11 +207,77 @@ var _flames: Array[Node3D] = []
 var _night_lights: Array[OmniLight3D] = []
 var road_lamps: Array[Vector3] = []
 var _elapsed: float = 0.0
+var _last_stream_warning: float = -10.0
+var _stream_timing: Dictionary = {}
 var _prepared: bool = false
 var _phase_name: String = "Day"
 
 
+## Runtime loads the authored snapshot. The procedural builder below is an
+## offline authoring tool and is never run as a fallback during normal play.
 func build() -> void:
+	var data: Resource = load("res://assets/world/baked_world.res")
+	if data == null or data.static_scene == null or data.format_version != 7 or not is_equal_approx(data.playable_bounds, BOUNDS) or not is_equal_approx(data.terrain_extent, TERRAIN_EXTENT) or data.terrain_segments != TERRAIN_SEGMENTS or data.terrain_tiles.is_empty() or data.vegetation_paths.is_empty() or data.static_paths.is_empty() or data.map_image == null:
+		push_error("The authored world asset is missing or incompatible; run scripts/dev/bake_world.gd.")
+		return
+	_init_noise()
+	_sites = data.sites.duplicate(true)
+	_ponds = data.ponds.duplicate(true)
+	_prepared = true
+	_finalize_spawns()
+	_terrain_heights = data.terrain_heights
+	_terrain_colors = data.terrain_colors
+	_terrain_grid_size = data.terrain_grid_size
+	_authored_map = data.map_image
+	_map_cache = null
+	roads = data.roads.duplicate(true)
+	_road_cells = data.road_cells.duplicate(true)
+	road_lamps = data.road_lamps.duplicate()
+	_tree_points = data.tree_points.duplicate()
+	_tree_spacing_cells = data.tree_spacing_cells.duplicate(true)
+	grass_points = data.grass_points
+	_streamed_visual_data.clear()
+	_vegetation_paths = data.vegetation_paths
+	_vegetation_counts = data.vegetation_counts
+	_vegetation_meshes.clear()
+	_vegetation_pending.clear()
+	_vegetation_desired.clear()
+	_streamed_visual_nodes.clear()
+	_stream_center = Vector2i(2147483647, 2147483647)
+	_terrain_paths = data.terrain_tiles
+	_terrain_active.clear()
+	_terrain_far.clear()
+	_terrain_pending.clear()
+	_terrain_desired.clear()
+	_terrain_center = Vector2i(2147483647, 2147483647)
+	_static_paths = data.static_paths
+	_static_active.clear()
+	_static_pending.clear()
+	_static_desired.clear()
+	_static_center = Vector2i(2147483647, 2147483647)
+	_create_atmosphere()
+	var authored: Node = data.static_scene.instantiate()
+	for child: Node in authored.get_children():
+		_clear_baked_owners(child)
+		authored.remove_child(child)
+		add_child(child)
+	authored.free()
+	for cell: Vector2i in _terrain_paths:
+		var low := get_node_or_null("TerrainFar_%02d_%02d" % [cell.x, cell.y]) as MeshInstance3D
+		if low != null:
+			_terrain_far[cell] = low
+	_refresh_baked_dynamic_nodes()
+	update_streamed_visuals(player_spawn)
+	update_terrain_chunks(player_spawn)
+	update_static_chunks(player_spawn)
+	_apply_time_of_day()
+
+func _clear_baked_owners(node: Node) -> void:
+	for child: Node in node.get_children():
+		_clear_baked_owners(child)
+	node.owner = null
+
+func build_procedural() -> void:
 	for child: Node in get_children():
 		remove_child(child)
 		child.queue_free()
@@ -176,6 +296,9 @@ func build() -> void:
 	grass_points.clear()
 	_tree_base.clear()
 	_prop_meshes.clear()
+	_streamed_visual_data.clear()
+	_streamed_visual_nodes.clear()
+	_stream_center = Vector2i(2147483647, 2147483647)
 	_init_noise()
 	_init_sites()
 	_init_ponds()
@@ -192,10 +315,12 @@ func build() -> void:
 	_create_broken_arch()
 	_create_sanctum()
 	_create_waygate()
+	_create_frontier_landmarks()
 	_create_vegetation()
 	_create_rocks_and_logs()
 	_create_distant_landscape()
 	_create_boundaries()
+	update_streamed_visuals(player_spawn)
 	_apply_time_of_day()
 
 
@@ -207,6 +332,16 @@ func _reseed(value: int) -> void:
 
 func _process(delta: float) -> void:
 	_elapsed += delta
+	var started := Time.get_ticks_usec()
+	_pump_streaming()
+	var completed := Time.get_ticks_usec()
+	if completed - started >= 25000 and _elapsed - _last_stream_warning >= 2.0:
+		_last_stream_warning = _elapsed
+		var logger := get_node_or_null("../GameLog")
+		if logger != null:
+			var detail: Dictionary = _stream_timing.duplicate()
+			detail["duration_ms"] = (completed - started) / 1000.0
+			logger.world("slow_chunk_activation", detail)
 	if _portal_material != null:
 		_portal_material.emission_energy_multiplier = 0.32 + sin(_elapsed * 1.4) * 0.10
 	# A shared flicker phase per flame is cheap and keeps the camp feeling alive.
@@ -217,6 +352,113 @@ func _process(delta: float) -> void:
 		var phase: float = float(index) * 1.73
 		flame.scale.y = flame.scale.x * (1.0 + sin(_elapsed * 6.1 + phase) * 0.07)
 		flame.rotation.y = sin(_elapsed * 2.3 + phase) * 0.10
+
+func _exit_tree() -> void:
+	# Every threaded request must be retrieved, including when logging out before
+	# the background buffer finishes; otherwise Godot retains loader objects.
+	if not _stream_running_path.is_empty():
+		ResourceLoader.load_threaded_get(_stream_running_path)
+	_stream_running_path = ""
+	_stream_running_kind = ""
+	_terrain_pending.clear()
+	_vegetation_pending.clear()
+	_static_pending.clear()
+
+func _stream_queue(kind: String) -> Dictionary:
+	match kind:
+		"terrain": return _terrain_pending
+		"scenery": return _static_pending
+		_: return _vegetation_pending
+
+func _stream_desired(kind: String) -> Dictionary:
+	match kind:
+		"terrain": return _terrain_desired
+		"scenery": return _static_desired
+		_: return _vegetation_desired
+
+## One resource request is in flight at a time. This avoids renderer-resource
+## creation races and spreads the prefetch work across frames.
+func _pump_streaming() -> void:
+	if not _stream_running_path.is_empty():
+		var status := ResourceLoader.load_threaded_get_status(_stream_running_path)
+		if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			return
+		if status != ResourceLoader.THREAD_LOAD_LOADED:
+			push_error("Could not load world chunk: " + _stream_running_path)
+			_stream_queue(_stream_running_kind).erase(_stream_running_cell)
+			_stream_running_path = ""
+			_stream_running_kind = ""
+			return
+		_finish_running_stream()
+		return
+	var kinds := ["terrain", "scenery", "vegetation"]
+	for offset in range(kinds.size()):
+		var index: int = (_stream_next_kind + offset) % kinds.size()
+		var kind: String = kinds[index]
+		var queue: Dictionary = _stream_queue(kind)
+		var desired: Dictionary = _stream_desired(kind)
+		var center := _terrain_center if kind == "terrain" else (_static_center if kind == "scenery" else _stream_center)
+		var best_cell := Vector2i.ZERO
+		var best_distance := 2147483647
+		var found := false
+		for cell: Vector2i in queue.keys():
+			if not desired.has(cell):
+				queue.erase(cell)
+				continue
+			var distance := maxi(absi(cell.x - center.x), absi(cell.y - center.y))
+			if distance < best_distance:
+				best_distance = distance
+				best_cell = cell
+				found = true
+		if found:
+			var cell := best_cell
+			var path: String = queue[cell]
+			# The headless dummy renderer cannot safely create mesh resources in
+			# parallel. Its tests stage one cell per frame on the main thread;
+			# the normal renderer prepares each resource in the background.
+			if DisplayServer.get_name() == "headless":
+				queue.erase(cell)
+				var read_started := Time.get_ticks_usec()
+				var resource := load(path)
+				var read_finished := Time.get_ticks_usec()
+				match kind:
+					"terrain": _activate_terrain_tile(cell, resource)
+					"scenery": _activate_static_cell(cell, resource as PackedScene)
+					"vegetation": _activate_vegetation_tile(cell, resource)
+				_stream_timing = {"kind": kind, "cell_x": cell.x, "cell_z": cell.y, "read_ms": (read_finished - read_started) / 1000.0, "activate_ms": (Time.get_ticks_usec() - read_finished) / 1000.0}
+				_stream_next_kind = (index + 1) % kinds.size()
+				return
+			if ResourceLoader.load_threaded_request(path) != OK:
+				queue.erase(cell)
+				push_error("Could not request world chunk: " + path)
+				continue
+			_stream_running_kind = kind
+			_stream_running_cell = cell
+			_stream_running_path = path
+			_stream_next_kind = (index + 1) % kinds.size()
+			return
+
+func _finish_running_stream() -> void:
+	if _stream_running_path.is_empty():
+		return
+	var kind := _stream_running_kind
+	var cell := _stream_running_cell
+	var started := Time.get_ticks_usec()
+	var resource := ResourceLoader.load_threaded_get(_stream_running_path)
+	var read_finished := Time.get_ticks_usec()
+	_stream_queue(kind).erase(cell)
+	_stream_running_path = ""
+	_stream_running_kind = ""
+	if not _stream_desired(kind).has(cell):
+		return
+	match kind:
+		"terrain":
+			if not _terrain_active.has(cell): _activate_terrain_tile(cell, resource)
+		"scenery":
+			if not _static_active.has(cell): _activate_static_cell(cell, resource as PackedScene)
+		"vegetation":
+			if not _streamed_visual_nodes.has(cell): _activate_vegetation_tile(cell, resource)
+	_stream_timing = {"kind": kind, "cell_x": cell.x, "cell_z": cell.y, "read_ms": (read_finished - started) / 1000.0, "activate_ms": (Time.get_ticks_usec() - read_finished) / 1000.0, "background": true}
 
 
 func advance_time(delta: float) -> void:
@@ -287,14 +529,16 @@ func _init_sites() -> void:
 	# Flattened pads keep the hand-built landmarks readable on rolling ground.
 	_sites = [
 		{"center": Vector2(-36.0, 32.0), "radius": 9.5, "blend": 7.0, "kind": "camp"},
-		{"center": Vector2(60.0, -52.0), "radius": 10.0, "blend": 7.0, "kind": "quest"},
-		{"center": Vector2(-48.0, -88.0), "radius": 11.5, "blend": 8.0, "kind": "boss"},
-		{"center": Vector2(-104.0, -132.0), "radius": 8.5, "blend": 7.0, "kind": "waygate"},
+		{"center": Vector2(100.0, -95.0), "radius": 10.0, "blend": 7.0, "kind": "quest"},
+		{"center": Vector2(-138.0, -138.0), "radius": 11.5, "blend": 8.0, "kind": "boss"},
+		{"center": Vector2(-215.0, -215.0), "radius": 8.5, "blend": 7.0, "kind": "waygate"},
 		# The hand-built monastery and sanctum need their own flat pads and a
 		# tree-free apron, or the forest grows through the terrace and pillars.
-		{"center": Vector2(72.0, -80.0), "radius": 10.5, "blend": 7.0, "kind": "arch"},
-		{"center": Vector2(-52.0, -100.0), "radius": 9.5, "blend": 7.0, "kind": "sanctum"},
+		{"center": Vector2(122.0, -116.0), "radius": 10.5, "blend": 7.0, "kind": "arch"},
+		{"center": Vector2(-142.0, -150.0), "radius": 9.5, "blend": 7.0, "kind": "sanctum"},
 	]
+	for landmark: Dictionary in frontier_landmarks:
+		_sites.append({"center": landmark["at"], "radius": 5.0, "blend": 5.0, "kind": "frontier_landmark"})
 	for site: Dictionary in _sites:
 		var center: Vector2 = site["center"]
 		site["level"] = _raw_height(center.x, center.y)
@@ -308,9 +552,9 @@ func _init_ponds() -> void:
 	# Centres avoid the trade roads, so no ribbon has to bridge a pool. The
 	# waterline sits 30 cm under the lowest raw rim point.
 	for spec: Dictionary in [
-		{"center": Vector2(64.0, 6.0), "radius": 10.0, "depth": 1.5},
-		{"center": Vector2(86.0, 54.0), "radius": 7.5, "depth": 1.25},
-		{"center": Vector2(110.0, 36.0), "radius": 6.5, "depth": 1.0},
+		{"center": Vector2(120.0, 0.0), "radius": 10.0, "depth": 1.5},
+		{"center": Vector2(165.0, 62.0), "radius": 7.5, "depth": 1.25},
+		{"center": Vector2(200.0, 12.0), "radius": 6.5, "depth": 1.0},
 	]:
 		var pond: Dictionary = spec.duplicate()
 		pond["phase"] = _rng.randf_range(0.0, TAU)
@@ -342,10 +586,10 @@ func _pond_shore_radius(pond: Dictionary, angle: float) -> float:
 func _finalize_spawns() -> void:
 	player_spawn = _ground(-33.4, 32.4)
 	camp_position = _ground(-36.0, 32.0)
-	quest_spawn = _ground(60.0, -52.0)
-	boss_spawn = _ground(-48.0, -88.0)
+	quest_spawn = _ground(100.0, -95.0)
+	boss_spawn = _ground(-138.0, -138.0)
 	smith_position = _ground(-30.8, 23.2)
-	waygate_position = _ground(-104.0, -132.0)
+	waygate_position = _ground(-215.0, -215.0)
 	for index: int in range(normal_spawns.size()):
 		var point: Vector3 = normal_spawns[index]
 		normal_spawns[index] = _ground(point.x, point.z)
@@ -511,8 +755,21 @@ func map_bounds() -> Rect2:
 ## Height shading, rock and biome tint all come from the same grid the terrain
 ## mesh uses, so the map looks like the land instead of like traced blobs.
 func map_texture(size: int = 640) -> ImageTexture:
-	if _map_cache != null:
+	if _map_cache != null and _map_cache.get_width() == size:
 		return _map_cache
+	if _authored_map != null:
+		var image := _authored_map.duplicate() as Image
+		if image.get_width() != size:
+			image.resize(size, size, Image.INTERPOLATE_LANCZOS)
+		_map_cache = ImageTexture.create_from_image(image)
+		return _map_cache
+	var image := _paint_map_image(size)
+	if image == null:
+		return null
+	_map_cache = ImageTexture.create_from_image(image)
+	return _map_cache
+
+func _paint_map_image(size: int) -> Image:
 	var count: int = _terrain_grid_size
 	if count < 2 or _terrain_heights.is_empty():
 		return null
@@ -603,8 +860,7 @@ func map_texture(size: int = 640) -> ImageTexture:
 					continue
 				var current: Color = image.get_pixel(sx, sy)
 				image.set_pixel(sx, sy, current.lerp(Color("2e4227"), 0.38))
-	_map_cache = ImageTexture.create_from_image(image)
-	return _map_cache
+	return image
 
 
 func _sample_density(grid: PackedFloat32Array, grid_size: int, u: float, v: float) -> float:
@@ -703,6 +959,16 @@ func _create_materials() -> void:
 	_material("terrain", Color.WHITE)
 	_materials["terrain"] = _textured(GRASS_TEXTURE, 0.96)
 	_materials["terrain"].vertex_color_use_as_albedo = true
+	_materials["terrain"].uv1_scale = Vector3(3.0, 3.0, 3.0)
+	_materials["terrain"].normal_enabled = true
+	_materials["terrain"].normal_texture = GROUND_NORMAL
+	_materials["terrain"].normal_scale = 0.45
+	var rock_material := _textured(ROCK_TEXTURE, 0.96)
+	rock_material.albedo_color = Color(0.82, 0.88, 0.84)
+	rock_material.normal_enabled = true
+	rock_material.normal_texture = ROCK_NORMAL
+	rock_material.normal_scale = 0.65
+	_materials["natural_rock"] = rock_material
 	_materials["road"] = _textured(ROAD_TEXTURE, 0.94)
 	_materials["road"].vertex_color_use_as_albedo = true
 	_materials["road"].transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -711,10 +977,10 @@ func _create_materials() -> void:
 	_materials["road_flat"].albedo_color = Color(0.86, 0.82, 0.72)
 	_materials["bark"] = _textured(BARK_TEXTURE, 0.97)
 	var birch_bark: StandardMaterial3D = _textured(BARK_TEXTURE, 0.94)
-	birch_bark.albedo_color = Color(1.7, 1.62, 1.5)
+	birch_bark.albedo_color = Color(0.85, 0.84, 0.82)
 	_materials["bark_birch"] = birch_bark
 	var dead_bark: StandardMaterial3D = _textured(BARK_TEXTURE, 0.98)
-	dead_bark.albedo_color = Color(1.22, 1.16, 1.06)
+	dead_bark.albedo_color = Color(0.92, 0.91, 0.88)
 	_materials["bark_dead"] = dead_bark
 	_materials["leaves"] = _textured(LEAF_TEXTURE, 0.92)
 	_materials["needles"] = _textured(NEEDLE_TEXTURE, 0.95)
@@ -844,11 +1110,11 @@ func _create_atmosphere() -> void:
 	_sun.light_color = Color("ffdca6")
 	_sun.light_energy = 1.35
 	_sun.shadow_enabled = true
-	_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
-	_sun.directional_shadow_max_distance = 150.0
+	# Two shadow cascades keep soft nearby shadows while avoiding repeated draws
+	# across four long-range shadow maps for the dense forest.
+	_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	_sun.directional_shadow_max_distance = 100.0
 	_sun.directional_shadow_split_1 = 0.08
-	_sun.directional_shadow_split_2 = 0.22
-	_sun.directional_shadow_split_3 = 0.48
 	_sun.directional_shadow_blend_splits = true
 	_sun.directional_shadow_fade_start = 0.82
 	_sun.light_angular_distance = 2.2
@@ -1063,24 +1329,36 @@ func _define_roads() -> void:
 		"crossroads": Vector2(0.0, 12.0),
 		"camp_west": Vector2(-64.0, 28.0),
 		"west_road": Vector2(-88.0, 8.0),
-		"thorn_deep": Vector2(-112.0, -28.0),
-		"thorn_south": Vector2(-90.0, -62.0),
-		"sanctum_road": Vector2(-56.0, -70.0),
-		"sanctum": Vector2(-48.0, -88.0),
-		"sanctum_west": Vector2(-88.0, -112.0),
-		"waygate": Vector2(-104.0, -132.0),
+		"thorn_deep": Vector2(-145.0, -28.0),
+		"thorn_south": Vector2(-120.0, -70.0),
+		"sanctum_road": Vector2(-90.0, -100.0),
+		"sanctum": Vector2(-138.0, -138.0),
+		"sanctum_west": Vector2(-185.0, -180.0),
+		"waygate": Vector2(-215.0, -215.0),
 		"fen_gate": Vector2(48.0, 40.0),
-		"fen_road": Vector2(76.0, 36.0),
-		"fen_deep": Vector2(104.0, 12.0),
-		"fen_south": Vector2(88.0, -28.0),
+		"fen_road": Vector2(105.0, 65.0),
+		"fen_deep": Vector2(155.0, -15.0),
+		"fen_south": Vector2(110.0, -45.0),
 		"arch_road": Vector2(52.0, -16.0),
-		"arch": Vector2(60.0, -52.0),
-		"arch_east": Vector2(92.0, -68.0),
-		"arch_north": Vector2(60.0, -96.0),
+		"arch": Vector2(100.0, -95.0),
+		"arch_east": Vector2(150.0, -103.0),
+		"arch_north": Vector2(110.0, -160.0),
 		"south_vale": Vector2(-8.0, -28.0),
 		"south_pass": Vector2(-24.0, -60.0),
+		"high_ridge": Vector2(20.0, -137.0),
+		"ancient_crossing": Vector2(-30.0, -115.0),
 		"east_vale": Vector2(32.0, 4.0),
 		"east_south": Vector2(36.0, -32.0),
+		"north_wood": Vector2(-150.0, 60.0), "north_glade": Vector2(-185.0, 120.0),
+		"northwest_ridge": Vector2(-125.0, 180.0), "north_ridge": Vector2(-65.0, 205.0),
+		"north_ford": Vector2(0.0, 150.0), "northeast_ridge": Vector2(78.0, 165.0),
+		"fen_outer": Vector2(145.0, 65.0), "fen_ridge": Vector2(205.0, 115.0),
+		"east_ridge": Vector2(226.0, 40.0), "east_fen": Vector2(190.0, -28.0),
+		"east_arch": Vector2(165.0, -90.0), "east_ruins": Vector2(205.0, -140.0),
+		"south_ruins": Vector2(130.0, -190.0), "south_ridge": Vector2(65.0, -185.0),
+		"south_crossing": Vector2(-60.0, -210.0), "south_sanctum": Vector2(-120.0, -175.0),
+		"west_sanctum": Vector2(-190.0, -165.0), "west_ridge": Vector2(-230.0, -120.0),
+		"west_pass": Vector2(-205.0, -70.0), "west_deep": Vector2(-160.0, -45.0),
 	}
 	var edges: Array = [
 		["camp", "camp_north"], ["camp", "crossroads"], ["camp", "camp_west"],
@@ -1089,12 +1367,25 @@ func _define_roads() -> void:
 		["east_vale", "crossroads"], ["east_vale", "east_south"], ["crossroads", "south_vale"],
 		["crossroads", "arch_road"], ["south_vale", "east_south"], ["south_vale", "south_pass"],
 		["east_south", "arch_road"], ["arch_road", "arch"], ["arch_road", "fen_south"],
-		["arch", "arch_east"], ["arch", "arch_north"], ["arch_north", "sanctum_road"],
-		["arch_north", "sanctum"], ["arch_east", "fen_south"], ["fen_south", "fen_deep"],
+		["arch", "arch_east"], ["arch", "arch_north"], ["arch_north", "high_ridge"],
+		["high_ridge", "ancient_crossing"], ["ancient_crossing", "sanctum_road"],
+		["arch_east", "fen_south"], ["fen_south", "fen_deep"],
 		["fen_deep", "fen_road"], ["fen_road", "fen_gate"], ["camp_west", "west_road"],
 		["west_road", "thorn_deep"], ["west_road", "thorn_south"], ["thorn_deep", "thorn_south"],
 		["thorn_south", "sanctum_road"], ["sanctum_road", "sanctum"],
 		["sanctum", "sanctum_west"], ["sanctum_west", "waygate"],
+		["west_road", "north_wood"], ["north_wood", "north_glade"],
+		["north_glade", "northwest_ridge"], ["northwest_ridge", "north_ridge"],
+		["north_ridge", "north_ford"], ["north_ford", "vale_north"],
+		["north_ford", "northeast_ridge"], ["northeast_ridge", "fen_ridge"],
+		["fen_road", "fen_outer"], ["fen_outer", "fen_ridge"],
+		["fen_ridge", "east_ridge"], ["east_ridge", "east_fen"], ["east_fen", "fen_deep"],
+		["east_fen", "east_arch"], ["arch_east", "east_arch"], ["east_arch", "east_ruins"],
+		["east_ruins", "south_ruins"], ["south_ruins", "south_ridge"],
+		["south_ridge", "arch_north"], ["south_ridge", "south_crossing"],
+		["south_crossing", "south_sanctum"], ["south_sanctum", "sanctum_west"],
+		["south_sanctum", "west_sanctum"], ["west_sanctum", "west_ridge"],
+		["west_ridge", "west_pass"], ["west_pass", "west_deep"], ["west_deep", "thorn_deep"],
 	]
 	for edge: Array in edges:
 		var a: Vector2 = nodes[str(edge[0])]
@@ -1460,9 +1751,8 @@ func _ripple_normal_texture() -> NoiseTexture2D:
 
 
 func _create_pond_dressing() -> void:
-	# Reeds grow in the shallows and a few wet stones sit on the bank; both hide
-	# the exact water/land seam and give the pool a readable edge from gameplay
-	# distance. Reeds are one multimesh, stones are a handful of instances.
+	# Shore grass sits beyond the water with clearance for the whole patch.
+	# Stones sit on the bank; no grass-like plants are placed in water.
 	_reseed(7723)
 	var reed_mesh := _grass_tuft_mesh()
 	var reed_material := StandardMaterial3D.new()
@@ -1476,6 +1766,7 @@ func _create_pond_dressing() -> void:
 	reed_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	reed_mesh.surface_set_material(0, reed_material)
 	var entries: Array = []
+	var shore_points := PackedVector2Array()
 	for pond: Dictionary in _ponds:
 		var center: Vector2 = pond["center"]
 		var placed: int = 0
@@ -1483,17 +1774,18 @@ func _create_pond_dressing() -> void:
 		while placed < 46 and attempts < 260:
 			attempts += 1
 			var angle: float = _rng.randf_range(0.0, TAU)
-			var t: float = _rng.randf_range(0.84, 1.06)
+			var t: float = _rng.randf_range(1.5, 1.9)
 			var point: Vector2 = center + Vector2(cos(angle), sin(angle)) * _pond_shore_radius(pond, angle) * t
 			if absf(point.x) > BOUNDS - 2.0 or absf(point.y) > BOUNDS - 2.0:
 				continue
 			var at := _ground_lowest(point.x, point.y, 0.2)
-			if float(pond["level"]) - at.y > 0.45:
+			if _in_pond(point, 1.2) or _on_road(point, 1.0) or water_depth_at(point.x, point.y) > 0.0:
 				continue
 			var scale_value: float = _rng.randf_range(1.25, 2.1)
 			var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(
 				Vector3(scale_value * 0.8, scale_value, scale_value * 0.8))
 			entries.append(Transform3D(basis, at))
+			shore_points.append(point)
 			placed += 1
 		for index: int in range(6):
 			var angle: float = _rng.randf_range(0.0, TAU)
@@ -1513,7 +1805,8 @@ func _create_pond_dressing() -> void:
 			stone.scale = Vector3.ONE * scale_value
 			stone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 			add_child(stone)
-	_create_multimesh("ShoreReeds", reed_mesh, entries, false)
+	var shore_grass := _create_multimesh("ShoreReeds", reed_mesh, entries, false)
+	shore_grass.set_meta("shore_points", shore_points)
 
 
 func _pick_tree(zone: Dictionary) -> String:
@@ -1553,27 +1846,7 @@ func _zone_ground_near(point: Vector2) -> Color:
 ## conifer. Mixing inside a region is allowed by that region's own `trees` table,
 ## but the conifer regions list pines only.
 func _outskirt_tree(point: Vector2) -> String:
-	var best: float = 1.0e9
-	var family: String = "broadleaf"
-	for zone: Dictionary in zones:
-		var distance: float = point.distance_to(zone["center"]) - float(zone["radius"])
-		if distance >= best:
-			continue
-		best = distance
-		var mix: Dictionary = zone["trees"]
-		var pine: float = float(mix.get("pine", 0.0))
-		var broadleaf: float = float(mix.get("oak", 0.0)) + float(mix.get("birch", 0.0))
-		if pine >= 0.5 and pine >= broadleaf:
-			family = "conifer"
-		elif float(mix.get("dead", 0.0)) >= 0.5:
-			family = "fen"
-		else:
-			family = "broadleaf"
-	if family == "conifer":
-		return "pine"
-	if family == "fen":
-		return "dead" if _rng.randf() < 0.55 else "pine"
-	return "oak" if _rng.randf() < 0.55 else "birch"
+	return _pick_tree(zone_at_xz(point))
 
 
 func _reserve_tree_position(point: Vector2) -> bool:
@@ -1606,6 +1879,8 @@ func _create_vegetation() -> void:
 				continue
 			if _near_road(point.x, point.y, 1) or _near_site(point, 7.0) or _in_pond(point, 1.0):
 				continue
+			if str(zone_at_xz(point)["id"]) != str(zone["id"]):
+				continue
 			var kind: String = _pick_tree(zone)
 			var scale_value: float = _rng.randf_range(0.92, 1.34)
 			var basis: Basis = Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale_value)
@@ -1620,7 +1895,7 @@ func _create_vegetation() -> void:
 			placed += 1
 	# Continue the forest past the zone blobs. Without this the outer third of the
 	# map is bare lawn, which makes the world read as five islands in a field.
-	var outskirt_target: int = 760
+	var outskirt_target: int = 1700
 	var outskirt_placed: int = 0
 	var outskirt_attempts: int = 0
 	while outskirt_placed < outskirt_target and outskirt_attempts < outskirt_target * 16:
@@ -1654,7 +1929,7 @@ func _create_vegetation() -> void:
 		var mesh: Mesh = _load_tree_mesh(kind)
 		if mesh == null:
 			continue
-		_create_multimesh("Trees_" + kind, mesh, entries, true, float(_tree_base.get(kind, 0.0)))
+		_register_streamed_multimesh("Trees_" + kind, mesh, entries, [], true, float(_tree_base.get(kind, 0.0)))
 	_create_grass()
 	_create_flowers()
 	_create_bushes()
@@ -1709,7 +1984,7 @@ func _load_prop_mesh(file_name: String, material_key: String) -> Mesh:
 	if mesh == null or mesh.get_surface_count() == 0:
 		return null
 	var copy: Mesh = mesh.duplicate() as Mesh
-	copy.surface_set_material(0, _materials[material_key])
+	copy.surface_set_material(0, _materials["natural_rock"] if file_name.begins_with("rock_") or file_name.begins_with("stone_") else _materials[material_key])
 	_prop_meshes[file_name] = copy
 	return copy
 
@@ -1731,56 +2006,281 @@ func _create_multimesh(node_name: String, mesh: Mesh, entries: Array, shadows: b
 	add_child(node)
 	return node
 
+func stream_cell(at: Vector3) -> Vector2i:
+	return Vector2i(floori(at.x / STREAM_CELL_SIZE), floori(at.z / STREAM_CELL_SIZE))
+
+func _refresh_baked_dynamic_nodes() -> void:
+	_flames.clear()
+	for flame: Node in find_children("Flame*", "Node3D", true, false):
+		_flames.append(flame as Node3D)
+	_night_lights.clear()
+	for light: Node in find_children("*", "OmniLight3D", true, false):
+		if light.has_meta("night_energy"):
+			_night_lights.append(light as OmniLight3D)
+	_portal_ring = find_child("PortalRing", true, false) as MeshInstance3D
+	var portal := find_child("DormantPortal", true, false) as MeshInstance3D
+	_portal_material = portal.material_override as StandardMaterial3D if portal != null else null
+
+func update_static_chunks(at: Vector3) -> void:
+	if _static_paths.is_empty():
+		return
+	var center := stream_cell(at)
+	if center == _static_center:
+		return
+	var initial := _static_center.x == 2147483647
+	_static_center = center
+	_static_desired.clear()
+	for cell: Vector2i in _static_paths:
+		if absi(cell.x - center.x) <= STREAM_CELL_RADIUS and absi(cell.y - center.y) <= STREAM_CELL_RADIUS:
+			_static_desired[cell] = true
+	var removed := false
+	for cell: Vector2i in _static_active.keys():
+		if _static_desired.has(cell):
+			continue
+		var node: Node = _static_active[cell]
+		remove_child(node)
+		node.queue_free()
+		_static_active.erase(cell)
+		removed = true
+	if removed:
+		_refresh_baked_dynamic_nodes()
+	for cell: Vector2i in _static_desired:
+		if _static_active.has(cell):
+			continue
+		var path: String = _static_paths[cell]
+		if initial and absi(cell.x - center.x) <= 1 and absi(cell.y - center.y) <= 1:
+			_finish_running_stream()
+			_static_pending.erase(cell)
+			if not _static_active.has(cell):
+				_activate_static_cell(cell, load(path) as PackedScene)
+		elif not _static_pending.has(cell):
+			_static_pending[cell] = path
+
+func _activate_static_cell(cell: Vector2i, scene: PackedScene) -> void:
+	if scene == null:
+		push_error("Invalid static cell: %s" % cell)
+		return
+	var node := scene.instantiate()
+	add_child(node)
+	_static_active[cell] = node
+	_refresh_baked_dynamic_nodes()
+	_apply_time_of_day()
+
+func terrain_cell(at: Vector3) -> Vector2i:
+	var tile_width := TERRAIN_EXTENT * 2.0 / TERRAIN_SEGMENTS * TERRAIN_TILE_SEGMENTS
+	return Vector2i(floori((at.x + TERRAIN_EXTENT) / tile_width), floori((at.z + TERRAIN_EXTENT) / tile_width))
+
+## A two-tile buffer is prepared ahead. Low-detail distant tiles provide the
+## horizon and collision until each detailed tile is ready.
+func update_terrain_chunks(at: Vector3) -> void:
+	var center := terrain_cell(at)
+	if center == _terrain_center:
+		return
+	var initial := _terrain_center.x == 2147483647
+	_terrain_center = center
+	_terrain_desired.clear()
+	for cell: Vector2i in _terrain_paths:
+		if absi(cell.x - center.x) <= TERRAIN_TILE_RADIUS and absi(cell.y - center.y) <= TERRAIN_TILE_RADIUS:
+			_terrain_desired[cell] = true
+	for cell: Vector2i in _terrain_active.keys():
+		if _terrain_desired.has(cell):
+			continue
+		var node: Node = _terrain_active[cell]
+		remove_child(node)
+		node.queue_free()
+		_terrain_active.erase(cell)
+		if _terrain_far.has(cell):
+			_terrain_far[cell].visible = true
+			_set_far_terrain_collision(cell, true)
+	# Prepare the initial 3x3 core during startup. Later movement never waits on
+	# a chunk read: the low-detail collider remains until the detailed tile loads.
+	for cell: Vector2i in _terrain_desired:
+		if _terrain_active.has(cell):
+			continue
+		var path: String = _terrain_paths[cell]
+		if initial and absi(cell.x - center.x) <= 1 and absi(cell.y - center.y) <= 1:
+			_finish_running_stream()
+			_terrain_pending.erase(cell)
+			if not _terrain_active.has(cell):
+				_activate_terrain_tile(cell, load(path))
+		elif not _terrain_pending.has(cell):
+			_terrain_pending[cell] = path
+
+func _activate_terrain_tile(cell: Vector2i, tile: Resource) -> void:
+	if tile == null or tile.mesh == null or tile.collision == null:
+		push_error("Invalid baked terrain tile: %s" % cell)
+		return
+	var node := Node3D.new()
+	node.name = "TerrainTile_%02d_%02d" % [cell.x, cell.y]
+	var visual := MeshInstance3D.new()
+	visual.mesh = tile.mesh
+	node.add_child(visual)
+	var body := StaticBody3D.new()
+	var collider := CollisionShape3D.new()
+	collider.shape = tile.collision
+	body.add_child(collider)
+	node.add_child(body)
+	add_child(node)
+	_terrain_active[cell] = node
+	if _terrain_far.has(cell):
+		_terrain_far[cell].visible = false
+		_set_far_terrain_collision(cell, false)
+
+func _set_far_terrain_collision(cell: Vector2i, enabled: bool) -> void:
+	var low: Node = _terrain_far.get(cell)
+	if low == null:
+		return
+	var shapes := low.find_children("*", "CollisionShape3D", true, false)
+	if not shapes.is_empty():
+		(shapes[0] as CollisionShape3D).disabled = not enabled
+
+## Offline authoring collects deterministic placement data into spatial cells.
+## At runtime the per-cell assets are loaded and instantiated near the player.
+func _register_streamed_multimesh(label: String, mesh: Mesh, entries: Array, colors: Array, shadows: bool, base_lift: float = 0.0) -> void:
+	var buckets: Dictionary = {}
+	for index in range(entries.size()):
+		var transform: Transform3D = entries[index]
+		transform.origin.y += base_lift
+		var cell := stream_cell(transform.origin)
+		if not buckets.has(cell):
+			buckets[cell] = {"entries": [], "colors": []}
+		buckets[cell]["entries"].append(transform)
+		if not colors.is_empty():
+			buckets[cell]["colors"].append(colors[index])
+	for cell in buckets:
+		if not _streamed_visual_data.has(cell):
+			_streamed_visual_data[cell] = []
+		_streamed_visual_data[cell].append({"name": label, "mesh": mesh, "entries": buckets[cell]["entries"], "colors": buckets[cell]["colors"], "shadows": shadows})
+
+func update_streamed_visuals(at: Vector3) -> void:
+	var center := stream_cell(at)
+	if center == _stream_center:
+		return
+	var initial := _stream_center.x == 2147483647
+	_stream_center = center
+	if not _vegetation_paths.is_empty():
+		_update_baked_vegetation(center, initial)
+		return
+	for cell: Vector2i in _streamed_visual_nodes.keys():
+		if absi(cell.x - center.x) <= STREAM_CELL_RADIUS and absi(cell.y - center.y) <= STREAM_CELL_RADIUS:
+			continue
+		for node: Node in _streamed_visual_nodes[cell]:
+			remove_child(node)
+			node.queue_free()
+		_streamed_visual_nodes.erase(cell)
+	for cell: Vector2i in _streamed_visual_data:
+		if _streamed_visual_nodes.has(cell) or absi(cell.x - center.x) > STREAM_CELL_RADIUS or absi(cell.y - center.y) > STREAM_CELL_RADIUS:
+			continue
+		var nodes: Array[Node] = []
+		for group: Dictionary in _streamed_visual_data[cell]:
+			var multimesh := MultiMesh.new()
+			multimesh.transform_format = MultiMesh.TRANSFORM_3D
+			multimesh.use_colors = not group["colors"].is_empty()
+			multimesh.mesh = group["mesh"]
+			multimesh.instance_count = group["entries"].size()
+			for index in range(multimesh.instance_count):
+				multimesh.set_instance_transform(index, group["entries"][index])
+				if multimesh.use_colors:
+					multimesh.set_instance_color(index, group["colors"][index])
+			var node := MultiMeshInstance3D.new()
+			node.name = "%s_%d_%d" % [group["name"], cell.x, cell.y]
+			node.multimesh = multimesh
+			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if group["shadows"] else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(node)
+			nodes.append(node)
+		_streamed_visual_nodes[cell] = nodes
+
+func _update_baked_vegetation(center: Vector2i, initial: bool) -> void:
+	_vegetation_desired.clear()
+	for cell: Vector2i in _vegetation_paths:
+		if absi(cell.x - center.x) <= STREAM_CELL_RADIUS and absi(cell.y - center.y) <= STREAM_CELL_RADIUS:
+			_vegetation_desired[cell] = true
+	for cell: Vector2i in _streamed_visual_nodes.keys():
+		if _vegetation_desired.has(cell):
+			continue
+		for node: Node in _streamed_visual_nodes[cell]:
+			remove_child(node)
+			node.queue_free()
+		_streamed_visual_nodes.erase(cell)
+	for cell: Vector2i in _vegetation_desired:
+		if _streamed_visual_nodes.has(cell):
+			continue
+		var path: String = _vegetation_paths[cell]
+		if initial and absi(cell.x - center.x) <= 1 and absi(cell.y - center.y) <= 1:
+			_finish_running_stream()
+			_vegetation_pending.erase(cell)
+			if not _streamed_visual_nodes.has(cell):
+				_activate_vegetation_tile(cell, load(path))
+		elif not _vegetation_pending.has(cell):
+			_vegetation_pending[cell] = path
+
+func _activate_vegetation_tile(cell: Vector2i, tile: Resource) -> void:
+	if tile == null:
+		push_error("Invalid baked vegetation cell: %s" % cell)
+		return
+	var nodes: Array[Node] = []
+	for group: Dictionary in tile.groups:
+		var mesh_path: String = group["mesh_path"]
+		if not _vegetation_meshes.has(mesh_path):
+			_vegetation_meshes[mesh_path] = load(mesh_path)
+		var mesh: Mesh = _vegetation_meshes[mesh_path]
+		if mesh == null:
+			push_error("Missing vegetation mesh: " + mesh_path)
+			continue
+		var multimesh := MultiMesh.new()
+		multimesh.transform_format = MultiMesh.TRANSFORM_3D
+		multimesh.use_colors = not group["colors"].is_empty()
+		multimesh.mesh = mesh
+		multimesh.instance_count = group["entries"].size()
+		for index in range(multimesh.instance_count):
+			multimesh.set_instance_transform(index, group["entries"][index])
+			if multimesh.use_colors:
+				multimesh.set_instance_color(index, group["colors"][index])
+		var node := MultiMeshInstance3D.new()
+		node.name = "%s_%d_%d" % [group["name"], cell.x, cell.y]
+		node.multimesh = multimesh
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if group["shadows"] else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(node)
+		nodes.append(node)
+	_streamed_visual_nodes[cell] = nodes
+
 
 func _grass_tuft_mesh() -> ArrayMesh:
-	# Four upright crossed cards carry the silhouette; three nearly horizontal
-	# rosettes fill the top-down view, where a vertical card is only a thin line.
-	# That is what made the old grass read as scattered specks from the game camera.
+	# Three differently sized, short clumps share a single mesh and draw call.
+	# Rotating/scaling each instance varies the patch without extra draw groups.
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
-	var width := 1.04
-	var height_value := 0.70
-	for quad: int in range(4):
-		var angle: float = TAU * float(quad) / 4.0 + 0.22
-		var side := Vector2(cos(angle), sin(angle)) * width * 0.5
-		var base: int = vertices.size()
-		vertices.append(Vector3(-side.x, 0.0, -side.y))
-		vertices.append(Vector3(side.x, 0.0, side.y))
-		vertices.append(Vector3(side.x, height_value, side.y))
-		vertices.append(Vector3(-side.x, height_value, -side.y))
-		for point_index: int in range(4):
-			normals.append(Vector3(-side.y, 0.0, side.x).normalized())
-		uvs.append(Vector2(0.0, 1.0))
-		uvs.append(Vector2(1.0, 1.0))
-		uvs.append(Vector2(1.0, 0.0))
-		uvs.append(Vector2(0.0, 0.0))
-		indices.append_array([base, base + 1, base + 2, base, base + 2, base + 3])
-	# Rosettes sit at three heights so the top-down camera sees overlapping
-	# patches instead of a single flat decal.
-	var rosettes := [
-		{"y": 0.16, "size": 1.04, "angle": 0.0},
-		{"y": 0.31, "size": 0.84, "angle": 1.12},
-		{"y": 0.46, "size": 0.62, "angle": 2.26},
+	var clumps := [
+		{"offset": Vector2(-0.26, -0.16), "width": 0.56, "height": 0.36, "angle": 0.12},
+		{"offset": Vector2(0.24, -0.10), "width": 0.49, "height": 0.30, "angle": 0.65},
+		{"offset": Vector2(0.03, 0.27), "width": 0.53, "height": 0.33, "angle": 1.15},
 	]
-	for rosette: Dictionary in rosettes:
-		var y: float = float(rosette["y"])
-		var half: float = float(rosette["size"]) * 0.5
-		var angle: float = float(rosette["angle"])
-		var along := Vector2(cos(angle), sin(angle)) * half
-		var across := Vector2(-sin(angle), cos(angle)) * half
-		var base: int = vertices.size()
-		vertices.append(Vector3(-along.x - across.x, y - 0.05, -along.y - across.y))
-		vertices.append(Vector3(along.x - across.x, y + 0.07, along.y - across.y))
-		vertices.append(Vector3(along.x + across.x, y - 0.03, along.y + across.y))
-		vertices.append(Vector3(-along.x + across.x, y + 0.09, -along.y + across.y))
-		for point_index: int in range(4):
-			normals.append(Vector3.UP)
-		uvs.append(Vector2(0.0, 1.0))
-		uvs.append(Vector2(1.0, 1.0))
-		uvs.append(Vector2(1.0, 0.0))
-		uvs.append(Vector2(0.0, 0.0))
+	for clump: Dictionary in clumps:
+		var offset: Vector2 = clump["offset"]
+		var width: float = clump["width"]
+		var height_value: float = clump["height"]
+		for quad in range(2):
+			var angle: float = float(clump["angle"]) + PI * float(quad) * 0.5
+			var side := Vector2(cos(angle), sin(angle)) * width * 0.5
+			var base := vertices.size()
+			vertices.append(Vector3(offset.x - side.x, 0.0, offset.y - side.y))
+			vertices.append(Vector3(offset.x + side.x, 0.0, offset.y + side.y))
+			vertices.append(Vector3(offset.x + side.x, height_value, offset.y + side.y))
+			vertices.append(Vector3(offset.x - side.x, height_value, offset.y - side.y))
+			for point_index in range(4): normals.append(Vector3(-side.y, 0.0, side.x).normalized())
+			uvs.append_array([Vector2(0.0, 1.0), Vector2(1.0, 1.0), Vector2(1.0, 0.0), Vector2(0.0, 0.0)])
+			indices.append_array([base, base + 1, base + 2, base, base + 2, base + 3])
+		# A small tilted card gives the overhead camera a leafy top view.
+		var half := width * 0.43
+		var base := vertices.size()
+		vertices.append(Vector3(offset.x - half, height_value * 0.47, offset.y - half))
+		vertices.append(Vector3(offset.x + half, height_value * 0.55, offset.y - half))
+		vertices.append(Vector3(offset.x + half, height_value * 0.50, offset.y + half))
+		vertices.append(Vector3(offset.x - half, height_value * 0.57, offset.y + half))
+		for point_index in range(4): normals.append(Vector3.UP)
+		uvs.append_array([Vector2(0.0, 1.0), Vector2(1.0, 1.0), Vector2(1.0, 0.0), Vector2(0.0, 0.0)])
 		indices.append_array([base, base + 1, base + 2, base, base + 2, base + 3])
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
@@ -1805,7 +2305,7 @@ func _create_grass() -> void:
 	for zone: Dictionary in zones:
 		var center: Vector2 = zone["center"]
 		var radius: float = zone["radius"]
-		var target: int = int(zone.get("grass_count", 1600))
+		var target: int = int(float(zone.get("grass_count", 1600)) * 0.90)
 		var placed: int = 0
 		var attempts: int = 0
 		while placed < target and attempts < target * 14:
@@ -1814,7 +2314,7 @@ func _create_grass() -> void:
 			var point: Vector2 = center + Vector2(cos(angle), sin(angle)) * sqrt(_rng.randf()) * radius * 0.94
 			if absf(point.x) > BOUNDS - 2.0 or absf(point.y) > BOUNDS - 2.0:
 				continue
-			if _on_road(point, 0.40) or _near_site(point, 1.4) or _in_pond(point, 0.1):
+			if _on_road(point, 0.80) or _near_site(point, 1.4) or _in_pond(point, 0.8):
 				continue
 			var scale_value: float = _rng.randf_range(0.82, 1.38)
 			var basis := Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(
@@ -1829,7 +2329,7 @@ func _create_grass() -> void:
 			placed += 1
 	# Same for the meadow: grass has to reach the foothills, not stop at an
 	# invisible zone boundary.
-	var outskirt_target: int = 7000
+	var outskirt_target: int = 13950
 	var outskirt_placed: int = 0
 	var outskirt_attempts: int = 0
 	while outskirt_placed < outskirt_target and outskirt_attempts < outskirt_target * 8:
@@ -1841,7 +2341,7 @@ func _create_grass() -> void:
 			continue
 		if _inside_any_zone(point, 0.92):
 			continue
-		if _on_road(point, 0.40) or _near_site(point, 1.4) or _in_pond(point, 0.1):
+		if _on_road(point, 0.80) or _near_site(point, 1.4) or _in_pond(point, 0.8):
 			continue
 		var at: Vector3 = _ground(point.x, point.y)
 		if at.y > 24.0:
@@ -1856,19 +2356,7 @@ func _create_grass() -> void:
 		tints.append(tint)
 		grass_points.append(point)
 		outskirt_placed += 1
-	var multimesh := MultiMesh.new()
-	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.use_colors = true
-	multimesh.mesh = mesh
-	multimesh.instance_count = entries.size()
-	for index: int in range(entries.size()):
-		multimesh.set_instance_transform(index, entries[index])
-		multimesh.set_instance_color(index, tints[index])
-	var node := MultiMeshInstance3D.new()
-	node.name = "MeadowGrass"
-	node.multimesh = multimesh
-	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(node)
+	_register_streamed_multimesh("MeadowGrass", mesh, entries, tints, false)
 
 
 func _create_flowers() -> void:
@@ -1932,19 +2420,7 @@ func _create_flowers() -> void:
 			entries.append(Transform3D(basis, _ground(point.x, point.y)))
 			colors.append(palette[_rng.randi_range(0, palette.size() - 1)])
 			placed += 1
-	var multimesh := MultiMesh.new()
-	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.use_colors = true
-	multimesh.mesh = mesh
-	multimesh.instance_count = entries.size()
-	for index: int in range(entries.size()):
-		multimesh.set_instance_transform(index, entries[index])
-		multimesh.set_instance_color(index, colors[index])
-	var node := MultiMeshInstance3D.new()
-	node.name = "Wildflowers"
-	node.multimesh = multimesh
-	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(node)
+	_register_streamed_multimesh("Wildflowers", mesh, entries, colors, false)
 
 
 func _create_bushes() -> void:
@@ -2001,19 +2477,7 @@ func _create_bushes() -> void:
 		entries.append(Transform3D(basis, at))
 		colors.append(Color(1.0, 1.0, 1.0).lerp(_zone_ground_near(point).lightened(0.2), _rng.randf_range(0.10, 0.3)))
 		outskirt_placed += 1
-	var multimesh := MultiMesh.new()
-	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.use_colors = true
-	multimesh.mesh = mesh
-	multimesh.instance_count = entries.size()
-	for index: int in range(entries.size()):
-		multimesh.set_instance_transform(index, entries[index])
-		multimesh.set_instance_color(index, colors[index])
-	var node := MultiMeshInstance3D.new()
-	node.name = "Underbrush"
-	node.multimesh = multimesh
-	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	add_child(node)
+	_register_streamed_multimesh("Underbrush", mesh, entries, colors, true)
 
 
 func _create_rocks_and_logs() -> void:
@@ -2069,10 +2533,10 @@ func _create_distant_landscape() -> void:
 		return
 	var entries: Array = []
 	var gate := Vector2(waygate_position.x, waygate_position.z)
-	for index: int in range(900):
-		var point := Vector2(_rng.randf_range(-170.0, 170.0), _rng.randf_range(-170.0, 170.0))
+	for index: int in range(1500):
+		var point := Vector2(_rng.randf_range(-BOUNDS - 22.0, BOUNDS + 22.0), _rng.randf_range(-BOUNDS - 22.0, BOUNDS + 22.0))
 		var edge: float = maxf(absf(point.x), absf(point.y))
-		if edge < 140.0 or edge > 170.0:
+		if edge < BOUNDS - 8.0 or edge > BOUNDS + 22.0:
 			continue
 		if point.distance_to(gate) < 24.0:
 			continue
@@ -2083,7 +2547,7 @@ func _create_distant_landscape() -> void:
 		var at := _ground_lowest(point.x, point.y, 0.45)
 		at.y -= 0.05
 		entries.append(Transform3D(basis, at))
-	_create_multimesh("FoothillPines", mesh, entries, false, float(_tree_base.get("pine", 0.0)))
+	_register_streamed_multimesh("FoothillPines", mesh, entries, [], false, float(_tree_base.get("pine", 0.0)))
 
 
 func _create_boundaries() -> void:
@@ -2097,6 +2561,28 @@ func _create_boundaries() -> void:
 		body.add_child(collision)
 		body.position = [Vector3(-BOUNDS - 2.0, 4.0, 0.0), Vector3(BOUNDS + 2.0, 4.0, 0.0), Vector3(0.0, 4.0, -BOUNDS - 2.0), Vector3(0.0, 4.0, BOUNDS + 2.0)][side]
 		add_child(body)
+
+func _create_frontier_landmarks() -> void:
+	for landmark: Dictionary in frontier_landmarks:
+		var at: Vector2 = landmark["at"]
+		var place := _group("FrontierLandmark", at.x, at.y)
+		var style: int = landmark["style"]
+		var plinth := _add_mesh(place, "WeatheredPlinth", _cylinder_mesh(2.2, 0.30, 8), "stone_dark")
+		plinth.position.y = 0.15
+		var columns := 2 + style % 3
+		for i in range(columns):
+			var angle := TAU * float(i) / float(columns) + float(style) * 0.3
+			_pillar(place, Vector3(cos(angle) * 1.45, 0.3, sin(angle) * 1.45), 0.35, 1.7 + 0.3 * ((i + style) % 3), "stone")
+		if style == 0 or style == 3:
+			var beam := _add_mesh(place, "FallenBeam", _box_mesh(Vector3(3.2, 0.45, 0.5)), "stone_light")
+			beam.position = Vector3(0.1, 0.42, 2.1)
+			beam.rotation.y = 0.35 * style
+		elif style == 2 or style == 4:
+			var altar := _add_mesh(place, "OldAltar", _box_mesh(Vector3(1.4, 0.7, 0.8)), "stone_light")
+			altar.position = Vector3(0.0, 0.65, 0.0)
+		var marker := _add_mesh(place, "LandmarkMarker", _box_mesh(Vector3(2.8, 0.55, 0.16)), "wood")
+		marker.position = Vector3(0.0, 1.25, 2.7)
+		_text(place, Vector3(0.0, 1.3, 2.8), str(landmark["name"]), 48, Color("cdbb92"))
 
 
 # ---------------------------------------------------------------------------
@@ -2315,9 +2801,11 @@ func _campfire(parent: Node3D, at: Vector3) -> void:
 		var angle: float = TAU * float(index) / 15.0 + 0.12
 		var radius: float = 1.08 + (0.07 if index % 2 == 0 else -0.04)
 		var stone_size: float = 0.23 + 0.05 * float(index % 3)
-		var stone := _add_mesh(parent, "FireStone", _sphere_mesh(stone_size, 6, 3), "stone")
-		stone.position = at + Vector3(cos(angle) * radius, 0.10, sin(angle) * radius)
-		stone.scale = Vector3(1.0, 0.66, 1.0)
+		var stone_mesh := _load_prop_mesh("stone_%d.glb" % (1 + index % 2), "stone")
+		var stone := _add_mesh(parent, "FireStone", stone_mesh, "")
+		stone.position = at + Vector3(cos(angle) * radius, 0.02, sin(angle) * radius)
+		var stone_scale := stone_size / (0.32 if index % 2 == 0 else 0.22)
+		stone.scale = Vector3(stone_scale, stone_scale * 0.9, stone_scale)
 		stone.rotation.y = angle
 	# Split logs lean into a teepee over a bed of embers.
 	for index: int in range(6):
@@ -2749,7 +3237,7 @@ func _create_camp() -> void:
 
 func _create_broken_arch() -> void:
 	_reseed(3307)
-	var site := _group("BrokenArch", 72.0, -80.0)
+	var site := _group("BrokenArch", 122.0, -116.0)
 	var terrace := _add_mesh(site, "Terrace", _cylinder_mesh(8.6, 0.55, 14), "stone")
 	terrace.position.y = 0.27
 	var inset := _add_mesh(site, "TerraceInset", _cylinder_mesh(7.4, 0.4, 14), "stone_light")
@@ -2780,7 +3268,7 @@ func _create_broken_arch() -> void:
 
 func _create_sanctum() -> void:
 	_reseed(4409)
-	var site := _group("CrownlessSanctum", -52.0, -100.0)
+	var site := _group("CrownlessSanctum", -142.0, -150.0)
 	var dais := _add_mesh(site, "Dais", _cylinder_mesh(4.4, 0.5, 16), "stone_dark")
 	dais.position.y = 0.25
 	var step := _add_mesh(site, "DaisStep", _cylinder_mesh(3.2, 0.36, 16), "stone")
