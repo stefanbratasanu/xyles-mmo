@@ -432,3 +432,9 @@ Angled status frame, no bottom spacer, unified 86% panel opacity; clock/chat/reg
 
 - Git LFS uses the normal GitHub origin endpoint. Existing binary assets and two large runtime animation resources are converted to LFS pointers in a new commit without rewriting history; working files stay intact. Other contributors must install Git LFS before pulling and run `git lfs pull` if needed, then run PLAY XYLES or import assets in Godot.
 - Verified all 509 pointers against working-file hashes and local LFS objects; headless world and baked-world integrity tests passed. The GitHub LFS upload and another machine's checkout remain to be verified after pushing. The old Git blobs remain in history.
+
+## 2026-10-29 - Skill modifiers and inventory hover
+
+- Fighter skill cards and skill shortcut tooltips show current computed power and highlight applicable equipment and active enchantment contributions in gold. Disabled enchantments and broken equipment modifiers are excluded; broken equipment's reduced base power is shown.
+- Inventory equipment and material descriptions appear immediately on hover and close when the pointer leaves or the window changes. Existing item actions are unchanged.
+- Headless modifier/hover, action-hotbar, Fighter-tree and world checks passed. Visual review remains necessary; the previous rendered test launch crashed in this sandbox.

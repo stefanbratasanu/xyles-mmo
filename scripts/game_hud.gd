@@ -643,6 +643,8 @@ func refresh() -> void:
 			var remaining: float = float(cooldown_data[i])
 			var skill_id: String = game.state.loadout[i]
 			hotbar[i].drag_payload = {"kind":"hotbar","id":skill_id} if not skill_id.is_empty() else {}
+			if hotbar[i].has_meta("skill_tooltip_bbcode"):
+				hotbar[i].remove_meta("skill_tooltip_bbcode")
 			if skill_id.begins_with("action:"):
 				var action_id := skill_id.trim_prefix("action:")
 				(hotbar[i].get_meta("picture") as TextureRect).texture = _action_icon(action_id)
@@ -660,6 +662,7 @@ func refresh() -> void:
 			(hotbar[i].get_meta("picture") as TextureRect).texture = skill_view.icon(str(game.state.skill_catalog.data.skills[skill_id].icon))
 			var compiled: Dictionary=s.compiled_skill(skill_id)
 			hotbar[i].tooltip_text = "%s [%d]\n%s\nMana %.1f · Cooldown %.1fs · Range %.1fm%s" % [s.skills[skill_id].name,(i+1)%10,s.skills[skill_id].description,float(compiled.cost)*float(compiled.cost_scale),float(compiled.cooldown)*float(compiled.cooldown_scale),float(compiled.range),"\nHold key to channel; click again to stop. Movement 50%; facing limited to 360°/s." if compiled.tags.has("channel") else ""]
+			hotbar[i].set_meta("skill_tooltip_bbcode", skill_description_bbcode(skill_id))
 			(hotbar[i].get_meta("timer_label") as Label).text = "%.1f" % remaining if remaining > 0.0 else ""
 			hotbar[i].modulate = Color(0.65, 0.72, 0.73) if remaining > 0.0 else Color.WHITE
 	var hint: Variant = game.get("context_hint")
@@ -718,6 +721,7 @@ func toggle_panel(panel_name: String) -> void:
 
 
 func close_panel() -> void:
+	inventory_view._hide_item_tooltip()
 	debug_rebind_action = ""
 	if current_panel == "settings" and game.has_method("save_settings"):
 		game.save_settings()
@@ -729,6 +733,7 @@ func close_panel() -> void:
 
 
 func _switch_panel(panel_name: String) -> void:
+	inventory_view._hide_item_tooltip()
 	corner_menu.hide()
 	debug_rebind_action = ""
 	if is_instance_valid(world_map) and world_map.visible:
@@ -749,6 +754,40 @@ func _switch_panel(panel_name: String) -> void:
 	overlay.move_to_front()
 	_render_overlay()
 	_settle_active.call_deferred(panel_name)
+
+
+# Presentation derives contributions from the same state used by skill delivery.
+func skill_description_bbcode(id: String) -> String:
+	var state: Node = game.state
+	if not state.skills.has(id): return ""
+	var compiled: Dictionary = state.compiled_skill(id)
+	var text := "[b]%s[/b]\n%s" % [str(state.skills[id].name).replace("[", "[lb]"), str(state.skills[id].description).replace("[", "[lb]")]
+	text += "\nMana %.1f · Cooldown %.1fs · Range %.1fm" % [float(compiled.cost) * float(compiled.cost_scale), float(compiled.cooldown) * float(compiled.cooldown_scale), float(compiled.range)]
+	if compiled.tags.has("channel"): text += "\nHold key to channel; click again to stop. Movement 50%; facing limited to 360°/s."
+	if compiled.tags.has("damage") or compiled.role == "support":
+		text += "\nCurrent power: %.1f" % game.skill_runtime.preview_power(id, compiled)
+	var lines: Array[String] = []
+	var equipment_keys: Array[String] = []
+	if compiled.tags.has("damage"):
+		equipment_keys.append("melee_multiplier" if compiled.role == "melee" else "cast_multiplier")
+	if compiled.role == "support": equipment_keys.append("support_multiplier")
+	for item: Dictionary in state.equipment:
+		var changes: Array[String] = []
+		if compiled.tags.has("damage") and float(item.get("power", 0)) != 0:
+			var durability_scale := 0.25 if float(item.get("durability", 0)) <= 0 else 1.0
+			changes.append("+%.1f base power" % (float(item.power) * durability_scale * 0.3))
+		if float(item.get("durability", 0)) > 0:
+			for modifier: String in item.get("modifiers", []):
+				var definition = state.modifier_catalog.get_modifier(modifier)
+				if definition != null and String(definition.stat_key) in equipment_keys:
+					changes.append(state.get_modifier_display_text(modifier))
+		if not changes.is_empty(): lines.append("Equipment · %s: %s" % [item.get("name", "Equipment"), ", ".join(changes)])
+	for enchantment: Dictionary in state.skills[id].evolutions:
+		var key := str(enchantment.get("id", ""))
+		if not state.skill_catalog.data.skills[id].get("unmodifiable", false) and state.skill_catalog.data.modifiers.has(key) and state.skill_catalog.data.modifiers[key].get("enabled", false):
+			lines.append("Enchantment · " + state.skill_catalog.describe(enchantment, id, state.skills[id].evolutions))
+	if not lines.is_empty(): text += "\n[color=#e6c27b]" + "\n".join(lines).replace("[", "[lb]") + "[/color]"
+	return text
 
 
 func _render_overlay() -> void:

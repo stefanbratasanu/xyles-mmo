@@ -6,6 +6,7 @@ var active_tab := "All"
 var selected_id := ""
 var confirm_discard := false
 var icons: Dictionary = {}
+var item_tooltip: PanelContainer
 
 func _init(owner_hud: CanvasLayer) -> void:
 	hud = owner_hud
@@ -47,6 +48,7 @@ func render() -> void:
 		else:
 			tile.tooltip_text += "\nClick to unequip."
 			tile.pressed.connect(_unequip.bind(id))
+			_enable_immediate_tooltip(tile)
 	var engraving: Label = hud._label("✦   XYLES   ✦", 12, Color("514b3c"))
 	engraving.position = Vector2(44, 326)
 	board.add_child(engraving)
@@ -95,6 +97,7 @@ func render() -> void:
 				tile.pressed.connect(_select.bind(str(item.id)))
 				tile.gui_input.connect(_bag_input.bind(int(entries[index].index)))
 				tile.tooltip_text += "\nDouble-click or right-click to equip."
+			_enable_immediate_tooltip(tile)
 			if str(item.id) == selected_id:
 				tile.add_theme_stylebox_override("normal", hud._style(Color("3d3829"), hud.GOLD, 2, 0))
 		else:
@@ -128,6 +131,36 @@ func render() -> void:
 	trash.tooltip_text = "Discard the selected bag item. Click twice to confirm."
 	trash.pressed.connect(_discard)
 	bottom.add_child(trash)
+
+
+func _enable_immediate_tooltip(tile: Button) -> void:
+	var description := tile.tooltip_text
+	tile.tooltip_text = ""
+	tile.mouse_entered.connect(_show_item_tooltip.bind(tile, description))
+	tile.mouse_exited.connect(_hide_item_tooltip)
+	tile.tree_exiting.connect(_hide_item_tooltip)
+
+func _show_item_tooltip(tile: Control, description: String) -> void:
+	_hide_item_tooltip()
+	if description.is_empty(): return
+	item_tooltip = hud._panel()
+	item_tooltip.name = "ImmediateItemTooltip"
+	item_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var text: Label = hud._label(description, 12, hud.TEXT)
+	text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var content: MarginContainer = hud._margin(item_tooltip, 12, 9)
+	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(text)
+	hud.add_child(item_tooltip)
+	item_tooltip.reset_size()
+	var viewport_size := hud.get_viewport().get_visible_rect().size
+	var desired := tile.get_global_rect().end + Vector2(8, 4)
+	item_tooltip.position = Vector2(clampf(desired.x, 0, maxf(0, viewport_size.x - item_tooltip.size.x)), clampf(desired.y, 0, maxf(0, viewport_size.y - item_tooltip.size.y)))
+
+func _hide_item_tooltip() -> void:
+	if is_instance_valid(item_tooltip):
+		item_tooltip.queue_free()
+		item_tooltip = null
 
 func _row_y(row: int) -> float:
 	return [14, 58, 102, 146, 190, 220, 266][row]

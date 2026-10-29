@@ -101,7 +101,9 @@ func render() -> void:
 		var installed: Array = data.evolutions
 		var skill_button := _tile(icon(str(state.skill_catalog.data.skills[id].icon)), 56, hud.GOLD)
 		skill_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		skill_button.set_script(preload("res://scripts/skill_drag_button.gd"))
 		skill_button.tooltip_text = "%s\n%s\nClick to enchant" % [data.name,data.description]
+		skill_button.set_meta("skill_tooltip_bbcode", hud.skill_description_bbcode(id))
 		skill_button.pressed.connect(_choose.bind(id, installed.size()))
 		base.add_child(skill_button)
 		var name_label: Label = hud._label(data.name,10,hud.TEXT)
@@ -161,14 +163,19 @@ func _render_fighter_tree() -> void:
 		tile.disabled=not unlocked
 		if unlocked: tile.drag_payload={"kind":"hotbar","id":node.id}
 		tile.tooltip_text="Drag to the hotbar." if unlocked else "Unlocks at level %d." % node.level
+		if unlocked: tile.set_meta("skill_tooltip_bbcode", hud.skill_description_bbcode(str(node.id)))
 		row.add_child(tile)
 		var info := VBoxContainer.new()
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(info)
 		info.add_child(hud._label(str(node.name), 13, hud.TEXT if unlocked else hud.MUTED))
 		info.add_child(hud._label("Level %d  ·  %s" % [node.level, "Learned" if unlocked else "Locked"], 10, hud.GOLD if unlocked else hud.MUTED))
-		var description: Label = hud._label(str(state.skills[node.id].description), 10, hud.MUTED)
-		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		var description := RichTextLabel.new()
+		description.bbcode_enabled = true
+		description.fit_content = true
+		description.scroll_active = false
+		description.add_theme_font_size_override("normal_font_size", 10)
+		description.text = hud.skill_description_bbcode(str(node.id))
 		info.add_child(description)
 		if unlocked:
 			tile.pressed.connect(func(): hud.show_notice("Drag this skill to a shortcut at the bottom of the screen."))
