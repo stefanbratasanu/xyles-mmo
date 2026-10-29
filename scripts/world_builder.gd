@@ -985,12 +985,16 @@ func _create_materials() -> void:
 	_materials["road"].cull_mode = BaseMaterial3D.CULL_DISABLED
 	_materials["road_flat"] = _textured(ROAD_TEXTURE, 0.95)
 	_materials["road_flat"].albedo_color = Color(0.86, 0.82, 0.72)
-	_materials["bark"] = _textured(BARK_TEXTURE, 0.97)
-	var birch_bark: StandardMaterial3D = _textured(BARK_TEXTURE, 0.94)
-	birch_bark.albedo_color = Color(0.85, 0.84, 0.82)
+	# Reuse the scanned bark maps already used by the camp, but keep tree trunks
+	# dark as required by the forest art direction.
+	var tree_bark: StandardMaterial3D = camp_timber.duplicate() as StandardMaterial3D
+	tree_bark.albedo_color = Color(0.54, 0.52, 0.48)
+	_materials["bark"] = tree_bark
+	var birch_bark: StandardMaterial3D = tree_bark.duplicate() as StandardMaterial3D
+	birch_bark.albedo_color = Color(0.50, 0.49, 0.45)
 	_materials["bark_birch"] = birch_bark
-	var dead_bark: StandardMaterial3D = _textured(BARK_TEXTURE, 0.98)
-	dead_bark.albedo_color = Color(0.92, 0.91, 0.88)
+	var dead_bark: StandardMaterial3D = tree_bark.duplicate() as StandardMaterial3D
+	dead_bark.albedo_color = Color(0.48, 0.49, 0.46)
 	_materials["bark_dead"] = dead_bark
 	_materials["leaves"] = _textured(LEAF_TEXTURE, 0.92)
 	_materials["needles"] = _textured(NEEDLE_TEXTURE, 0.95)
@@ -1192,7 +1196,10 @@ func _apply_time_of_day() -> void:
 	_sky_material.set_shader_parameter("night_amount", 1.0 - daylight)
 	_environment.ambient_light_energy = lerpf(0.15, 0.48, daylight) + dusk * 0.05
 	_environment.fog_light_color = Color("1c2b3a").lerp(Color("8a9c8d"), daylight).lerp(Color("b78a63"), dusk * 0.55)
-	_environment.fog_density = lerpf(0.0058, 0.0029, daylight)
+	# Hide the detailed vegetation streaming boundary in atmospheric distance,
+	# without adding a full volumetric fog pass or obscuring nearby combat.
+	_environment.fog_density = lerpf(0.0105, 0.0080, daylight)
+	_sky_material.set_shader_parameter("mist_color", _environment.fog_light_color)
 	# Fires fade in at dusk and out after dawn, including their local sound.
 	var night_amount := 1.0 - daylight
 	for light: OmniLight3D in _night_lights:
@@ -2630,7 +2637,7 @@ func _create_rocks_and_logs() -> void:
 		if _near_road(point.x, point.y, 2) or _near_site(point, 5.0) or _in_pond(point, 0.5):
 			continue
 		var at: Vector3 = _ground(point.x, point.y)
-		var log_mesh: MeshInstance3D = _add_mesh(self, "FallenLog", _cylinder_mesh(0.30, _rng.randf_range(2.8, 4.8), 8), "wood")
+		var log_mesh: MeshInstance3D = _add_mesh(self, "FallenLog", _cylinder_mesh(0.30, _rng.randf_range(2.8, 4.8), 8), "bark")
 		log_mesh.position = Vector3(at.x, at.y + 0.26, at.z)
 		log_mesh.rotation = Vector3(PI * 0.5, _rng.randf_range(-1.0, 1.0), 0.0)
 		log_mesh.create_trimesh_collision()

@@ -114,12 +114,18 @@ def draw_leaf(buf, cx, cy, length, width, angle, rgb):
                 continue
             # Darker at the base, brighter towards the tip; a lighter mid rib
             # gives the card structure at close range without extra geometry.
-            light = 0.80 + 0.30 * clamp((u + 1.0) * 0.5)
+            # Fine mottling and fine side veins make the card read as leaf
+            # surface instead of a solid flat-green silhouette at close range.
+            speckle = math.sin(x * 1.71 + y * 2.39) * math.sin(x * 0.37 - y * 0.61)
+            light = (0.80 + 0.30 * clamp((u + 1.0) * 0.5)) * (1.0 + 0.045 * speckle)
+            side_vein = abs(math.sin((u + abs(v_scaled) * 0.38) * 15.0))
+            if side_vein < 0.09 and abs(v_scaled) < 0.84:
+                light *= 1.045
             shade = [rgb[0] * light, rgb[1] * light, rgb[2] * light]
             if abs(v_scaled) < 0.075 and u < 0.92:
-                shade[0] = min(1.0, shade[0] * 1.20 + 0.02)
-                shade[1] = min(1.0, shade[1] * 1.18 + 0.02)
-                shade[2] = min(1.0, shade[2] * 1.12 + 0.01)
+                shade[0] = min(1.0, shade[0] * 1.10 + 0.01)
+                shade[1] = min(1.0, shade[1] * 1.10 + 0.01)
+                shade[2] = min(1.0, shade[2] * 1.08 + 0.005)
             over(buf, y * SIZE + x, shade, cover)
 
 

@@ -21,6 +21,7 @@ uniform float cloud_opacity : hint_range(0.0, 1.0) = 0.92;
 uniform float wind_speed = 0.010;
 uniform float night_amount : hint_range(0.0, 1.0) = 0.0;
 uniform float sun_glow : hint_range(0.0, 1.5) = 1.0;
+uniform vec3 mist_color : source_color = vec3(0.54, 0.61, 0.55);
 
 float hash3(vec3 p) {
 	p = fract(p * vec3(0.1031, 0.1030, 0.0973));
@@ -98,5 +99,10 @@ void sky() {
 		col += star_color * star * twinkle * (1.0 - smoothstep(0.05, 0.35, dir.y) * 0.4) * night_amount;
 	}
 
+	// The sky has no distant geometry to receive scene fog. Blend a soft
+	// horizon band into the same day/night color so bare streaming horizons do
+	// not end abruptly in blue sky. Keep the upper clouds and stars visible.
+	float horizon_mist = 1.0 - smoothstep(0.0, 0.20, abs(dir.y));
+	col = mix(col, mist_color, horizon_mist * 0.78);
 	COLOR = col;
 }

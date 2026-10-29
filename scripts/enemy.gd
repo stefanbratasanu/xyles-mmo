@@ -51,6 +51,8 @@ var level_max: int = 3
 var level: int = 2
 var power: float = 1.0
 var damage_scale: float = 1.0
+var creature_voice: AudioStreamPlayer3D
+var last_aggro_sound: float = -10.0
 
 
 ## Called by main.gd before the enemy enters the tree. The zone band decides how
@@ -98,6 +100,13 @@ func _ready() -> void:
 	else:
 		visual.build_knight(Color("6b5041") if kind == "quest" else Color("453651"), kind == "boss")
 		visual.scale = Vector3.ONE * scale_value
+	if kind == "normal":
+		creature_voice = AudioStreamPlayer3D.new()
+		creature_voice.name = "CreatureVoice"
+		creature_voice.stream = load("res://assets/audio/enemies/%s_aggro.wav" % species)
+		creature_voice.max_distance = 24.0
+		creature_voice.unit_size = 5.0
+		add_child(creature_voice)
 	selected_ring = _ring(0.8 * scale_value, Color("d8ab63"))
 	selected_ring.visible = false
 	add_child(selected_ring)
@@ -200,6 +209,7 @@ func _physics_process(delta: float) -> void:
 	var leash: float = 13.0 if kind != "boss" else 18.0
 	var reach: float = _reach()
 	var speed_value: float = 2.3 if kind == "normal" else (2.1 if kind == "quest" else 1.65)
+	var was_aggro := aggro
 	if game.is_dead:
 		aggro = false
 		_cancel_attack()
@@ -209,6 +219,9 @@ func _physics_process(delta: float) -> void:
 		aggro = false
 	if aggro and global_position.distance_to(home) > leash:
 		aggro = false
+	if aggro and not was_aggro:
+		_play_aggro_sound()
+	_update_creature_voice_volume()
 	# The attack cooldown always ticks, so stepping into reach with an expired
 	# timer attacks on the same frame instead of waiting for another branch.
 	var attack_rate: float = 1.0
@@ -287,13 +300,15 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y -= 26.0 * delta
 	move_and_slide()
+	var prior_yaw: float = visual.rotation.y
 	if winding_up:
 		visual.rotation.y = atan2(-locked_dir.x, -locked_dir.z)
 	elif direction.length() > 0.05:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), delta * 7)
 	elif aggro and not winding_up and to_player.length() > 0.01:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-to_player.x, -to_player.z), delta * 7)
-	visual.animate(delta, Vector2(velocity.x, velocity.z).length())
+	var turn_rate: float = angle_difference(prior_yaw, visual.rotation.y) / maxf(delta, 0.001)
+	visual.animate(delta, Vector2(velocity.x, velocity.z).length(), false, turn_rate)
 
 
 func _reach() -> float:
@@ -375,6 +390,8 @@ func _cancel_attack() -> void:
 func _finish_attack() -> void:
 	_cancel_attack()
 	visual.strike = 1.0
+	if kind == "normal" and species in ["wolf", "boar"]:
+		_play_creature_sound("res://assets/audio/enemies/%s_attack.wav" % species)
 	if attack_type == "charge":
 		_start_charge()
 		return
@@ -573,7 +590,10 @@ func _begin_slam() -> void:
 func take_damage(amount: float) -> void:
 	if dead:
 		return
+	var was_aggro := aggro
 	aggro = true
+	if not was_aggro:
+		_play_aggro_sound()
 	hp = maxf(0, hp - amount)
 	health_bar_root.visible = true
 	game.floating_text(global_position + Vector3.UP * 1.6, str(roundi(amount)), Color("f1d7a2"))
@@ -582,6 +602,8 @@ func take_damage(amount: float) -> void:
 	tween.tween_property(visual, "scale", Vector3.ONE * (1.0 if kind == "normal" else (1.35 if kind == "quest" else 2.45)), 0.12)
 	if hp <= 0:
 		dead = true
+		if kind == "normal" and species in ["wolf", "boar"]:
+			_play_creature_sound("res://assets/audio/enemies/%s_death.wav" % species)
 		_cancel_attack()
 		collision_layer = 0
 		winding_up = false
@@ -595,3 +617,34 @@ func take_damage(amount: float) -> void:
 		death_tween.tween_property(visual, "rotation:z", PI * 0.45, 0.3)
 		death_tween.tween_property(self, "position:y", -2.0, 1.2).set_delay(1.0)
 		death_tween.tween_callback(queue_free)
+
+
+func _update_creature_voice_volume() -> void:
+	if not is_instance_valid(creature_voice) or not is_instance_valid(game) or not is_instance_valid(game.audio):
+		return
+	var volume: float = float(game.audio.master_volume)
+	creature_voice.volume_db = -80.0 if game.audio.muted or volume <= 0.0 else -12.0 + linear_to_db(maxf(volume, 0.0001))
+
+
+func _play_aggro_sound() -> void:
+	if not is_instance_valid(creature_voice) or creature_voice.stream == null or age - last_aggro_sound < 8.0:
+		return
+	_update_creature_voice_volume()
+	if is_instance_valid(game.audio) and (game.audio.muted or float(game.audio.master_volume) <= 0.0):
+		return
+	last_aggro_sound = age
+	creature_voice.stream = load("res://assets/audio/enemies/%s_aggro.wav" % species)
+	creature_voice.play()
+
+
+func _play_creature_sound(path: String) -> void:
+	if not is_instance_valid(creature_voice) or not is_instance_valid(game) or not is_instance_valid(game.audio):
+		return
+	if game.audio.muted or float(game.audio.master_volume) <= 0.0:
+		return
+	var sound: AudioStream = load(path) as AudioStream
+	if sound == null:
+		return
+	_update_creature_voice_volume()
+	creature_voice.stream = sound
+	creature_voice.play()

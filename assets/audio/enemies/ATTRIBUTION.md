@@ -1,0 +1,11 @@
+# Enemy sound credits
+
+- `wolf_aggro.wav`: trimmed and level-adjusted from [Dog growls](https://opengameart.org/content/dog-growls) by congusbongus, derived from Dogs growling.wav by [juskiddink](https://freesound.org/people/juskiddink/sounds/121565/). CC BY 3.0: https://creativecommons.org/licenses/by/3.0/. The source is a dog recording, used for the wolf.
+- `wolf_attack.wav`: a 0.55-second excerpt, with fades and level adjustment, from a different clip in the same [Dog growls](https://opengameart.org/content/dog-growls) pack by congusbongus, derived from Dogs growling.wav by [juskiddink](https://freesound.org/people/juskiddink/sounds/121565/), CC BY 3.0. Selected by Alin as wolf attack B and shortened at his request.
+- `wolf_death.wav`: the first 0.95 seconds of [wolf-die-1.ogg](https://github.com/wesnoth/wesnoth/blob/master/data/core/sounds/wolf-die-1.ogg), by the Battle for Wesnoth team, with short fades and peak normalization. [Wyrmsun's credits](https://github.com/Andrettin/Wyrmsun/blob/master/sounds/credits.txt) identify this cue as GPL 2.0. Alin selected this effect after being told that it carries GPL distribution terms. The original sound and the GPL 2.0 license text are retained in `sources/`; the edited sound is distributed under GPL 2.0. Check the license obligations and compatibility for the intended distribution of the game.
+- `boar_aggro.wav`: trimmed and level-adjusted from [Pig SFX Pack](https://opengameart.org/content/pig-sfx-pack) by Vinrax. CC BY 3.0: https://creativecommons.org/licenses/by/3.0/. The source is a processed toy-pig recording.
+
+- `boar_death.wav`: shortened and level-adjusted from [Injured Boar Grunt 07](https://sfxmint.com/sounds/boar-grunt-07), an AI-generated effect by SFXMint, CC0 1.0. Selected by Alin from the revised A/B preview.
+- `boar_attack.wav`: a 0.55-second excerpt, with fades and level adjustment, from [Boar.Grwls(1).ogg](https://commons.wikimedia.org/wiki/File:Boar.Grwls(1).ogg) by GrWolf1129, licensed [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The uploader labels the source as boar growls; the recording circumstances are unspecified. Selected by Alin as boar attack A and shortened at his request. This edited audio is distributed under CC BY-SA 4.0.
+
+These six files were selected by Alin from A/B previews on 2026-10-29.

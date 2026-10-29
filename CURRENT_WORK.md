@@ -3,6 +3,21 @@
 Last updated: **2026-10-29**
 Branch: `main`
 
+## Forest distance and creature cues (2026-10-29)
+
+- Increased distance fog and matched a soft sky-horizon band to the changing
+  day/night fog color. Tree trunks and fallen logs now use the existing scanned
+  oak bark color and normal maps with dark tints; broadleaf cards have subtler
+  veins and color variation. Rebuilt the saved world assets.
+- Wolf and boar rigs step when their visual body turns even if stationary. The
+  existing locked attack targets and timings are unchanged.
+- Added the selected wolf and boar aggro, attack and death sounds. Their sources
+  and licenses are in `assets/audio/enemies/ATTRIBUTION.md`. The selected wolf
+  death cue is GPL 2.0; review distribution obligations and compatibility.
+- Day/night rendering, world and streaming checks, combat telegraphs and a rig/
+  audio regression check were run. Judge turning and the sound mix interactively;
+  the engine still reports resource/RID leaks on scripted shutdown.
+
 ## Camp and road-fire pass (2026-10-29)
 
 - Replaced the old road lanterns with original Blender-authored timber tripods,

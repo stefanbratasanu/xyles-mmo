@@ -238,16 +238,20 @@ func build_boar() -> void:
 	tail.rotation.x = 0.9
 
 
-func animate(delta: float, speed_value: float, attacking: bool = false) -> void:
-	gait += delta * speed_value * 2.6
+func animate(delta: float, speed_value: float, attacking: bool = false, turn_rate: float = 0.0) -> void:
+	# A stationary animal still takes small steps to turn. Turn rate comes from
+	# the actual visual rotation, so slowing or stopping the turn settles its feet.
+	var turn_step: float = clampf(absf(turn_rate) * 0.48, 0.0, 1.3)
+	var motion: float = maxf(speed_value, turn_step)
+	gait += delta * motion * 2.6
 	strike = move_toward(strike, 0.0, delta * 5.5)
 	if attacking:
 		strike = 1.0
 	if wolf or boar:
-		position.y = absf(sin(gait * 2.0)) * minf(speed_value * 0.012, 0.035)
+		position.y = absf(sin(gait * 2.0)) * minf(motion * 0.012, 0.035)
 		if is_instance_valid(creature_rig):
 			# Diagonal leg pairs move together in a trot; amplitude fades at rest.
-			var step: float = sin(gait) * minf(speed_value / 2.3, 1.0) * (0.25 if boar else 0.36)
+			var step: float = sin(gait) * minf(motion / 2.3, 1.0) * (0.25 if boar else 0.36)
 			_pose_creature_bone("front_left", step)
 			_pose_creature_bone("hind_right", step)
 			_pose_creature_bone("front_right", -step)
@@ -255,7 +259,7 @@ func animate(delta: float, speed_value: float, attacking: bool = false) -> void:
 			_pose_creature_bone("head", -sin(strike * PI) * (0.12 if boar else 0.20))
 		if boar:
 			# A heavy roll in the shoulders sells the charge without a rig.
-			rotation.z = sin(gait * 0.5) * minf(speed_value * 0.010, 0.045)
+			rotation.z = sin(gait * 0.5) * minf(motion * 0.010, 0.045)
 		return
 	if left_leg:
 		var angle: float = sin(gait) * minf(speed_value * 0.13, 0.6)
