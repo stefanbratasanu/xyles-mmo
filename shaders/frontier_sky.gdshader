@@ -84,7 +84,7 @@ void sky() {
 		// hard band, and thin out directly around the sun.
 		float horizon_fade = smoothstep(0.004, 0.16, dir.y);
 		float sun_thin = 1.0 - pow(sun_dot, 5.0) * 0.45;
-		mask *= horizon_fade * sun_thin;
+		mask *= horizon_fade * sun_thin * (1.0 - night_amount);
 		vec3 lit = mix(cloud_shadow, cloud_color, smoothstep(0.38, 0.78, noise_value));
 		lit += sun_tint * pow(sun_dot, 4.0) * 0.18 * sun_glow;
 		lit = mix(lit, lit * 0.24, night_amount * 0.72);
@@ -102,7 +102,7 @@ void sky() {
 	// The sky has no distant geometry to receive scene fog. Blend a soft
 	// horizon band into the same day/night color so bare streaming horizons do
 	// not end abruptly in blue sky. Keep the upper clouds and stars visible.
-	float horizon_mist = 1.0 - smoothstep(0.0, 0.20, abs(dir.y));
-	col = mix(col, mist_color, horizon_mist * 0.78);
+	float horizon_mist = 1.0 - smoothstep(0.0, 0.11, abs(dir.y));
+	col = mix(col, mist_color, horizon_mist * 0.65);
 	COLOR = col;
 }

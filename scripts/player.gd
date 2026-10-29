@@ -66,7 +66,7 @@ func _ready() -> void:
 		if parsed is Dictionary:
 			authored_animation_speeds = parsed
 	collision_layer = 2
-	collision_mask = 1 | 4
+	collision_mask = 1 | 4 | 8
 	var shape: CollisionShape3D = get_node_or_null("CollisionShape3D") as CollisionShape3D
 	if not is_instance_valid(shape):
 		shape = CollisionShape3D.new()

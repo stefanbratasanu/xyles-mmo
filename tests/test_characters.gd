@@ -46,6 +46,10 @@ func _run() -> void:
 		var b := State.new()
 		check(a.load_game(first.path) and b.load_game(second.path), "Both characters load")
 		check(a.character_name == "Aster" and a.character_race == "Dark Elf" and a.character_class == "Mystic", "Identity persists")
+		check(a.inventory.is_empty() and a.equipment.size() == 1, "New character has no starting items except the equipped sword")
+		check(a.wood == 0 and a.iron == 0, "New character has no starting crafting resources")
+		if a.equipment.size() == 1:
+			check(a.equipment[0].get("visual_id", "") == "ornate_silver_sword", "New character has the ornate silver sword equipped")
 		a.gold = 444
 		check(a.save_game(first.path), "Save first character")
 		var reloaded := State.new()
@@ -94,7 +98,7 @@ func _run() -> void:
 			await process_frame
 			check(game.current_save_path == first.path and game.state.character_name == "Aster", "Selection loads chosen character into the world")
 			check(store.auto_login_path() == first.path, "Successful selection remembers the character")
-			check(game.hud != null and game.hud.player_name.text.contains("ASTER"), "HUD displays character name")
+			check(game.hud != null and game.hud.player_name.text.contains("Aster"), "HUD displays character name")
 			check(game.hud.player_identity.text.contains("DARK ELF") and game.hud.player_identity.text.contains("MYSTIC"), "HUD displays race and class")
 			game.state.gold = 987
 			game.test_mode = false

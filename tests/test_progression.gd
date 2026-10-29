@@ -87,10 +87,10 @@ func _test_quest() -> void:
 func _test_crafting_and_death() -> void:
 	var state = GameState.new()
 	state.rng.seed = 7919
+	state.wood = 120
+	state.iron = 120
 	var before_wood: int = state.wood
-	_check(state.craft_sword("basic"), "Base sword must be craftable with starter resources")
-	# The inventory starts with example gear, so inspect the item just crafted
-	# instead of assuming a fixed inventory index.
+	_check(state.craft_sword("basic"), "Base sword must be craftable with sufficient resources")
 	_check(state.wood == before_wood - 100 and state.inventory.back()["modifiers"].size() == 2, "Base crafting must consume 100 wood and roll two modifiers")
 	_check(not state.craft_sword("legendary"), "High-tier crafting must reject insufficient materials")
 	state.wood = 1000
@@ -107,6 +107,7 @@ func _test_crafting_and_death() -> void:
 	_check(found, "Broken equipment must drop on death")
 	for item: Dictionary in state.equipment:
 		_check(item["id"] != dropped_id, "Dropped equipment must leave equipped slots")
+	state.equipment.append(state._make_item("Test Armor", "basic", "armor", 10, 90.0))
 	state.gold = 1000
 	_check(state.repair_all(), "Damaged equipment should be repairable")
 	for item: Dictionary in state.equipment:

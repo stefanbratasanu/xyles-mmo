@@ -490,7 +490,6 @@ MultiMesh transforms. Map II is still unbuilt.
 
 **Status.** Awaiting the user's decision. This report did not modify any game code.
 
-
 ## 2026-10-28 - Read-only installed enchantment inspection
 
 **Intent.** Clicking an installed enchantment should show that enchantment rather than immediately presenting the retained alternatives, as reported in the two screenshots.
@@ -1306,3 +1305,178 @@ Verified: Direct3D 12 captures of corner menu, character sheet, Options and drag
 **Intent and changes.** The pull fast-forwarded and GitHub Desktop preserved local edits in a stash. Reconciled the stash with the incoming code and kept the pulled AGENTS.md. Preserved both histories, upstream enemy-telegraph UID and addon path, bow and ornate sword visuals, clock preview and draggable clock, and tabbed Options including Graphics. The original stash remains intact.
 
 **Verification and limits.** Headless import completed with existing editor diagnostics and sandbox filesystem/certificate errors. Headless test-mode smoke, world, action hotbar, corner UI, HUD snapping, basic attack, enemy telegraphs and ornate sword checks passed. Progression and skill-panel checks fail because the saved skill redesign disables enchantments and changes the panel; combat-effects and visual-preview/sound checks assume a populated starting hotbar but the saved redesign starts empty. Review these fixtures and intended behavior before treating those areas as verified. A rendered test launch failed D3D12 initialization, fell back to Vulkan and crashed with illegal instruction (0xc000001d); no graphical or interactive verification was completed. Engine cleanup warnings persist.
+
+## 2026-10-29 20:59 - Remote changes from another machine (automatic)
+
+**Source.** `origin/main` moved from `8a5c1f4b` to `2115754f`. Local HEAD is `2115754f`.
+
+**Commits not authored on this PC** (local identity: `d.alin_09@yahoo.com`):
+
+- `2115754f` 2026-10-29T20:43:37+02:00 **Stefan Bratasanu** - mine (45 files, +1287/-140) [already in local HEAD]
+
+**New commits authored on this PC:** 1 (not reported as external).
+
+**Files touched by the external commits:**
+
+- `assets/ui/actions/action_atlas.png`
+- `assets/ui/actions/action_atlas_minimal.png`
+- `assets/ui/actions/action_atlas_playful.png`
+- `assets/ui/actions/dance.png`
+- `assets/ui/character_head.svg`
+- `CURRENT_WORK.md`
+- `Documentation/IMPLEMENTATION_LOG.md`
+- `Documentation/PROJECT_DOCUMENTATION.txt`
+- `Documentation/UI_STANDARD.md`
+- `GAME_RULES.md`
+- `resources/skills/skill_catalog.tres`
+- `scripts/animation_profiles.gd`
+- `scripts/classic_frame.gd`
+- `scripts/game_hud.gd`
+- `scripts/game_state.gd`
+- `scripts/main.gd`
+- `scripts/player.gd`
+- `scripts/skill_drag_button.gd`
+- `scripts/skill_panel.gd`
+- `scripts/skills/fighter_tree.gd`
+- `scripts/skills/skill_runtime.gd`
+- `scripts/status_resource_bar.gd`
+- `scripts/ui_drag_guides.gd`
+- `tests/test_action_hotbar.gd`
+- `tests/test_actions_rework.gd`
+- `tests/test_basic_attack.gd`
+- `tests/test_corner_ui.gd`
+- `tests/test_fighter_tree.gd`
+- `tests/test_hud_snapping.gd`
+- `tests/test_remove_skill.gd`
+- Generated Godot metadata: 15 `.uid`/`.import` file(s) (regenerate with a headless import)
+
+**Flags.**
+
+- Core file changed: `scripts/game_hud.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/game_state.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/main.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/player.gd`. Re-run the game and the tests before trusting it.
+- Hard failure calls on 7 added line(s).
+
+**Proposed actions (not applied).**
+
+- **Re-verify:** launch the game, run the tests, and re-read the changed core files against `GAME_RULES.md`.
+- Nothing was changed automatically. Confirm each action with the user before editing or reverting.
+
+**Status.** Awaiting the user's decision. This report did not modify any game code.
+
+## 2026-10-29 - Forest collision, light shafts and starting equipment
+
+**Intent and changes.** The user requested solid trees and props for mobs, a two-second stun when charging boars hit trees, removal of the pointed tree-base pieces, the Blender silver sword as the sole starting item, sun shafts, and fire audio heard from the character. Baked vegetation uses MultiMesh instances and previously had no trunk colliders. Each loaded tree group now owns a shared-shape trunk collision body, removed with its streamed cell; a dedicated physics layer keeps the orbit camera from collapsing against trunks. Existing solid prop collisions also stop a charge. Enemy charge impact with a tree ends the charge and stuns it for two seconds. The Blender generator discards separate root cones while retaining its random sequence, and `refresh_tree_meshes.gd` updates the five shared baked meshes without rebuilding placements. New characters equip the existing ornate silver sword and start with no bag items or wood/iron; current saves are not migrated or cleared. An AudioListener3D follows the player while using the camera orientation, affecting positional sounds including fire.
+
+**Lighting.** Godot Forward+ volumetric fog scatters the existing directional sun and its shadows; regular fog remains for distant streaming. The sun's volumetric energy falls to zero at night. The Graphics option persists and permits disabling the extra GPU effect. Reference: https://docs.godotengine.org/en/stable/tutorials/3d/volumetric_fog.html .
+
+**Verification and limits.** Re-exported the trees in Blender and imported them in Godot. Character creation, ornate-sword, forest collision/stun/listener/light-setting, world, enemy telegraph, basic attack, torch and chunk-streaming checks passed; the character-name and sword tests were adjusted for the current HUD casing and new starting equipment. A Direct3D screenshot tour and an on/off forest comparison were inspected; the separate root spikes are gone and the sunlight is subtle in the reviewed view. The effect, collision navigation, mix and performance still need interactive review; no controlled performance benchmark was run. The screenshot tour logged slow frames during its rapid teleports and engine shutdown reported the existing resource/RID leak diagnostics. The remote-change check flagged Stefan's already-pulled core changes for re-verification; no external commit was reverted.
+
+## 2026-10-29 - Localized forest shafts and stronger SSAO
+
+**Intent and references.** The user rejected the broad light wash and requested distinct beams with varied brightness and softness. Compared a real [redwood forest photograph](https://ianplant.com/photo/907045/20564086/sunbeams-in-the-forest-5-redwood-national-park-california) and a [game forest example](https://www.3djuegos.com/juegos/the-witcher-3-wild-hunt/noticias/los-mejores-bosques-de-videojuego-190728-95263). Godot documents volumetric fog and NVIDIA describes the role of occluders in light shafts, but the first global-volume result visibly washed out the whole view.
+
+**Changes.** Replaced that global volumetric wash with localized, depth-tested crossed shader cards batched with the streamed vegetation, varying length, width and opacity. Their apparent slant follows the sun, they fade at night, and the graphics toggle hides their draw calls. This is an art-directed approximation: the cards are placed near trees and depth-tested against visible geometry, but they are not calculated from actual canopy gaps or physical shadow volumes. SSAO intensity is now 2.5 times the selected 1–3 level (formerly 1.5) and light affect is 0.35 (formerly 0.12), so occlusion remains more visible in sunlight. Existing settings retain their selected level.
+
+**Verification and limits.** A Direct3D on/off forest comparison showed distinct localized light bands without the old screen-wide wash; separate 1× and 3× SSAO frames were inspected. Headless forest checks cover shaft setting, streaming nodes, changing sun direction and night visibility, plus the collision and listener changes. The world test checks the revised SSAO values and settings persistence. Run an interactive movement and target-PC performance review: screen-facing geometry is an approximation and the cost of additional transparent draws has not been benchmarked. The parallel rendered capture and world test initially shared a timestamped runtime log and the world-log assertion failed; the world test passed when rerun alone. Existing scripted-shutdown RID/resource diagnostics remain.
+
+## 2026-10-29 - Restore blue daytime sky
+
+**Intent and changes.** The user reported a grey daytime sky. The prior horizon-hiding pass used a grey-green daytime horizon, blended a wide grey fog band into the sky, and allowed scene fog to affect the sky. Changed the daytime gradient to blue, narrowed the shader's mist band, and reduced fog influence on the sky while retaining world fog density and the existing night/dusk progression. This preserves the intended concealment of distant streamed scenery without tinting the whole sky grey.
+
+**Verification and limits.** Inspected Direct3D day and night frames: the daytime view is blue with clouds and the night view remains dark with stars. Headless forest and world tests passed, including checks for the blue-day shader parameter, reduced sky fog and retained distance fog. The progression fixture now supplies its own materials and damaged armor instead of depending on removed starting items; its crafting/death checks had no errors, but 13 enchantment-related assertions still fail because the current Fighter redesign has that system disabled (already recorded in the prior reconciliation entry). No interactive horizon-traversal or performance benchmark was done. Existing scripted-shutdown diagnostics remain.
+
+## 2026-10-29 22:13 - Remote changes from another machine (automatic)
+
+**Source.** `origin/main` moved from `2115754f` to `df45631d`. Local HEAD is `2115754f`.
+
+**Commits not authored on this PC** (local identity: `d.alin_09@yahoo.com`):
+
+- `df45631d` 2026-10-29T21:02:23+02:00 **Stefan Bratasanu** - lfs update (7 files, +174/-2) [not in local HEAD]
+- `5580b0ab` 2026-10-29T20:46:02+02:00 **Stefan Bratasanu** - Track game assets with Git LFS (512 files, +29/-65370) [not in local HEAD]
+
+**Files touched by the external commits:**
+
+- `.gitattributes`
+- `assets/animations/player_runtime/action_animations.tres`
+- `assets/animations/player_runtime/character_texture.res`
+- `assets/animations/player_runtime/greatsword_texture.res`
+- `assets/animations/player_runtime/protof_animations.tres`
+- `assets/animations/player_runtime/shield_texture.res`
+- `assets/animations/player_runtime/staff_texture.res`
+- `assets/animations/player_runtime/sword_texture.res`
+- `assets/audio/campfire_crackle.wav`
+- `assets/audio/enemies/boar_aggro.wav`
+- `assets/audio/enemies/boar_attack.wav`
+- `assets/audio/enemies/boar_death.wav`
+- `assets/audio/enemies/sources/wesnoth_wolf_die_1.ogg`
+- `assets/audio/enemies/wolf_aggro.wav`
+- `assets/audio/enemies/wolf_attack.wav`
+- `assets/audio/enemies/wolf_death.wav`
+- `assets/audio/player/sword_slash_user.wav`
+- `assets/audio/torch_crackle.wav`
+- `assets/effects/ember_bolt/Texture/FlameRadiation.png`
+- `assets/models/creatures/boar.glb`
+- `assets/models/creatures/boar_boar_hide.png`
+- `assets/models/creatures/boar_fur_card.png`
+- `assets/models/creatures/boar_rigged.glb`
+- `assets/models/creatures/boar_rigged_boar_hide.png`
+- `assets/models/creatures/boar_rigged_fur_card.png`
+- `assets/models/creatures/wolf.glb`
+- `assets/models/creatures/wolf_fur_card.png`
+- `assets/models/creatures/wolf_rigged.glb`
+- `assets/models/creatures/wolf_rigged_fur_card.png`
+- `assets/models/creatures/wolf_rigged_wolf_fur.png`
+- `assets/models/creatures/wolf_wolf_fur.png`
+- `assets/models/props/bush.glb`
+- `assets/models/props/camp_bed.glb`
+- `assets/models/props/camp_bed_camp_canvas.png`
+- `assets/models/props/camp_bed_camp_timber.png`
+- `assets/models/props/camp_bed_camp_wool.png`
+- `assets/models/props/camp_firewood.glb`
+- `assets/models/props/camp_firewood_camp_timber.png`
+- `assets/models/props/camp_firewood_jolcham_oak_bark_01_diff_1k.jpg`
+- `assets/models/props/camp_firewood_jolcham_oak_bark_01_nor_gl_1k.jpg`
+- `assets/models/props/camp_log_seat.glb`
+- `assets/models/props/camp_log_seat_camp_endgrain.png`
+- `assets/models/props/camp_log_seat_camp_timber.png`
+- `assets/models/props/camp_log_seat_jolcham_oak_bark_01_diff_1k.jpg`
+- `assets/models/props/camp_log_seat_jolcham_oak_bark_01_nor_gl_1k.jpg`
+- `assets/models/props/camp_tent.glb`
+- `assets/models/props/camp_tent_camp_canvas.png`
+- `assets/models/props/camp_tent_camp_timber.png`
+- `assets/models/props/road_cresset.glb`
+- `assets/models/props/road_cresset_bark.png`
+- `assets/models/props/rock_1.glb`
+- `assets/models/props/rock_2.glb`
+- `assets/models/props/rock_3.glb`
+- `assets/models/props/stone_1.glb`
+- `assets/models/props/stone_2.glb`
+- `assets/models/trees/tree_birch.glb`
+- `assets/models/trees/tree_dead.glb`
+- `assets/models/trees/tree_oak.glb`
+- `assets/models/trees/tree_pine.glb`
+- `assets/models/weapons/ornate_silver_sword.glb`
+- ... and 457 more source file(s)
+
+**Flags.**
+
+- Core file changed: `scripts/game_hud.gd`. Re-run the game and the tests before trusting it.
+- Hard failure calls on 1 added line(s).
+
+**Proposed actions (not applied).**
+
+- **Re-verify:** launch the game, run the tests, and re-read the changed core files against `GAME_RULES.md`.
+- Nothing was changed automatically. Confirm each action with the user before editing or reverting.
+
+**Status.** Awaiting the user's decision. This report did not modify any game code.
+
+
+## 2026-10-29 - Shaft placement, night clouds, stun and aggro modes
+
+**Intent and changes.** Fixed reported shafts crossing trunks or appearing over roads/open areas: Map I vegetation cells create candidate beams, and full slanted paths are checked against the authored tree index, road corridors, sites and ponds, with a four-tree density threshold. Checks repeat as the sun moves and are staged one batch per frame; unloaded nodes are referenced by instance ID. Shaft intensity ramps up from 10:00 to 11:00, stays full until 16:00 and fades out by 17:00, using the existing visual day/night preview. Night cloud opacity now reaches zero. Existing baked boulders are identified by their rock mesh resource name (their node names are often auto-generated) and settled partly into sampled ground when static chunks load, moving collision with them; the offline generator uses the same settling rule. Stun uses three rotating yellow star labels above the creature's head and below its health bar for the two-second stun.
+
+**Aggro.** Added passive, territorial and aggressive modes. Passive creatures do not initiate proximity aggro but retaliate when attacked, as clarified by the user; territorial creatures detect within 3 m, while aggressive creatures keep the existing kind-specific detection radius. All retaliate when damaged. Health bars identify the behavior in yellow, orange or red before combat; an engaged or recently damaged creature's bar is red. The combat color clears eight seconds after the last damage when no longer engaged. Existing wolves, boars and guardians retain their aggressive behavior. Rules are recorded in GAME_RULES.md.
+
+**Verification and limits.** The forest test checks time windows, clearance, boulder settling, stun placement/duration and audio listener; the aggro test covers the three modes, passive retaliation and colors. World, enemy telegraph and chunk-streaming tests were run, including unloading while queued shaft checks exist. Direct3D captures were inspected for a cloud-free night, grounded boulder, and stars below the health bar. A local forest check found 4.8–10.8 ms worst staged checks in successive runs using two batches per frame; the final version was reduced to one batch per frame. This is not a full frame-time or slower-PC benchmark. The card-based shafts are still an approximation and need interactive review across terrain and time. Existing shutdown RID/resource warnings persist. The remote check found two newer commits, including an LFS migration and UI changes; they were not pulled or altered, and local uncommitted changes remain.

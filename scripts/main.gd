@@ -21,6 +21,7 @@ var player: CharacterBody3D
 var hud: CanvasLayer
 var game_log: Node
 var camera: Camera3D
+var player_listener: AudioListener3D
 var camera_pivot: Node3D
 var camera_arm: SpringArm3D
 var audio: Node
@@ -50,6 +51,7 @@ var glow_enabled: bool = true
 var ssao_enabled: bool = true
 var ssao_strength: int = 1
 var taa_enabled: bool = true
+var sun_shafts_enabled: bool = true
 var fps_limit: int = 60
 var camera_focus := Vector3.ZERO
 var region_name: String = "EMBERFALL VALE"
@@ -140,7 +142,7 @@ func _ready() -> void:
 		world.day_number = maxi(1, int(state.world_session.get("day", 1)))
 		world.set_time_of_day(float(state.world_session.get("hour", 8.25)))
 	if world.has_method("apply_graphics_settings"):
-		world.apply_graphics_settings(glow_enabled, ssao_enabled, ssao_strength)
+		world.apply_graphics_settings(glow_enabled, ssao_enabled, ssao_strength, sun_shafts_enabled)
 	game_log.world("world_ready", {
 		"build_ms": Time.get_ticks_msec() - world_started,
 		"children": world.get_child_count(),
@@ -180,6 +182,10 @@ func _ready() -> void:
 		camera.far = 420.0
 		camera_arm.add_child(camera)
 	camera.current = true
+	player_listener = AudioListener3D.new()
+	player_listener.name = "PlayerAudioListener"
+	add_child(player_listener)
+	player_listener.make_current()
 	camera_focus = player.position + Vector3.UP
 	_update_camera(1.0)
 	combat_effects = get_node_or_null("CombatEffects") as Node3D
@@ -432,6 +438,7 @@ func _load_graphics_settings(config: ConfigFile) -> void:
 	ssao_enabled = bool(config.get_value("graphics", "ambient_occlusion", ssao_enabled))
 	ssao_strength = clampi(int(config.get_value("graphics", "ambient_occlusion_strength", 1)), 1, 3)
 	taa_enabled = bool(config.get_value("graphics", "temporal_antialiasing", true))
+	sun_shafts_enabled = bool(config.get_value("graphics", "sun_shafts", true))
 	fps_limit = clampi(int(config.get_value("graphics", "fps_limit", 60)), 20, 60)
 
 func _load_debug_keys(config: ConfigFile) -> void:
@@ -473,6 +480,7 @@ func _store_graphics_settings(config: ConfigFile) -> void:
 	config.set_value("graphics", "ambient_occlusion", ssao_enabled)
 	config.set_value("graphics", "ambient_occlusion_strength", ssao_strength)
 	config.set_value("graphics", "temporal_antialiasing", taa_enabled)
+	config.set_value("graphics", "sun_shafts", sun_shafts_enabled)
 	config.set_value("graphics", "fps_limit", fps_limit)
 
 func _debug_key_available(key: int) -> bool:
@@ -513,6 +521,7 @@ func reset_settings() -> void:
 	ssao_enabled = true
 	ssao_strength = 1
 	taa_enabled = true
+	sun_shafts_enabled = true
 	fps_limit = 60
 	if is_instance_valid(audio):
 		audio.set_master_volume(master_volume)
@@ -524,7 +533,14 @@ func _apply_graphics_settings() -> void:
 	Engine.max_fps = fps_limit
 	get_viewport().use_taa = taa_enabled
 	if is_instance_valid(world) and world.has_method("apply_graphics_settings"):
-		world.apply_graphics_settings(glow_enabled, ssao_enabled, ssao_strength)
+		world.apply_graphics_settings(glow_enabled, ssao_enabled, ssao_strength, sun_shafts_enabled)
+
+
+func set_sun_shafts_enabled(enabled: bool) -> void:
+	sun_shafts_enabled = enabled
+	_apply_graphics_settings()
+	save_settings()
+	game_log.ui("graphics_option", {"option": "sun_shafts", "enabled": enabled})
 
 
 func set_taa_enabled(enabled: bool) -> void:
@@ -565,6 +581,9 @@ func _update_camera(delta: float) -> void:
 	camera_pivot.rotation.y = camera_yaw
 	camera_arm.rotation.x = -camera_pitch
 	camera_arm.spring_length = camera_distance
+	if is_instance_valid(player_listener):
+		player_listener.global_position = player.global_position + Vector3.UP
+		player_listener.global_basis = camera.global_basis
 
 func _world_click(screen_position: Vector2) -> void:
 	var origin := camera.project_ray_origin(screen_position)
@@ -838,7 +857,7 @@ func _fail_notice(message: String) -> void:
 
 func _in_combat() -> bool:
 	for enemy in enemies:
-		if is_instance_valid(enemy) and not enemy.dead and enemy.aggro:
+		if is_instance_valid(enemy) and not enemy.dead and (enemy.aggro or enemy.combat_time > 0.0):
 			return true
 	return false
 

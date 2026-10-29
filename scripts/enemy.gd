@@ -20,6 +20,11 @@ var dead: bool = false
 var attack_timer: float = 1.5
 var age: float = 0.0
 var aggro: bool = false
+## Passive does not initiate from proximity; territorial detects only nearby;
+## aggressive uses the existing species/kind detection radius. All retaliate.
+var aggro_mode: String = "aggressive"
+var combat_time: float = 0.0
+const TERRITORIAL_DETECTION := 3.0
 var boss_timer: float = 5.0
 var winding_up: bool = false
 var attack_windup: float = 0.0
@@ -44,6 +49,8 @@ var charge_travelled: float = 0.0
 var charge_distance: float = 0.0
 var charge_speed: float = 14.0
 var charge_hit: bool = false
+var stun_time: float = 0.0
+var stun_indicator: Node3D
 var _telegraph_mat: StandardMaterial3D
 var wander_offset: float = 0.0
 var level_min: int = 1
@@ -69,10 +76,9 @@ func configure_zone(zone: Dictionary) -> void:
 
 func _ready() -> void:
 	collision_layer = 4
-	# 1 = terrain, 2 = player, 4 = other enemies. Without this the old mask (world
-	# only) let wolves walk straight through the player and through each other,
-	# which is what looked like clipping during a fight.
-	collision_mask = 1 | 2 | 4
+	# 1 = terrain/solid props, 2 = player, 4 = enemies, 8 = tree trunks.
+	# Include all four so creatures cannot walk through solid objects or actors.
+	collision_mask = 1 | 2 | 4 | 8
 	# The terrain is a triangle mesh with real slopes. Floor snapping and a
 	# forgiving floor angle keep the mob on the ground instead of losing the
 	# surface on a crest and jittering in place.
@@ -119,6 +125,21 @@ func _ready() -> void:
 	name_label.modulate = Color("e1c99a") if kind != "boss" else Color("d7b1dd")
 	name_label.outline_size = 5
 	add_child(name_label)
+	stun_indicator = Node3D.new()
+	stun_indicator.name = "StunStars"
+	# Keep the stars over the head and below the separate name/health display.
+	stun_indicator.position.y = name_label.position.y - 0.70 * scale_value
+	add_child(stun_indicator)
+	for index in range(3):
+		var star := Label3D.new()
+		star.text = "★"
+		star.font_size = 36
+		star.pixel_size = 0.006 * scale_value
+		star.modulate = Color("ffdc48")
+		star.outline_size = 5
+		star.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		stun_indicator.add_child(star)
+	stun_indicator.visible = false
 	health_bar_width = 1.1 * scale_value
 	health_bar_root = Node3D.new()
 	health_bar_root.name = "HealthBar"
@@ -141,7 +162,7 @@ func _ready() -> void:
 	health_fill.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	health_bar_root.add_child(health_fill)
 	_apply_health_ratio(1.0)
-	health_bar_root.visible = false
+	health_bar_root.visible = true
 	wander_offset = randf() * TAU
 	last_position = global_position
 	if kind == "boss":
@@ -167,7 +188,10 @@ func _apply_health_ratio(ratio: float) -> void:
 	health_fill.position.x = -health_bar_width * (1.0 - ratio) * 0.5
 	var material := health_fill.material_override as StandardMaterial3D
 	if material != null:
-		material.albedo_color = Color("7fae66") if ratio > 0.5 else (Color("c49a4f") if ratio > 0.25 else Color("b4553f"))
+		if aggro or combat_time > 0.0:
+			material.albedo_color = Color("d3473d")
+		else:
+			material.albedo_color = {"passive": Color("e5cd4a"), "territorial": Color("eb9637"), "aggressive": Color("d3473d")}.get(aggro_mode, Color("d3473d"))
 
 func _update_health_bar(delta: float) -> void:
 	health_display_ratio = lerpf(health_display_ratio, hp / max_hp, minf(delta * 9.0, 1.0))
@@ -177,8 +201,17 @@ func _update_health_bar(delta: float) -> void:
 	var camera := get_viewport().get_camera_3d()
 	if camera != null:
 		health_bar_root.global_rotation = camera.global_rotation
-	# Keep drawing until a heal animation reaches full, then fade out.
-	health_bar_root.visible = hp < max_hp or game.target == self or health_display_ratio < 0.995
+	health_bar_root.visible = not dead
+
+func _update_stun_indicator() -> void:
+	if not is_instance_valid(stun_indicator):
+		return
+	stun_indicator.visible = stun_time > 0.0 and not dead
+	if stun_indicator.visible:
+		for index in stun_indicator.get_child_count():
+			var star := stun_indicator.get_child(index) as Label3D
+			var angle: float = age * 4.0 + float(index) * TAU / 3.0
+			star.position = Vector3(cos(angle) * 0.34, sin(angle * 2.0) * 0.05, sin(angle) * 0.34)
 
 func _ring(radius: float, color: Color) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
@@ -199,13 +232,25 @@ func _physics_process(delta: float) -> void:
 	if dead or not is_instance_valid(game) or not is_instance_valid(game.player):
 		return
 	age += delta
+	combat_time = maxf(0.0, combat_time - delta)
 	_update_health_bar(delta)
 	selected_ring.visible = game.target == self
 	name_label.visible = game.target == self or kind != "normal" or aggro
+	if stun_time > 0.0:
+		stun_time = maxf(0.0, stun_time - delta)
+		_update_stun_indicator()
+		velocity.x = 0.0
+		velocity.z = 0.0
+		velocity.y = -0.6 if is_on_floor() else velocity.y - 26.0 * delta
+		move_and_slide()
+		visual.animate(delta, 0.0)
+		return
 	var to_player: Vector3 = game.player.global_position - global_position
 	to_player.y = 0.0
 	var distance: float = to_player.length()
 	var detection: float = 7.0 if kind == "normal" else (8.0 if kind == "quest" else 12.0)
+	if aggro_mode == "territorial":
+		detection = TERRITORIAL_DETECTION
 	var leash: float = 13.0 if kind != "boss" else 18.0
 	var reach: float = _reach()
 	var speed_value: float = 2.3 if kind == "normal" else (2.1 if kind == "quest" else 1.65)
@@ -213,7 +258,7 @@ func _physics_process(delta: float) -> void:
 	if game.is_dead:
 		aggro = false
 		_cancel_attack()
-	elif distance < detection:
+	elif aggro_mode != "passive" and distance < detection:
 		aggro = true
 	elif distance > leash:
 		aggro = false
@@ -221,6 +266,7 @@ func _physics_process(delta: float) -> void:
 		aggro = false
 	if aggro and not was_aggro:
 		_play_aggro_sound()
+	_apply_health_ratio(health_display_ratio)
 	_update_creature_voice_volume()
 	# The attack cooldown always ticks, so stepping into reach with an expired
 	# timer attacks on the same frame instead of waiting for another branch.
@@ -256,7 +302,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		direction = Vector3(sin(age * 0.27 + wander_offset), 0, cos(age * 0.31 + wander_offset)) * 0.25
 		speed_value = 0.7
-		if hp < max_hp:
+		if hp < max_hp and combat_time <= 0.0:
 			hp = minf(max_hp, hp + delta * 4.0)
 	if wants_move:
 		direction = _avoid_crowd(direction)
@@ -462,6 +508,18 @@ func _advance_charge(delta: float) -> void:
 	move_and_slide()
 	visual.rotation.y = atan2(-locked_dir.x, -locked_dir.z)
 	visual.animate(delta, charge_speed)
+	for index in get_slide_collision_count():
+		var hit := get_slide_collision(index)
+		var obstacle := hit.get_collider() as Node
+		if obstacle != null and obstacle.is_in_group("tree_trunks"):
+			_end_charge()
+			stun_time = 2.0
+			_update_stun_indicator()
+			return
+		# Stop on solid world obstacles, not on the ground or other characters.
+		if obstacle is StaticBody3D and hit.get_normal().y < 0.6:
+			_end_charge()
+			return
 	# Contact damage, once, only while the boar's body actually overlaps the
 	# player. Sidestepping the lane is a clean dodge.
 	if not charge_hit and is_instance_valid(game.player) and not game.is_dead:
@@ -591,10 +649,12 @@ func take_damage(amount: float) -> void:
 	if dead:
 		return
 	var was_aggro := aggro
+	combat_time = 8.0
 	aggro = true
-	if not was_aggro:
+	if aggro and not was_aggro:
 		_play_aggro_sound()
 	hp = maxf(0, hp - amount)
+	_apply_health_ratio(health_display_ratio)
 	health_bar_root.visible = true
 	game.floating_text(global_position + Vector3.UP * 1.6, str(roundi(amount)), Color("f1d7a2"))
 	var tween := create_tween()
@@ -602,6 +662,7 @@ func take_damage(amount: float) -> void:
 	tween.tween_property(visual, "scale", Vector3.ONE * (1.0 if kind == "normal" else (1.35 if kind == "quest" else 2.45)), 0.12)
 	if hp <= 0:
 		dead = true
+		_update_stun_indicator()
 		if kind == "normal" and species in ["wolf", "boar"]:
 			_play_creature_sound("res://assets/audio/enemies/%s_death.wav" % species)
 		_cancel_attack()

@@ -20,6 +20,7 @@ file is the shorter contract used during implementation.
 - Normal startup loads the last successfully selected character. With no usable last character, choose a save or create one with a name, race and starting class. Available races are Human, Orc, Elf, Dark Elf and Dwarf; each may choose Fighter or Mystic.
 - Race and class are identity only for this prototype. The current model, starting stats, skills and location are shared; race-specific art, classes and balance are future work.
 - Each new character has an independent local save. The existing `saves/journey.json` remains available as the original journey. Saving uses a temporary file before replacement.
+- New characters start with the ornate silver sword equipped and no other items in their inventory or equipment, including no wood or iron crafting stacks. Existing character saves retain their items.
 - Options → Log out saves the active character and returns to selection. Logout is blocked while dead or while dropped equipment remains in the world, because ground loot is not currently persisted.
 
 ## 2. Controls
@@ -52,7 +53,8 @@ file is the shorter contract used during implementation.
 
 - The two campfire logs are solid seats: approach one and press E to sit; moving
   with WASD starts the stand-up animation. The campfire and roadside/gate
-  torches burn at night, fading at dawn and dusk, with quiet positional crackling.
+  torches burn at night, fading at dawn and dusk, with quiet positional crackling
+  heard from the player's position rather than the camera.
 
 - Before a new mob is implemented, ask Alin or Stefan for its spawn time or
   day/night window and the map, zones or biomes where it belongs. Record their
@@ -90,7 +92,8 @@ file is the shorter contract used during implementation.
 - Forest and foothill tree centres keep at least 3.2 m of clearance, including
   across zone boundaries. Canopies can overlap, but trunks must not touch.
 - **A tree trunk is one continuous lofted mesh**, roots included. Do not rebuild
-  a tree by stacking cylinder segments; the seams and kinks are visible.
+  a tree by stacking cylinder segments; the seams and kinks are visible. Do not
+  add separate pointed root spikes around the base.
 - **Foliage is modelled, not painted on a cone.** Crowns and bushes use
   alpha-scissor leaf/needle cards with per-card colour tint (surface 0 is bark,
   surface 1 is foliage). Smooth green blobs are a regression.
@@ -148,21 +151,27 @@ file is the shorter contract used during implementation.
 - **The sky moves with the clock.** Cloud noise is sampled in 3D on the view
   direction and scrolls with time; the sky uses a realtime radiance update. A
   static sky, or a planar cloud projection that tears at the zenith, is a
-  regression.
+  regression. Daytime sky is blue above a narrow misty horizon, and distant
+  world fog continues to conceal streamed scenery boundaries.
 - **Post-processing is a player choice.** Glow is screen-blended with a 1.0 HDR
   threshold, so fire, lanterns, runes, the portal and creature eyes read as light
   without hazing the whole frame. SSAO supplies contact shadow. Both default on
   and must stay switchable under **Settings → Graphics**; the choice persists in
   `saves/settings.cfg` under `[graphics]`. Never make a gameplay signal, damage
   number or UI element depend on either effect.
-- Ambient occlusion strength is selectable at 1×, 2× or 3×, with 1× preserving
-  the original intensity. Its selection persists even while the effect is off.
+- Ambient occlusion strength is selectable at 1×, 2× or 3×. All three levels are
+  stronger than the original setting; selection persists even while it is off.
 - Settings → Graphics provides a persistent frame-rate limit from 20 to 60 FPS,
   applied immediately and defaulting to 60 for older settings. The cap limits
   frame rate; performance and display synchronization may keep it lower.
 - Settings → Graphics provides a persistent temporal anti-aliasing (TAA) toggle,
   on by default. Disabling it can reduce softness in motion but may increase
   vegetation shimmer. The existing MSAA remains enabled.
+- On Map I only, Settings → Graphics can disable forest sun shafts for lower GPU cost. The
+  localized shafts follow the sun's direction, appear after 10:00, begin fading
+  at 16:00 and finish fading by 17:00. They belong in dense woods and must avoid
+  roads, open ground and tree trunks. The setting persists.
+- Clouds fade away at night, leaving the stars visible.
 - The clock panel's visual preview cycles Auto / Day / Night. It changes only
   the rendered atmosphere and fire presentation: the actual clock, saved day
   and time, mob schedules and timers continue normally. Auto restores the
@@ -183,10 +192,12 @@ file is the shorter contract used during implementation.
 - `Tab` and clicking an enemy set a single current target. The target ring is the
   only selection marker.
 - Every enemy has **one** health display: a world-space bar above the enemy.
-  - It must be visible while the enemy is damaged or selected.
+  - It is visible before combat to show the creature's aggro behavior.
   - It must update on damage **and** on healing.
   - The fill must deplete from the left edge and keep a dark background frame.
-  - Colour shifts from green to amber to red as health falls.
+  - Before combat, passive bars are yellow, territorial bars orange, and
+    aggressive bars red. A creature's bar turns red during combat, regardless
+    of its behavior, and returns to its behavior color after combat ends.
   - Do not add a second target panel in the HUD. Duplicate HP displays are a
     regression, not a feature.
 - Damage must produce visible feedback: floating number, brief hit reaction, and
@@ -229,7 +240,16 @@ file is the shorter contract used during implementation.
   living unloaded enemy keeps its health and position until its species window
   ends. The world clock and spawn deadlines are saved with the character and
   pause while the game is closed. Training enemies remain temporary.
-- Enemies aggro inside their detection radius and leash back to their home point.
+- Creatures have three aggro behaviors: **passive** do not initiate aggression
+  from proximity but fight back if attacked;
+  **territorial** attack when the player comes very close (currently 3 m);
+  **aggressive** notice the player at their existing larger detection radius
+  and pursue them. Existing wolves, boars and guardians remain aggressive until
+  a species is explicitly assigned another behavior. Enemies leash back home.
+- New creature definitions must explicitly choose `passive`, `territorial`, or
+  `aggressive` for their aggro behavior; do not infer the choice from species.
+- Damage provokes all three behaviors to retaliate. An unengaged creature's
+  combat color clears eight seconds after it was last damaged.
 - **Every attack commits to a world-space point.** The enemy picks its target at
   the windup start, locks that point, and tests the hit against it. The player
   can walk or dodge out of the point and take no damage. Enemies never track the
@@ -250,6 +270,10 @@ file is the shorter contract used during implementation.
 - Enemies collide with the terrain, the player and each other. They snap to the
   ground, spread out instead of stacking, and sidestep when wedged for half a
   second. Standing inside a wolf or watching it vibrate in place is a regression.
+- Streamed tree trunks are solid to the player and enemies. A boar's charge
+  stops on a trunk and stuns it for two seconds; other solid world obstacles stop
+  the charge without the tree-specific stun. A stunned creature displays
+  rotating yellow stars above its head for the duration of the stun.
 - Enemies regenerate health while not aggroed. The health bar must reflect that
   regeneration.
 - Enemy HP and damage scale with the level band of the zone they spawn in, so a

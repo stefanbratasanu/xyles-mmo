@@ -1028,6 +1028,15 @@ func _render_settings() -> void:
 	taa_check.toggled.connect(game.set_taa_enabled)
 	graphics_column.add_child(taa_check)
 	graphics_column.add_child(_label("OFF CAN REDUCE MOTION BLUR; GRASS MAY SHIMMER", 9, MUTED))
+	var shafts_check := CheckButton.new()
+	shafts_check.name = "SunShafts"
+	shafts_check.text = "Sun shafts"
+	shafts_check.button_pressed = bool(game.sun_shafts_enabled)
+	shafts_check.focus_mode = Control.FOCUS_NONE
+	shafts_check.add_theme_color_override("font_color", TEXT)
+	shafts_check.add_theme_font_size_override("font_size", 13)
+	shafts_check.toggled.connect(game.set_sun_shafts_enabled)
+	graphics_column.add_child(shafts_check)
 	var glow_check: CheckButton = CheckButton.new()
 	glow_check.text = "Glow on fire, lanterns and runes"
 	glow_check.button_pressed = bool(game.glow_enabled)
@@ -1058,7 +1067,7 @@ func _render_settings() -> void:
 	ao_strength.select(int(game.ssao_strength) - 1)
 	ao_strength.item_selected.connect(_set_ssao_strength)
 	ao_row.add_child(ao_strength)
-	graphics_column.add_child(_label("TURN BOTH OFF ON A SLOW GPU", 9, MUTED))
+	graphics_column.add_child(_label("TURN EFFECTS OFF ON A SLOW GPU", 9, MUTED))
 
 	var audio_card: PanelContainer = _panel(Color("121f25"))
 	overlay_content.add_child(audio_card)

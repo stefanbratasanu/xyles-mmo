@@ -8,8 +8,8 @@ Design notes (why the shapes are built this way):
 * **The trunk is one continuous lofted mesh.** The old version stacked four
   cones; their random jitter left visible gaps and misaligned rings in game.
   `lofted_trunk()` now samples one tapered profile along a single leaning spine
-  and bridges every ring, so the trunk cannot split. Roots and limbs are extra
-  geometry that grows out of that solid trunk, not replacement segments.
+  and bridges every ring, so the trunk cannot split. The lower rings form a
+  natural root flare without separate pointed root pieces.
 * The pivot is the base of the trunk and the mesh is not re-centred on the
   foliage centroid (which used to push the trunk off the placement point).
 * Foliage is made of alpha cards, not ico spheres: each cluster is a pair of
@@ -246,8 +246,11 @@ def add_roots(parts, name, height, radius, mat, lean, count=6):
             math.sin(angle) * reach,
             radius * 0.05,
         ))
-        parts.append(cone("%sRoot%d" % (name, index), start, end,
-                          radius * 0.62, radius * 0.05, 5, mat, jagged=0.08))
+        # Keep the generator's random sequence unchanged for the branches and
+        # foliage, but discard the pointed, detached root pieces.
+        root = cone("%sRoot%d" % (name, index), start, end,
+                    radius * 0.62, radius * 0.05, 5, mat, jagged=0.08)
+        bpy.data.objects.remove(root, do_unlink=True)
 
 
 def card_mesh(name, cards, mat):

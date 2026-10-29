@@ -42,8 +42,8 @@ var max_hp: float = 120.0
 var mana: float = 100.0
 var max_mana: float = 100.0
 var gold: int = 180
-var wood: int = 120
-var iron: int = 120
+var wood: int = 0
+var iron: int = 0
 var level: int = 1
 var xp: int = 0
 var skill_points: int = 0
@@ -65,13 +65,9 @@ func _init() -> void:
 	changed.connect(func(): compiled_skills.clear())
 	_define_skills()
 	_define_quests()
-	equipment = [
-		_make_item("Worn Ironblade", "basic", "weapon", 12, 88.0),
-		_make_item("Wayfarer's Cuirass", "basic", "armor", 10, 92.0),
-		_make_item("Ashen Focus", "rare", "offhand", 9, 76.0),
-	]
-	_add_equipment_examples()
-	_add_spear_example()
+	var starting_sword := _make_item("Ornate Silver Sword", "basic", "weapon", 12, 100.0, "sword")
+	starting_sword["visual_id"] = "ornate_silver_sword"
+	equipment = [starting_sword]
 	logs.append("You have reached the Ashen Reach. Speak with the blacksmith [E].")
 
 
