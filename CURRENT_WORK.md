@@ -459,3 +459,14 @@ Angled status frame, no bottom spacer, unified 86% panel opacity; clock/chat/reg
 - Preserved the pulled AGENTS.md, the incoming world/lighting changes, and the saved local UI, Fighter and action changes. The clock retains its lighting preview and drag registration; Options includes a Graphics tab. The bow and ornate sword visuals coexist.
 - Headless world, action hotbar, corner UI, HUD snapping, basic attack, enemy telegraph and ornate sword checks passed. Existing progression and skill-panel tests assume enabled enchantments, while the saved redesign disabled them. The combat-effects and visual-preview/sound tests assume a populated starting hotbar, while the saved redesign starts with empty slots; they failed and need fixtures reviewed against the intended design.
 - Headless test-mode launch completed. The rendered test launch failed to initialize Direct3D 12, fell back to Vulkan, then crashed with an illegal instruction in the sandbox; graphical play and audio still need verification. The original GitHub Desktop stash remains available.
+
+## 2026-10-29 - GitHub Git LFS migration
+
+- Git LFS uses the normal GitHub origin endpoint. Existing binary assets and two large runtime animation resources are converted to LFS pointers in a new commit without rewriting history; working files stay intact. Other contributors must install Git LFS before pulling and run `git lfs pull` if needed, then run PLAY XYLES or import assets in Godot.
+- Verified all 509 pointers against working-file hashes and local LFS objects; headless world and baked-world integrity tests passed. The GitHub LFS upload and another machine's checkout remain to be verified after pushing. The old Git blobs remain in history.
+
+## 2026-10-29 - Skill modifiers and inventory hover
+
+- Fighter skill cards and skill shortcut tooltips show current computed power and highlight applicable equipment and active enchantment contributions in gold. Disabled enchantments and broken equipment modifiers are excluded; broken equipment's reduced base power is shown.
+- Inventory equipment and material descriptions appear immediately on hover and close when the pointer leaves or the window changes. Existing item actions are unchanged.
+- Headless modifier/hover, action-hotbar, Fighter-tree and world checks passed. Visual review remains necessary; the previous rendered test launch crashed in this sandbox.
