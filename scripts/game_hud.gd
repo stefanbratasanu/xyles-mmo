@@ -38,6 +38,7 @@ var hotbar: Array[Button] = []
 var heading_font: SystemFont
 var clock_label: Label
 var clock_phase: Label
+var lighting_preview_button: Button
 var world_map: Control
 var chat_panel: PanelContainer
 var chat_log: RichTextLabel
@@ -211,7 +212,7 @@ func _build_quest() -> void:
 func _build_clock() -> void:
 	var panel: PanelContainer = _panel(Color(0.04, 0.06, 0.07, 0.72), false)
 	_place(panel, Vector2(-252, 12), Vector2(240, 64), Vector2(1, 0))
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.mouse_filter = Control.MOUSE_FILTER_PASS
 	var column := _column(panel, 12, 8)
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -222,7 +223,25 @@ func _build_clock() -> void:
 	row.add_child(clock_label)
 	clock_phase = _label("DAYLIGHT", 9, GOLD)
 	row.add_child(clock_phase)
-	column.add_child(_label("[M] world map     [F10] bug marker", 9, MUTED))
+	var controls := HBoxContainer.new()
+	controls.add_theme_constant_override("separation", 6)
+	column.add_child(controls)
+	var hint := _label("[M] map   [F10] marker", 9, MUTED)
+	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	controls.add_child(hint)
+	lighting_preview_button = _button("VIEW: AUTO", 9)
+	lighting_preview_button.name = "LightingPreview"
+	lighting_preview_button.custom_minimum_size = Vector2(81, 22)
+	lighting_preview_button.tooltip_text = "Preview day or night lighting. The real clock and spawns continue."
+	lighting_preview_button.pressed.connect(_cycle_lighting_preview)
+	controls.add_child(lighting_preview_button)
+
+
+func _cycle_lighting_preview() -> void:
+	var modes := ["auto", "day", "night"]
+	var next: String = modes[(modes.find(game.world.visual_time_preview) + 1) % modes.size()]
+	game.set_visual_time_preview(next)
+	lighting_preview_button.text = "VIEW: " + next.to_upper()
 
 
 func _build_menu() -> void:
@@ -855,6 +874,16 @@ func _render_settings() -> void:
 	fps_row.add_child(fps_value)
 	fps_slider.value_changed.connect(_set_fps_limit.bind(fps_value))
 	fps_slider.drag_ended.connect(_commit_settings)
+	var taa_check := CheckButton.new()
+	taa_check.name = "TemporalAntialiasing"
+	taa_check.text = "Temporal anti-aliasing (TAA)"
+	taa_check.button_pressed = bool(game.taa_enabled)
+	taa_check.focus_mode = Control.FOCUS_NONE
+	taa_check.add_theme_color_override("font_color", TEXT)
+	taa_check.add_theme_font_size_override("font_size", 13)
+	taa_check.toggled.connect(game.set_taa_enabled)
+	graphics_column.add_child(taa_check)
+	graphics_column.add_child(_label("OFF CAN REDUCE MOTION BLUR; GRASS MAY SHIMMER", 9, MUTED))
 	var glow_check: CheckButton = CheckButton.new()
 	glow_check.text = "Glow on fire, lanterns and runes"
 	glow_check.button_pressed = bool(game.glow_enabled)

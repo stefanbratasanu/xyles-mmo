@@ -365,6 +365,8 @@ func face_point(point: Vector3) -> void:
 
 func attack_animation(attack_type: String = "melee_cone") -> void:
 	play_profile_action(attack_type)
+	if weapon_style in ["sword", "greatsword"] and is_instance_valid(game) and is_instance_valid(game.audio):
+		game.audio.cue("sword_slash")
 
 ## Play any imported two-handed clip using the part of its FBX filename after
 ## "Humanoid@". Looping full-body clips remain active until explicitly stopped.

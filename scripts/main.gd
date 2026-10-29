@@ -48,6 +48,7 @@ var master_volume: float = 1.0
 var glow_enabled: bool = true
 var ssao_enabled: bool = true
 var ssao_strength: int = 1
+var taa_enabled: bool = true
 var fps_limit: int = 60
 var camera_focus := Vector3.ZERO
 var region_name: String = "EMBERFALL VALE"
@@ -93,6 +94,7 @@ func _ready() -> void:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://saves"))
 	_load_settings()
 	Engine.max_fps = fps_limit
+	get_viewport().use_taa = taa_enabled
 	var save_loaded := false
 	var show_selector := select_character_on_next_start
 	select_character_on_next_start = false
@@ -427,6 +429,7 @@ func _load_graphics_settings(config: ConfigFile) -> void:
 	glow_enabled = bool(config.get_value("graphics", "glow", glow_enabled))
 	ssao_enabled = bool(config.get_value("graphics", "ambient_occlusion", ssao_enabled))
 	ssao_strength = clampi(int(config.get_value("graphics", "ambient_occlusion_strength", 1)), 1, 3)
+	taa_enabled = bool(config.get_value("graphics", "temporal_antialiasing", true))
 	fps_limit = clampi(int(config.get_value("graphics", "fps_limit", 60)), 20, 60)
 
 func _load_debug_keys(config: ConfigFile) -> void:
@@ -466,6 +469,7 @@ func _store_graphics_settings(config: ConfigFile) -> void:
 	config.set_value("graphics", "glow", glow_enabled)
 	config.set_value("graphics", "ambient_occlusion", ssao_enabled)
 	config.set_value("graphics", "ambient_occlusion_strength", ssao_strength)
+	config.set_value("graphics", "temporal_antialiasing", taa_enabled)
 	config.set_value("graphics", "fps_limit", fps_limit)
 
 func _debug_key_available(key: int) -> bool:
@@ -504,6 +508,7 @@ func reset_settings() -> void:
 	glow_enabled = true
 	ssao_enabled = true
 	ssao_strength = 1
+	taa_enabled = true
 	fps_limit = 60
 	if is_instance_valid(audio):
 		audio.set_master_volume(master_volume)
@@ -513,8 +518,16 @@ func reset_settings() -> void:
 
 func _apply_graphics_settings() -> void:
 	Engine.max_fps = fps_limit
+	get_viewport().use_taa = taa_enabled
 	if is_instance_valid(world) and world.has_method("apply_graphics_settings"):
 		world.apply_graphics_settings(glow_enabled, ssao_enabled, ssao_strength)
+
+
+func set_taa_enabled(enabled: bool) -> void:
+	taa_enabled = enabled
+	_apply_graphics_settings()
+	save_settings()
+	game_log.ui("graphics_option", {"option": "temporal_antialiasing", "enabled": enabled})
 
 
 func set_glow_enabled(enabled: bool) -> void:
@@ -653,6 +666,11 @@ func debug_set_time_paused(enabled: bool) -> void:
 func debug_set_time(hours: float) -> void:
 	world.set_time_of_day(hours)
 	game_log.world("debug_set_time", {"clock": world.clock_text()})
+
+
+func set_visual_time_preview(mode: String) -> void:
+	world.set_visual_time_preview(mode)
+	game_log.ui("lighting_preview", {"mode": world.visual_time_preview})
 
 func _player_died() -> void:
 	is_dead = true

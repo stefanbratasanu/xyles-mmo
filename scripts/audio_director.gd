@@ -1,5 +1,5 @@
 extends Node
-## Lightweight original synthesized interaction sounds, no downloads.
+## Interaction sounds, including the user-provided sword slash.
 ##
 ## There is deliberately no looping ambience bed: the old filtered-white-noise
 ## "wind" read as a constant hiss on headphones. The world is quiet between
@@ -16,6 +16,7 @@ func _ready() -> void:
 	random.seed = 803
 	for id in ["melee", "cast", "block", "move", "support", "reward", "death"]:
 		cues[id] = _build_cue(id)
+	cues["sword_slash"] = load("res://assets/audio/player/sword_slash_user.wav")
 	for i in range(16):
 		var voice := AudioStreamPlayer.new()
 		voice.volume_db = -14
@@ -53,8 +54,9 @@ func _build_cue(id: String) -> AudioStreamWAV:
 	return stream
 
 func cue(id: String) -> void:
-	if muted or not cues.has(id):
+	if muted or not cues.has(id) or cues[id] == null:
 		return
+	var stream: AudioStream = cues[id]
 	var sound: AudioStreamPlayer = voices[next_voice]
 	for voice in voices:
 		if not voice.playing:
@@ -62,8 +64,9 @@ func cue(id: String) -> void:
 			break
 	next_voice = (next_voice + 1) % voices.size()
 	sound.stop()
-	sound.stream = cues[id]
+	sound.stream = stream
 	sound.play()
+
 
 func toggle_mute() -> void:
 	muted = not muted

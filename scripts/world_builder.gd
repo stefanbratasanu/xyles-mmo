@@ -146,6 +146,8 @@ var zones: Array[Dictionary] = [
 var roads: Array[PackedVector2Array] = []
 var time_of_day: float = 8.25
 var day_number: int = 1
+## A visual-only lighting preview. The real clock and mob schedules continue.
+var visual_time_preview: String = "auto"
 ## Graphics options surfaced in Settings. They live on the world so the initial
 ## build and a live toggle share one application path, and so a test can assert
 ## exactly what the environment received.
@@ -492,6 +494,13 @@ func set_time_of_day(hours: float) -> void:
 
 func phase_text() -> String:
 	return _time_phase(time_of_day)
+
+
+func set_visual_time_preview(mode: String) -> void:
+	if mode not in ["auto", "day", "night"]:
+		return
+	visual_time_preview = mode
+	_apply_time_of_day()
 
 
 func _init_noise() -> void:
@@ -1156,12 +1165,13 @@ func apply_graphics_settings(use_glow: bool, use_ssao: bool, ao_strength: int = 
 func _apply_time_of_day() -> void:
 	if _sun == null or _environment == null or _sky_material == null:
 		return
-	var solar_t: float = fposmod(time_of_day - 6.0, 24.0) / 12.0
+	var visual_hour: float = 12.0 if visual_time_preview == "day" else (22.0 if visual_time_preview == "night" else time_of_day)
+	var solar_t: float = fposmod(visual_hour - 6.0, 24.0) / 12.0
 	var solar_height: float = sin(solar_t * PI)
 	var daylight: float = smoothstep(0.0, 0.24, solar_height)
 	var dusk: float = smoothstep(-0.04, 0.12, solar_height) * (1.0 - smoothstep(0.16, 0.55, solar_height))
 	var is_day: bool = solar_height > 0.0
-	var arc_t: float = solar_t if is_day else fposmod(time_of_day - 18.0, 24.0) / 12.0
+	var arc_t: float = solar_t if is_day else fposmod(visual_hour - 18.0, 24.0) / 12.0
 	var arc_height: float = maxf(sin(arc_t * PI), 0.02)
 	_sun.rotation_degrees = Vector3(-(4.0 + arc_height * 58.0), lerpf(-104.0, 104.0, arc_t), 0.0)
 	if is_day:

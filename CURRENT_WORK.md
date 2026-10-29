@@ -3,6 +3,20 @@
 Last updated: **2026-10-29**
 Branch: `main`
 
+## Lighting preview, TAA and sword swing (2026-10-29)
+
+- The clock panel includes an Auto / Day / Night atmosphere preview. The real
+  world clock and time-based spawns continue underneath, and Auto returns to
+  their lighting. The preview does not persist across launches.
+- Settings → Graphics can toggle temporal anti-aliasing live and persist the
+  choice; it defaults on. Godot documents that TAA can blur moving views, so
+  compare it on and off to diagnose the user's reported motion softness.
+- Sword and greatsword melee animations use the user's supplied slash from
+  `assets/audio/player/`. The quiet lead-in and tail were trimmed for timing;
+  sound follows master volume and mute and uses the existing audio voice pool.
+- Day/night and graphics settings were inspected in a Direct3D test-mode view;
+  the end-to-end preview, audio and graphics settings have a regression test.
+
 ## Forest distance and creature cues (2026-10-29)
 
 - Increased distance fog and matched a soft sky-horizon band to the changing

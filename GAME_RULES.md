@@ -160,6 +160,13 @@ file is the shorter contract used during implementation.
 - Settings → Graphics provides a persistent frame-rate limit from 20 to 60 FPS,
   applied immediately and defaulting to 60 for older settings. The cap limits
   frame rate; performance and display synchronization may keep it lower.
+- Settings → Graphics provides a persistent temporal anti-aliasing (TAA) toggle,
+  on by default. Disabling it can reduce softness in motion but may increase
+  vegetation shimmer. The existing MSAA remains enabled.
+- The clock panel's visual preview cycles Auto / Day / Night. It changes only
+  the rendered atmosphere and fire presentation: the actual clock, saved day
+  and time, mob schedules and timers continue normally. Auto restores the
+  atmosphere driven by the actual world clock. Preview selection is not saved.
 - There is **no minimap**. `M` opens a full-screen, square **painted map**
   rendered from the same height and colour grids as the terrain: hillshade,
   contours every 4 m, forest canopy from real tree positions, ponds, roads and
