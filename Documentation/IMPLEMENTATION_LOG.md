@@ -990,3 +990,101 @@ minimum extent and rebaked without a second in-game run. Inspect the resulting
 torch in play. Both tests printed the previously observed renderer resource
 cleanup diagnostics at process exit.
 
+
+## 2026-10-29 16:53 - Remote changes from another machine (automatic)
+
+**Source.** `origin/main` moved from `0c4fc49f` to `75238a0b`. Local HEAD is `75238a0b`.
+
+**Commits not authored on this PC** (local identity: `d.alin_09@yahoo.com`):
+
+- `75238a0b` 2026-10-29T14:53:34+02:00 **XyLeS** - Update 5 (293 files, +2461/-145) [already in local HEAD]
+
+**New commits authored on this PC:** 1 (not reported as external).
+
+**Files touched by the external commits:**
+
+- `AGENTS.md`
+- `assets/audio/campfire_crackle.wav`
+- `assets/audio/torch_crackle.wav`
+- `assets/models/props/camp_bed.glb`
+- `assets/models/props/camp_bed_camp_canvas.png`
+- `assets/models/props/camp_bed_camp_timber.png`
+- `assets/models/props/camp_bed_camp_wool.png`
+- `assets/models/props/camp_firewood.glb`
+- `assets/models/props/camp_firewood_camp_timber.png`
+- `assets/models/props/camp_firewood_jolcham_oak_bark_01_diff_1k.jpg`
+- `assets/models/props/camp_firewood_jolcham_oak_bark_01_nor_gl_1k.jpg`
+- `assets/models/props/camp_log_seat.glb`
+- `assets/models/props/camp_log_seat_camp_endgrain.png`
+- `assets/models/props/camp_log_seat_camp_timber.png`
+- `assets/models/props/camp_log_seat_jolcham_oak_bark_01_diff_1k.jpg`
+- `assets/models/props/camp_log_seat_jolcham_oak_bark_01_nor_gl_1k.jpg`
+- `assets/models/props/camp_tent.glb`
+- `assets/models/props/camp_tent_camp_canvas.png`
+- `assets/models/props/camp_tent_camp_timber.png`
+- `assets/models/props/generate_camp_assets.py`
+- `assets/models/props/generate_fire_audio.py`
+- `assets/models/props/generate_road_cresset.py`
+- `assets/models/props/road_cresset.glb`
+- `assets/models/props/road_cresset_bark.png`
+- `assets/textures/camp_canvas.png`
+- `assets/textures/camp_endgrain.png`
+- `assets/textures/camp_timber.png`
+- `assets/textures/camp_wool.png`
+- `assets/textures/fire_sprite.png`
+- `assets/textures/polyhaven/jolcham_oak_bark_01_diff_1k.jpg`
+- `assets/textures/polyhaven/jolcham_oak_bark_01_nor_gl_1k.jpg`
+- `assets/textures/polyhaven/README.md`
+- `assets/world/baked_world.res`
+- `assets/world/static/cell_0_0.scn`
+- `assets/world/static/cell_0_1.scn`
+- `assets/world/static/cell_0_-1.scn`
+- `assets/world/static/cell_0_2.scn`
+- `assets/world/static/cell_0_-2.scn`
+- `assets/world/static/cell_0_-3.scn`
+- `assets/world/static/cell_1_0.scn`
+- `assets/world/static/cell_-1_0.scn`
+- `assets/world/static/cell_1_1.scn`
+- `assets/world/static/cell_1_-1.scn`
+- `assets/world/static/cell_-1_1.scn`
+- `assets/world/static/cell_-1_-1.scn`
+- `assets/world/static/cell_1_-2.scn`
+- `assets/world/static/cell_-1_2.scn`
+- `assets/world/static/cell_1_3.scn`
+- `assets/world/static/cell_1_-3.scn`
+- `assets/world/static/cell_1_-4.scn`
+- `assets/world/static/cell_-1_-4.scn`
+- `assets/world/static/cell_1_-5.scn`
+- `assets/world/static/cell_2_0.scn`
+- `assets/world/static/cell_-2_0.scn`
+- `assets/world/static/cell_2_1.scn`
+- `assets/world/static/cell_2_-1.scn`
+- `assets/world/static/cell_-2_1.scn`
+- `assets/world/static/cell_-2_-1.scn`
+- `assets/world/static/cell_2_2.scn`
+- `assets/world/static/cell_-2_-2.scn`
+- ... and 205 more source file(s)
+- Generated Godot metadata: 28 `.uid`/`.import` file(s) (regenerate with a headless import)
+
+**Flags.**
+
+- Core file changed: `scripts/main.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/player.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/world_builder.gd`. Re-run the game and the tests before trusting it.
+- Hard failure calls on 145 added line(s).
+
+**Proposed actions (not applied).**
+
+- **Re-verify:** launch the game, run the tests, and re-read the changed core files against `GAME_RULES.md`.
+- Nothing was changed automatically. Confirm each action with the user before editing or reverting.
+
+**Status.** Awaiting the user's decision. This report did not modify any game code.
+
+
+## 2026-10-29 - Missing camp after pull and guarded launcher
+
+**Symptom and cause.** The user's post-pull session showed a missing camp, although its gameplay logger reported zero errors. The incoming Git commit included the baked camp and source GLBs, textures, audio and scenes. Before import, the reproduced world test emitted missing `.godot/imported` errors for new camp and torch assets, and scenery/camp assertions failed. Godot's machine-local import cache is ignored by Git; engine resource-loader failures in the console did not reach the project's gameplay log.
+
+**Changed.** Ran the existing Godot headless import to regenerate the local cache, without changing incoming game code or authored world assets. Added `PLAY XYLES.bat`, `scripts/dev/launch_xyles.ps1` and `scripts/dev/verify_world_assets.gd`. The launcher checks a fingerprint of project sources and the existence of default imported outputs; after a change or missing output it imports, inspects errors, then checks the baked terrain, scenery, vegetation, shared meshes and camp before launching. It stops with a log location on detected errors. Fingerprinting uses file names, sizes and modification times rather than file-content hashes. Direct Godot launches do not go through this check.
+
+**Verification and limits.** Before import, the headless world test reproduced resource-loading errors and missing camp; after import it and the baked-integrity and chunk tests reported passes without script/assertion or missing-file errors. The all-cell scan loaded 72 static, 196 terrain and 144 vegetation cells, checked eight shared meshes and found one camp, with no missing assets. A Direct3D camp preview was inspected. Launcher checks covered forced import, the up-to-date fast path, a deliberately removed imported camp scene regenerated by the launcher, and a real 120-frame test-mode game launch; no player save was used. The editor's missing local addon warning and empty-name error remain, as do pre-existing test exit RID/resource cleanup diagnostics. The launcher cannot guarantee against every game or asset problem and must be committed/pulled to be available on other machines.
