@@ -1124,3 +1124,185 @@ cleanup diagnostics at process exit.
 **Changed.** At the user's request, replaced the provisional selection with the single supplied `54427377-sword-slash-476148.mp3` for every sword and greatsword attack. Converted 0.54–1.07 seconds of the recording to WAV to remove silence; the original remains in Downloads. The source and license were not provided. Mute and master volume still use the existing audio pool.
 
 **Verification and limits.** Godot imported the WAV successfully. `test_visual_preview_sound.gd` passed checks for repeated sword and greatsword attacks using the supplied clip, normal skill activation, unarmed exclusion and mute. `test_combat_effects.gd` passed. The in-game audio mix has not been auditioned. The existing editor import empty-name and test-shutdown resource diagnostics remain.
+
+**Risk / follow-up.** The fixed 100-degree cone and 0.8/0.9/1.0 s windups are initial tuning values; playtest the feel on slopes and against groups. Terrain overlays are tessellated approximations of the sector and surface. The existing HUD saved-placement test failure remains unrelated.
+
+## 2026-10-28 - Basic attack command (partial)
+
+Added /attack chat command for an independent, unupgradeable melee hit with its own cooldown. Progression test passed. Sword grip and in-game combat verification remain outstanding; this pass is not complete.
+
+## 2026-10-28 - Basic attack combat verification
+
+Tested /attack through chat against a nearby enemy, including mana, cooldown, range and immunity to melee upgrades. Corrected power calculation to use the basic attack's own buff identity. Sword grip still requires visual diagnosis.
+
+## 2026-10-28 - Remove individual equipped skill
+
+Added per-skill REMOVE in K; empties the selected slot and refunds that skill's upgrades, preserves learned skill and offers, saves empty slots, and handles empty hotbar/casts. UI uses existing compact bronze controls and square slots, following the project reference and UI standard. Dedicated removal/save/re-equip and skill-panel tests passed. Sword-grip work remains outstanding.
+
+## 2026-10-28 - Actions and enchantment pause (partial)
+
+Disabled all authored enchantment definitions using their existing editable enabled flag. Existing investments and rolls are preserved, but disabled effects no longer compile or appear in offers. Added F7 Actions with attack, sit, target and placeholder social/party controls. The action window follows the reference's grouped square-grid approach using existing controls. The Human Fighter class redesign, animated emotes and final visual polish remain unfinished. Dedicated Actions test passes.
+
+## 2026-10-28 - Click-to-move option (partial)
+
+Added a saved boolean in Options that disables ground-click movement while retaining enemy selection; disabling cancels an existing click path. Headless startup passed. Fighter skill tree, bow, progression and drag/drop remain unfinished.
+
+## 2026-10-28 - Fighter tree data (in progress)
+
+Recorded requested Fighter skill milestones in scripts/skills/fighter_tree.gd. This is authoring data only; class progression, bow attack, drag-and-drop, save migration and UI integration are not implemented. Existing gameplay was left intact while these dependencies remain.
+
+## 2026-10-28 - Fighter tree integration (in progress)
+
+Added Fighter milestone view, level-gated assignment, unmodifiable derived Fighter skills, empty new hotbars, and initial skill/action drag payloads. Added craftable bow weapon type and prototype visual. The milestone/save test passed. This remains incomplete: bow combat/projectile presentation, drag interaction and existing-save migration require rendered end-to-end verification; old Fighter loadouts require review.
+
+## 2026-10-28 - Action hotbar and dance icon
+
+Made every Basic, Party and Social action assignable to hotbar slots, preserving explicit placeholder behavior for unimplemented actions. Added original generated dance icon in the Actions window and hotbar. Saved action identifiers are validated against the registered list. Action assignment/drop API and save/reload tests pass. Headless import reported the existing editor empty-name warning and sandbox editor-settings error. Full mouse-drag visual verification remains outstanding.
+
+## 2026-10-28 - Actions icon set
+
+Generated an original 12-cell atlas in the reference's pale-blue silhouette and dark square style. Assigned distinct icons to all ten actions in F7 and the hotbar. Action assignment and icon-presence tests pass. Import encountered sandbox editor-settings warnings; visual small-size inspection remains outstanding.
+
+## 2026-10-28 - Playful action icons
+
+Replaced the temporary generic symbols with original generated pale-blue expressive figures, dark-blue squares and playful poses informed by the user's reference; applied to action window and hotbar. Reviewed a Direct3D 12 rendered window and action-hotbar test passed. Existing party and social actions remain placeholders.
+
+## 2026-10-28 - Compact classic interface pass
+
+Adapted the reference's compact hierarchy, inset bronze borders, dark interiors and square shortcuts using original Godot frame drawing. The reference topic was readable; its external screenshot URLs failed to load, so supplied reference images and UI_STANDARD guided details. Added fine bevels and title sheen across shared frames. Adventure menu exposes Inventory, Class skills, Actions, Bestiary, Crafting and Options; development tools remain in Options. Removed the redundant wide footer navigation. Fighter tree now uses compact illustrated milestone cards; Actions uses a 300x390 grouped icon window with honest placeholder tooltips. Status includes XP and the hotbar prioritizes assignment guidance over inactive enchantment points. Existing window position persistence remains intact.
+
+Verified: Direct3D 12 render of HUD, Fighter skills, Actions and Inventory at 1600x900, no script errors in the rendered run. Action-hotbar and Fighter milestone tests pass. Legacy test_skill_panel is incompatible with the already-disabled enchantment definitions and Fighter default: it fails installation/row expectations then aborts on a missing old row child. It was stopped, not marked passing. No gameplay formulas changed. Existing saves may retain previous window placement; Options > Reset Window Positions applies the new default arrangement.
+`nWorld integration test also passed. Normal game launched after verification.
+
+## 2026-10-28 - Reference status bars
+
+Replaced the spacious status card with a compact name/level header and stacked full-width XP, HP and MP bars, following the supplied reference. XP is yellow with current-level percentage; HP red and MP blue with centered live values. No CP resource invented. Headless action/HUD integration passed; Direct3D 12 render checked. Character identity remains state-backed but is no longer a separate visible row.
+
+## 2026-10-28 - Angled status and movable HUD
+
+Followed the user's diagonal right-edge cut using a polygon frame and child clipping; reduced the status height to its content to remove the black bottom strip. Normalized shared panel backgrounds to 86% opacity. Added clock, chat, region plate and frameless shortcut bar to the existing drag/snap/persistence system. Chat has a dedicated title above its interactive tabs; shortcuts have a separate drag grip above the tiles. Existing content windows and evolution picker retain title dragging. The full-screen map remains a full-screen view.
+
+Verified Direct3D 12 rendered layout, diagonal clipping and bar text; action-hotbar integration and expanded HUD snapping tests pass (including registered panels, hotbar drop collision resolution and recorded placement). No gameplay or save data changed. Sandbox headless runs still emit environmental log/certificate warnings.
+
+## 2026-10-29 - Corner navigation, character sheet and drag guides
+
+Removed permanent Adventure and System Journal panels at the user's request. Bottom-right controls now offer an original head silhouette for live character stats, a gear for Options and a foldout listing windows/map. The character sheet groups current vitals, actual equipment multipliers/mitigation and progression, avoiding unimplemented attributes. Options uses Camera / Audio / Game / Tools tabs and immediate saved settings with OK; no nonfunctional Apply/Cancel controls. Resource fills themselves now have diagonal end caps, including partially depleted values. Hotbar drag instruction text is removed; its grip sits at the right. During dragging, cyan peer bounds and a gold active rectangle/gap outline expose the snapping geometry.
+
+Verified: Direct3D 12 captures of corner menu, character sheet, Options and drag guides; fixed clipped corner navigation found during review. New test_corner_ui covers closed foldout, live HP, tab visibility and guide lifecycle. Action-hotbar, updated HUD snapping and world integration tests pass. Rendered integration produced no script errors. Shared background opacity remains 86%. No gameplay formulas changed; full-screen map remains full-screen. Headless sandbox log/certificate warnings remain environmental.
+
+## 2026-10-29 20:20 - Remote changes from another machine (automatic)
+
+**Source.** `origin/main` moved from `c544b2cd` to `6afc50ac`. Local HEAD is `6afc50ac`.
+
+**Commits not authored on this PC** (local identity: `bratasanu.stefan@gmail.com`):
+
+- `6afc50ac` 2026-10-29T19:13:11+02:00 **XyLeS** - Update 7 (13 files, +225/-7) [already in local HEAD]
+- `8a5c1f4b` 2026-10-29T18:19:15+02:00 **XyLeS** - Update 6 (105 files, +672/-17) [already in local HEAD]
+- `70494c66` 2026-10-29T17:10:55+02:00 **XyLeS** - Bat (7 files, +282/-0) [already in local HEAD]
+- `75238a0b` 2026-10-29T14:53:34+02:00 **XyLeS** - Update 5 (293 files, +2461/-145) [already in local HEAD]
+- `8cbf1f8f` 2026-10-29T11:32:20+02:00 **XyLeS** - 4 (475 files, +2048/-296) [already in local HEAD]
+- `0c4fc49f` 2026-10-29T01:23:32+02:00 **XyLeS** - Update 3 (37 files, +920/-38) [already in local HEAD]
+- `c1e904dc` 2026-10-29T00:35:56+02:00 **XyLeS** - Merge branch 'main' of https://github.com/stefanbratasanu/xyles-mmo (33 files, +1089/-42) [already in local HEAD]
+- `84a19b19` 2026-10-29T00:15:33+02:00 **XyLeS** - Update 2 (50 files, +3957/-361) [already in local HEAD]
+
+**Files touched by the external commits:**
+
+- `.gitignore`
+- `{editor_plugins => addons}/skill_distribution/plugin.cfg`
+- `{editor_plugins => addons}/skill_distribution/plugin.gd`
+- `AGENTS.md`
+- `assets/audio/campfire_crackle.wav`
+- `assets/audio/enemies/ATTRIBUTION.md`
+- `assets/audio/enemies/boar_aggro.wav`
+- `assets/audio/enemies/boar_attack.wav`
+- `assets/audio/enemies/boar_death.wav`
+- `assets/audio/enemies/sources/.gdignore`
+- `assets/audio/enemies/sources/GPL-2.0.txt`
+- `assets/audio/enemies/sources/wesnoth_wolf_die_1.ogg`
+- `assets/audio/enemies/wolf_aggro.wav`
+- `assets/audio/enemies/wolf_attack.wav`
+- `assets/audio/enemies/wolf_death.wav`
+- `assets/audio/player/ATTRIBUTION.md`
+- `assets/audio/player/sword_slash_user.wav`
+- `assets/audio/torch_crackle.wav`
+- `assets/models/creatures/boar.glb`
+- `assets/models/creatures/boar_boar_hide.png`
+- `assets/models/creatures/boar_fur_card.png`
+- `assets/models/creatures/boar_rigged.glb`
+- `assets/models/creatures/boar_rigged_boar_hide.png`
+- `assets/models/creatures/boar_rigged_fur_card.png`
+- `assets/models/creatures/generate_creatures.py`
+- `assets/models/creatures/make_creature_textures.py`
+- `assets/models/creatures/rig_creatures.py`
+- `assets/models/creatures/wolf.glb`
+- `assets/models/creatures/wolf_fur_card.png`
+- `assets/models/creatures/wolf_rigged.glb`
+- `assets/models/creatures/wolf_rigged_fur_card.png`
+- `assets/models/creatures/wolf_rigged_wolf_fur.png`
+- `assets/models/creatures/wolf_wolf_fur.png`
+- `assets/models/props/bush.glb`
+- `assets/models/props/camp_bed.glb`
+- `assets/models/props/camp_bed_camp_canvas.png`
+- `assets/models/props/camp_bed_camp_timber.png`
+- `assets/models/props/camp_bed_camp_wool.png`
+- `assets/models/props/camp_firewood.glb`
+- `assets/models/props/camp_firewood_camp_timber.png`
+- `assets/models/props/camp_firewood_jolcham_oak_bark_01_diff_1k.jpg`
+- `assets/models/props/camp_firewood_jolcham_oak_bark_01_nor_gl_1k.jpg`
+- `assets/models/props/camp_log_seat.glb`
+- `assets/models/props/camp_log_seat_camp_endgrain.png`
+- `assets/models/props/camp_log_seat_camp_timber.png`
+- `assets/models/props/camp_log_seat_jolcham_oak_bark_01_diff_1k.jpg`
+- `assets/models/props/camp_log_seat_jolcham_oak_bark_01_nor_gl_1k.jpg`
+- `assets/models/props/camp_tent.glb`
+- `assets/models/props/camp_tent_camp_canvas.png`
+- `assets/models/props/camp_tent_camp_timber.png`
+- `assets/models/props/generate_camp_assets.py`
+- `assets/models/props/generate_fire_audio.py`
+- `assets/models/props/generate_props.py`
+- `assets/models/props/generate_road_cresset.py`
+- `assets/models/props/road_cresset.glb`
+- `assets/models/props/road_cresset_bark.png`
+- `assets/models/props/rock_1.glb`
+- `assets/models/props/rock_2.glb`
+- `assets/models/props/rock_3.glb`
+- `assets/models/props/stone_1.glb`
+- ... and 503 more source file(s)
+- Generated Godot metadata: 87 `.uid`/`.import` file(s) (regenerate with a headless import)
+
+**Deleted files:**
+
+- `addons/effekseer/bin/windows/~libeffekseer.x86_64.dll~RF633b90.TMP`
+
+**Flags.**
+
+- New or changed addon outside addons/effekseer: `addons/skill_distribution/plugin.cfg`. Review before running.
+- New or changed addon outside addons/effekseer: `addons/skill_distribution/plugin.gd`. Review before running.
+- Executable/script added or changed: `PLAY XYLES.bat`. Do not run it until reviewed.
+- Core file changed: `project.godot`. Re-run the game and the tests before trusting it.
+- Executable/script added or changed: `scripts/dev/check_remote_changes.ps1`. Do not run it until reviewed.
+- Executable/script added or changed: `scripts/dev/launch_xyles.ps1`. Do not run it until reviewed.
+- Core file changed: `scripts/enemy.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/game_hud.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/game_state.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/main.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/player.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/world_builder.gd`. Re-run the game and the tests before trusting it.
+- 1 file(s) deleted by the remote commits. Confirm the deletion was intended.
+- Debug leftovers on 2 added line(s).
+- Hard failure calls on 221 added line(s).
+
+**Proposed actions (not applied).**
+
+- **Re-verify:** launch the game, run the tests, and re-read the changed core files against `GAME_RULES.md`.
+- **Ask first:** review the addon/executable diff with the user before it is allowed to run.
+- **Modify:** remove or gate debug leftovers after the user agrees.
+- Nothing was changed automatically. Confirm each action with the user before editing or reverting.
+
+**Status.** Awaiting the user's decision. This report did not modify any game code.
+
+## 2026-10-29 - Reconcile pulled work and GitHub Desktop stash
+
+**Intent and changes.** The pull fast-forwarded and GitHub Desktop preserved local edits in a stash. Reconciled the stash with the incoming code and kept the pulled AGENTS.md. Preserved both histories, upstream enemy-telegraph UID and addon path, bow and ornate sword visuals, clock preview and draggable clock, and tabbed Options including Graphics. The original stash remains intact.
+
+**Verification and limits.** Headless import completed with existing editor diagnostics and sandbox filesystem/certificate errors. Headless test-mode smoke, world, action hotbar, corner UI, HUD snapping, basic attack, enemy telegraphs and ornate sword checks passed. Progression and skill-panel checks fail because the saved skill redesign disables enchantments and changes the panel; combat-effects and visual-preview/sound checks assume a populated starting hotbar but the saved redesign starts empty. Review these fixtures and intended behavior before treating those areas as verified. A rendered test launch failed D3D12 initialization, fell back to Vulkan and crashed with illegal instruction (0xc000001d); no graphical or interactive verification was completed. Engine cleanup warnings persist.

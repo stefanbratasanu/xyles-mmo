@@ -25,3 +25,13 @@ The implementation uses original Godot-drawn frames; reference screenshots are n
 Reusable implementation: `scripts/classic_frame.gd` supplies the frame ornamentation, while the HUD's `_panel`, `_button`, `_bar` and `_label` helpers supply common styling. Register new floating HUD windows through `_register_window`; use a title-only hit area so content buttons remain interactive.
 
 - Character selection uses a compact bronze-framed roster and creation form. Show the chosen race/class and explain that race-specific models and gameplay are not implemented.
+
+## Current Fighter slice navigation
+
+Adventure exposes Inventory / Class skills / Actions / Bestiary / Crafting / Options. Each floating window owns its content without a duplicated navigation footer. Fighter skills use compact illustrated level-milestone cards; Actions uses a small grouped square grid, with Party/Social previews identified in tooltips. Development tools stay in Options. Status includes a thin XP strip; the hotbar shows assignment guidance while enchantments are disabled. Shared frames have recessed bronze bevels and a restrained title highlight.
+
+Status: compact level/name header above full-width yellow XP percentage, red HP and blue MP bars, with live values centered over each fill.
+
+Status uses the user's diagonal right-edge cut. Shared panel interiors use 86% opacity. Clock, chat, region label and frameless hotbar join persistent dragging/snapping; the hotbar has a separate grip above the slots. The full-screen map stays full-screen.
+
+2026-10-29 supersedes permanent menu/journal layout: bottom-right head opens Character Status, gear opens tabbed Options, arrow folds out all windows. No permanent Adventure or System Journal. Shortcuts use a right-side dot grip; active drag shows gold bounds and cyan peers with the snap gap. Resource fill ends are diagonal at partial as well as full values.

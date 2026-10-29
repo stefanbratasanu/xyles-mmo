@@ -15,6 +15,7 @@ var game: Node
 var root: Control
 var hp_bar: ProgressBar
 var mana_bar: ProgressBar
+var xp_bar: ProgressBar
 var hp_text: Label
 var mana_text: Label
 var player_name: Label
@@ -35,6 +36,8 @@ var overlay_subtitle: Label
 var current_panel: String = ""
 var panel_signature: String = ""
 var hotbar: Array[Button] = []
+var action_icons: Dictionary = {}
+const ACTION_ICON_INDEX := {"attack":0,"sit":1,"target":2,"party_invite":3,"party_leave":4,"party_find":5,"wave":6,"bow":7,"cheer":8,"dance":9}
 var heading_font: SystemFont
 var clock_label: Label
 var clock_phase: Label
@@ -70,6 +73,10 @@ var minion_count_label: Label
 var debug_invulnerability_toggle: CheckButton
 var debug_rebind_action := ""
 var debug_binding_buttons: Dictionary = {}
+var corner_menu: PanelContainer
+var drag_guides: Control
+var settings_tab := 0
+var character_values: Dictionary = {}
 
 
 func setup(owner_game: Node) -> void:
@@ -101,6 +108,7 @@ func setup(owner_game: Node) -> void:
 	_build_chat()
 	_build_toast()
 	_build_overlay()
+	_build_drag_guides()
 	world_map = preload("res://scripts/world_map.gd").new()
 	world_map.name = "WorldMap"
 	root.add_child(world_map)
@@ -114,6 +122,7 @@ func setup(owner_game: Node) -> void:
 
 
 func _process(delta: float) -> void:
+	if is_instance_valid(drag_guides): drag_guides.queue_redraw()
 	if toast_timer > 0.0:
 		toast_timer -= delta
 		toast.modulate.a = minf(toast_timer, 1.0)
@@ -124,7 +133,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed or event.echo:
 		return
 	var key: int = event.physical_keycode
-	var panel_keys: Dictionary = {KEY_K: "skills", KEY_B: "bestiary", KEY_I: "inventory", KEY_C: "forge", KEY_H: "guide", KEY_O: "settings", KEY_F6:"animations"}
+	var panel_keys: Dictionary = {KEY_K: "skills", KEY_B: "bestiary", KEY_I: "inventory", KEY_C: "forge", KEY_H: "guide", KEY_O: "settings", KEY_F6:"animations", KEY_F7:"actions"}
 	if panel_keys.has(key):
 		toggle_panel(str(panel_keys[key]))
 		get_viewport().set_input_as_handled()
@@ -158,44 +167,54 @@ func _build_brand() -> void:
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_shadowed(subtitle)
 	compass.add_child(subtitle)
+	_register_window(compass, "region", false, 18)
 
 
 func _build_player() -> void:
 	var panel: PanelContainer = _panel()
-	_place(panel, Vector2(12, 12), Vector2(268, 100))
-	_register_window(panel, "status")
-	var column: VBoxContainer = _column(panel, 13, 10)
-	player_name = _label("WANDERER  /  LV. 1", 12, TEXT)
+	_place(panel, Vector2(12, 12), Vector2(220, 65))
+	_register_window(panel, "status", false, 16)
+	panel.ornate = false
+	panel.angled_status = true
+	panel.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	var column: VBoxContainer = _column(panel, 4, 3)
+	column.add_theme_constant_override("separation", 1)
+	player_name = _label("1   Wanderer", 11, TEXT)
 	column.add_child(player_name)
-	var hrow: HBoxContainer = HBoxContainer.new()
-	hrow.add_theme_constant_override("separation", 8)
-	column.add_child(hrow)
-	hrow.add_child(_label("VITALITY", 9, MUTED))
-	hp_bar = _bar(Color("a72d29"), 12)
-	hp_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hrow.add_child(hp_bar)
-	hp_text = _label("120 / 120", 10, TEXT)
-	hp_text.custom_minimum_size.x = 62
-	hp_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	hrow.add_child(hp_text)
-	var mrow: HBoxContainer = HBoxContainer.new()
-	mrow.add_theme_constant_override("separation", 8)
-	column.add_child(mrow)
-	mrow.add_child(_label("MANA     ", 9, MUTED))
-	mana_bar = _bar(Color("305c9c"), 12)
-	mana_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mrow.add_child(mana_bar)
-	mana_text = _label("100 / 100", 10, TEXT)
-	mana_text.custom_minimum_size.x = 62
-	mana_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	mrow.add_child(mana_text)
-	player_identity = _label("HUMAN  /  FIGHTER  •  CONTESTED", 8, GOLD)
+	player_identity = _label("", 9, GOLD)
+	player_identity.visible = false
 	column.add_child(player_identity)
+	xp_bar = _status_bar(column, "XP", Color("a58a36"))
+	hp_bar = _status_bar(column, "HP", Color("9d2927"))
+	mana_bar = _status_bar(column, "MP", Color("30538b"))
+	hp_text = hp_bar.get_meta("value_label")
+	mana_text = mana_bar.get_meta("value_label")
 
+
+func _status_bar(column: VBoxContainer, caption: String, color: Color) -> ProgressBar:
+	var bar := _bar(color, 14)
+	bar.set_script(preload("res://scripts/status_resource_bar.gd"))
+	bar.tint = color
+	bar.add_theme_stylebox_override("background", _style(Color("171611"), Color("5c5542"), 1, 0))
+	bar.add_theme_stylebox_override("fill", StyleBoxEmpty.new())
+	column.add_child(bar)
+	var title := _label(caption, 10, TEXT)
+	title.position = Vector2(5, 0)
+	_shadowed(title)
+	bar.add_child(title)
+	var value := _label("", 10, TEXT)
+	value.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_shadowed(value)
+	bar.add_child(value)
+	bar.set_meta("value_label", value)
+	return bar
 
 func _build_quest() -> void:
 	var panel: PanelContainer = _panel(Color(0.04, 0.06, 0.07, 0.83), false)
-	_place(panel, Vector2(-288, 196), Vector2(276, 140), Vector2(1, 0))
+	_place(panel, Vector2(-252, 236), Vector2(240, 140), Vector2(1, 0))
 	_register_window(panel, "quest")
 	var column: VBoxContainer = _column(panel, 14, 12)
 	column.add_child(_label("Quest Journal", 9, GOLD))
@@ -206,7 +225,7 @@ func _build_quest() -> void:
 	quest_text.size.x = 230
 	quest_text.custom_minimum_size.y = 45
 	column.add_child(quest_text)
-	column.add_child(_label("[E]  INTERACT NEAR THE FORGE", 9, MUTED))
+	column.add_child(_label("[M] Map   ·   [E] Interact", 9, MUTED))
 
 
 func _build_clock() -> void:
@@ -236,6 +255,8 @@ func _build_clock() -> void:
 	lighting_preview_button.pressed.connect(_cycle_lighting_preview)
 	controls.add_child(lighting_preview_button)
 
+	_register_window(panel, "clock")
+
 
 func _cycle_lighting_preview() -> void:
 	var modes := ["auto", "day", "night"]
@@ -245,21 +266,36 @@ func _cycle_lighting_preview() -> void:
 
 
 func _build_menu() -> void:
-	var menu_box := _panel()
-	_place(menu_box, Vector2(-252, 84), Vector2(240, 100), Vector2(1, 0))
-	_register_window(menu_box, "menu")
-	var menu_column := _column(menu_box, 10, 8)
-	var grid := GridContainer.new()
-	grid.columns = 3
-	grid.add_theme_constant_override("h_separation", 4)
-	grid.add_theme_constant_override("v_separation", 4)
-	menu_column.add_child(grid)
-	for item: Array in [["K", "Skills", "skills"], ["B", "Bestiary", "bestiary"], ["I", "Items", "inventory"], ["C", "Forge", "forge"], ["H", "Guide", "guide"], ["O", "Options", "settings"]]:
-		var btn := _button("%s [%s]" % [item[1], item[0]], 9)
-		btn.custom_minimum_size = Vector2(70, 28)
-		btn.pressed.connect(toggle_panel.bind(str(item[2])))
-		grid.add_child(btn)
-
+	var dock := HBoxContainer.new()
+	_place(dock, Vector2(-152, -48), Vector2(140, 36), Vector2(1, 1))
+	var head := _button("", 20)
+	var head_image := Image.new()
+	head_image.load_svg_from_string(FileAccess.get_file_as_string("res://assets/ui/character_head.svg"))
+	head.icon = ImageTexture.create_from_image(head_image)
+	head.tooltip_text = "Character status"
+	head.custom_minimum_size = Vector2(34, 34)
+	head.pressed.connect(toggle_panel.bind("character"))
+	dock.add_child(head)
+	var options := _button("⚙", 18)
+	options.tooltip_text = "Options [O]"
+	options.pressed.connect(toggle_panel.bind("settings"))
+	dock.add_child(options)
+	var fold := _button("▴", 16)
+	fold.tooltip_text = "All windows"
+	dock.add_child(fold)
+	corner_menu = _panel()
+	_place(corner_menu, Vector2(-212, -490), Vector2(200, 430), Vector2(1, 1))
+	var column := _column(corner_menu, 10, 10)
+	column.add_child(_label("Windows", 11, GOLD))
+	for item: Array in [["Character", "character"], ["Inventory [I]", "inventory"], ["Class skills [K]", "skills"], ["Actions [F7]", "actions"], ["Bestiary [B]", "bestiary"], ["Crafting [C]", "forge"], ["Field guide [H]", "guide"], ["Animations [F6]", "animations"], ["Debug", "debug"], ["Options [O]", "settings"]]:
+		var button := _button(item[0], 10)
+		button.pressed.connect(func(): corner_menu.hide(); toggle_panel(item[1]))
+		column.add_child(button)
+	var map_button := _button("World map [M]", 10)
+	map_button.pressed.connect(func(): corner_menu.hide(); toggle_map())
+	column.add_child(map_button)
+	corner_menu.hide()
+	fold.pressed.connect(func(): corner_menu.visible = not corner_menu.visible)
 
 func _build_chat() -> void:
 	chat_panel = _panel(Color(0.035, 0.045, 0.05, 0.82), false)
@@ -268,6 +304,7 @@ func _build_chat() -> void:
 	_place(chat_panel, Vector2(12, -238), Vector2(360, 238), Vector2(0, 1))
 	chat_panel.mouse_filter = Control.MOUSE_FILTER_PASS
 	var column := _column(chat_panel, 10, 8)
+	column.add_child(_label("Chat", 10, GOLD))
 	var tabs := HBoxContainer.new()
 	tabs.add_theme_constant_override("separation", 3)
 	column.add_child(tabs)
@@ -305,6 +342,7 @@ func _build_chat() -> void:
 	column.add_child(chat_input)
 	_append_chat_line("World", "Server", "Map I is live. The sealed waygate leads to Map II, which is not built yet.")
 	_select_channel("World")
+	_register_window(chat_panel, "chat")
 
 
 func _select_channel(channel: String) -> void:
@@ -356,6 +394,10 @@ func _submit_chat(text: String) -> void:
 	chat_input.clear()
 	if message.is_empty():
 		return
+	if message.to_lower() == "/attack":
+		chat_input.release_focus()
+		game.basic_attack()
+		return
 	_append_chat_line(chat_channel, "Wayfarer", message)
 	if is_instance_valid(game) and game.get("game_log") != null:
 		game.game_log.ui("chat_message", {"channel": chat_channel, "length": message.length()})
@@ -402,6 +444,14 @@ func _build_hotbar() -> void:
 	column.mouse_filter = Control.MOUSE_FILTER_PASS
 	column.add_theme_constant_override("separation", 5)
 	holder.add_child(column)
+	var grip := Control.new()
+	grip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.add_child(grip)
+	grip.position = Vector2(574, 48)
+	grip.size = Vector2(10, 20)
+	grip.draw.connect(func():
+		for y in [0, 6, 12]: grip.draw_circle(Vector2(3, y), 1.5, GOLD))
+	grip.queue_redraw()
 	context_text = _label("Shortcuts   •   1–9, 0", 11, Color("f0e6c8"))
 	context_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_shadowed(context_text)
@@ -413,15 +463,18 @@ func _build_hotbar() -> void:
 	column.add_child(row)
 	for i in range(10):
 		var skill := _button("", 12, true)
+		skill.set_script(preload("res://scripts/skill_drag_button.gd"))
+		skill.drop_handler = _assign_hotbar.bind(i)
 		skill.custom_minimum_size = Vector2(50, 50)
 		skill.add_theme_stylebox_override("normal", _style(Color(0.05, 0.06, 0.06, 0.80), Color("6f6854"), 1, 4, 0, 0))
 		skill.add_theme_stylebox_override("hover", _style(Color(0.12, 0.13, 0.11, 0.9), GOLD, 1, 4, 0, 0))
 		skill.add_theme_stylebox_override("pressed", _style(Color(0.02, 0.03, 0.03, 0.9), GOLD, 1, 4, 0, 0))
 		skill.pressed.connect(_activate_skill.bind(i))
-		skill.tooltip_text = "%s [%d]" % [game.state.skills[game.state.loadout[i]].name, (i + 1) % 10]
+		var initial_id: String = game.state.loadout[i]
+		skill.tooltip_text = "%s [%d]" % [game.state.skills[initial_id].name if game.state.skills.has(initial_id) else initial_id.replace("action:","").capitalize(), (i + 1) % 10]
 		row.add_child(skill)
 		var picture := TextureRect.new()
-		picture.texture = skill_view.icon(str(game.state.skill_catalog.data.skills[game.state.loadout[i]].icon))
+		picture.texture = skill_view.icon(str(game.state.skill_catalog.data.skills[initial_id].icon)) if game.state.skill_catalog.data.skills.has(initial_id) else null
 		skill.set_meta("picture", picture)
 		picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
@@ -456,6 +509,16 @@ func _build_hotbar() -> void:
 	resource_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_shadowed(resource_text)
 	column.add_child(resource_text)
+	_register_window(holder, "hotbar", false, 17)
+	var handle: Control = holder.get_meta("drag_handle")
+	handle.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	handle.position = Vector2(568, 26)
+	handle.size = Vector2(24, 50)
+	var dots := _label("•••", 12, GOLD)
+	dots.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dots.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dots.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	handle.add_child(dots)
 
 
 func _shadowed(label: Label) -> void:
@@ -465,22 +528,10 @@ func _shadowed(label: Label) -> void:
 
 
 func _build_log() -> void:
-	var panel: PanelContainer = _panel(Color(0.04, 0.06, 0.07, 0.68), false)
-	_place(panel, Vector2(-362, -193), Vector2(350, 181), Vector2(1, 1))
-	_register_window(panel, "system_log")
-	var column: VBoxContainer = _column(panel, 12, 10)
-	column.add_child(_label("All   |   System   |   Combat", 9, GOLD))
+	# Retain the log model for diagnostics; there is no permanent journal window.
 	log_text = RichTextLabel.new()
-	log_text.bbcode_enabled = false
-	log_text.add_theme_color_override("default_color", MUTED)
-	log_text.add_theme_font_size_override("normal_font_size", 11)
-	log_text.custom_minimum_size.y = 110
-	log_text.fit_content = false
-	log_text.scroll_active = false
-	log_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_child(log_text)
-	column.add_child(_label("RMB ORBIT  /  WHEEL ZOOM  /  X SIT  /  O OPTIONS", 9, TEXT))
-
+	log_text.hide()
+	root.add_child(log_text)
 
 func _build_toast() -> void:
 	toast = _label("", 18, Color("e8cf98"), true)
@@ -532,7 +583,7 @@ func _build_overlay() -> void:
 	overlay_footer = footer
 	footer.add_theme_constant_override("separation", 3)
 	outer.add_child(footer)
-	for item: Array in [["Skills [K]", "skills"], ["Bestiary [B]", "bestiary"], ["Items [I]", "inventory"], ["Forge [C]", "forge"], ["Guide [H]", "guide"], ["Animations [F6]","animations"], ["Options [O]", "settings"]]:
+	for item: Array in [["Skills [K]", "skills"], ["Bestiary [B]", "bestiary"], ["Items [I]", "inventory"], ["Forge [C]", "forge"], ["Guide [H]", "guide"], ["Actions [F7]","actions"], ["Animations [F6]","animations"], ["Options [O]", "settings"]]:
 		var btn := _button(str(item[0]), 11)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.pressed.connect(_switch_panel.bind(str(item[1])))
@@ -553,6 +604,7 @@ func _build_overlay() -> void:
 
 
 func refresh() -> void:
+	_update_character()
 	if not is_instance_valid(game) or not is_instance_valid(game.get("state")):
 		return
 	var s: Node = game.state
@@ -567,11 +619,15 @@ func refresh() -> void:
 	hp_bar.value = float(s.hp)
 	mana_bar.max_value = effective_mana
 	mana_bar.value = float(s.mana)
+	xp_bar.max_value = int(s.level) * 100
+	xp_bar.value = int(s.xp)
+	(xp_bar.get_meta("value_label") as Label).text = "%.2f%%" % (100.0 * float(s.xp) / xp_bar.max_value)
+	xp_bar.tooltip_text = "Experience: %d / %d" % [s.xp, int(s.level) * 100]
 	hp_text.text = "%d / %d" % [int(s.hp), int(effective_hp)]
 	mana_text.text = "%d / %d" % [int(s.mana), int(effective_mana)]
-	var display_name: String = str(s.character_name).to_upper()
+	var display_name: String = str(s.character_name)
 	if display_name.length() > 18: display_name = display_name.left(17) + "…"
-	player_name.text = "%s  /  LV. %02d" % [display_name, int(s.level)]
+	player_name.text = "%d   %s" % [int(s.level), display_name]
 	player_identity.text = "%s  /  %s  •  CONTESTED" % [str(s.character_race).to_upper(), str(s.character_class).to_upper()]
 	quest_text.text = str(s.get_quest_text())
 	if not s.quests.is_empty():
@@ -579,16 +635,31 @@ func refresh() -> void:
 	var region: Variant = game.get("region_name")
 	if region is String:
 		region_label.text = region.to_upper()
-	progression_text.text = "LEVEL %02d    /    %d SKILL POINTS    /    %d OF 50 DISCOVERED" % [int(s.level), int(s.skill_points), int(s.earned_skill_points)]
+	progression_text.text = "[K] Class skills   ·   [F7] Actions   ·   Drag onto a shortcut"
 	resource_text.text = game.skill_runtime.status_text() if not game.skill_runtime.buffs.is_empty() or not game.skill_runtime.channel_id.is_empty() else "%d GOLD     %d WOOD     %d IRON" % [int(s.gold), int(s.wood), int(s.iron)]
 	var cooldown_data: Variant = game.get("cooldowns")
 	if cooldown_data is Array:
 		for i: int in range(mini(hotbar.size(), cooldown_data.size())):
 			var remaining: float = float(cooldown_data[i])
 			var skill_id: String = game.state.loadout[i]
+			hotbar[i].drag_payload = {"kind":"hotbar","id":skill_id} if not skill_id.is_empty() else {}
+			if skill_id.begins_with("action:"):
+				var action_id := skill_id.trim_prefix("action:")
+				(hotbar[i].get_meta("picture") as TextureRect).texture = _action_icon(action_id)
+				hotbar[i].text=""
+				hotbar[i].tooltip_text = "Action: "+skill_id.trim_prefix("action:").capitalize()
+				(hotbar[i].get_meta("timer_label") as Label).text = ""
+				continue
+			hotbar[i].text=""
+			if skill_id.is_empty():
+				(hotbar[i].get_meta("picture") as TextureRect).texture = null
+				(hotbar[i].get_meta("timer_label") as Label).text = ""
+				hotbar[i].tooltip_text = "Empty slot [%d] · assign a skill in K" % ((i+1)%10)
+				hotbar[i].modulate = Color.WHITE
+				continue
 			(hotbar[i].get_meta("picture") as TextureRect).texture = skill_view.icon(str(game.state.skill_catalog.data.skills[skill_id].icon))
 			var compiled: Dictionary=s.compiled_skill(skill_id)
-			hotbar[i].tooltip_text = "%s [%d] · %d / 10 enchantments\n%s\nMana %.1f · Cooldown %.1fs · Range %.1fm%s" % [s.skills[skill_id].name,(i+1)%10,s.skills[skill_id].evolutions.size(),s.skills[skill_id].description,float(compiled.cost)*float(compiled.cost_scale),float(compiled.cooldown)*float(compiled.cooldown_scale),float(compiled.range),"\nHold key to channel; click again to stop. Movement 50%; facing limited to 360°/s." if compiled.tags.has("channel") else ""]
+			hotbar[i].tooltip_text = "%s [%d]\n%s\nMana %.1f · Cooldown %.1fs · Range %.1fm%s" % [s.skills[skill_id].name,(i+1)%10,s.skills[skill_id].description,float(compiled.cost)*float(compiled.cost_scale),float(compiled.cooldown)*float(compiled.cooldown_scale),float(compiled.range),"\nHold key to channel; click again to stop. Movement 50%; facing limited to 360°/s." if compiled.tags.has("channel") else ""]
 			(hotbar[i].get_meta("timer_label") as Label).text = "%.1f" % remaining if remaining > 0.0 else ""
 			hotbar[i].modulate = Color(0.65, 0.72, 0.73) if remaining > 0.0 else Color.WHITE
 	var hint: Variant = game.get("context_hint")
@@ -658,6 +729,7 @@ func close_panel() -> void:
 
 
 func _switch_panel(panel_name: String) -> void:
+	corner_menu.hide()
 	debug_rebind_action = ""
 	if is_instance_valid(world_map) and world_map.visible:
 		world_map.close()
@@ -681,7 +753,8 @@ func _switch_panel(panel_name: String) -> void:
 
 func _render_overlay() -> void:
 	overlay_subtitle.visible = current_panel != "inventory"
-	overlay_footer.visible = current_panel != "inventory" and current_panel != "debug"
+	# Each window has its own purpose; navigation lives in the Adventure menu.
+	overlay_footer.visible = false
 	for child: Node in overlay_content.get_children():
 		overlay_content.remove_child(child)
 		child.queue_free()
@@ -691,13 +764,68 @@ func _render_overlay() -> void:
 		"inventory": _render_inventory()
 		"forge": _render_forge()
 		"settings": _render_settings()
+		"character": _render_character()
 		"animations": animation_view.render()
+		"actions": _render_actions()
 		"debug": _render_debug()
 		_: _render_guide()
 
 
 func _render_skills() -> void:
 	skill_view.render()
+
+func _render_actions() -> void:
+	overlay_title.text = "Actions"
+	overlay_subtitle.text = "Drag an action onto your shortcut bar."
+	var sections: Array = [
+		["Basic", [["Attack", "attack"], ["Sit / Stand", "sit"], ["Target", "target"]]],
+		["Party", [["Invite", "party_invite"], ["Leave", "party_leave"], ["Find Party", "party_find"]]],
+		["Social", [["Wave", "wave"], ["Bow", "bow"], ["Cheer", "cheer"], ["Dance", "dance"]]]
+	]
+	for section: Array in sections:
+		overlay_content.add_child(_label(str(section[0]),12,GOLD))
+		var grid:=GridContainer.new()
+		grid.columns=4
+		grid.add_theme_constant_override("h_separation",4)
+		grid.add_theme_constant_override("v_separation",4)
+		overlay_content.add_child(grid)
+		for action: Array in section[1]:
+			var button: Button=_button(str(action[0]),10,true)
+			button.set_script(preload("res://scripts/skill_drag_button.gd"))
+			button.drag_payload={"kind":"hotbar","id":"action:"+str(action[1])}
+			button.icon=_action_icon(str(action[1]))
+			button.expand_icon=true
+			button.text=""
+			button.custom_minimum_size=Vector2(56,56)
+			button.tooltip_text = str(action[0]) + "\nDrag to a shortcut."
+			if str(action[1]).begins_with("party_") or str(section[0]) == "Social":
+				button.tooltip_text += "\nPreview only: gameplay is not implemented yet."
+			button.pressed.connect(_perform_action.bind(str(action[1])))
+			grid.add_child(button)
+
+func _action_icon(id: String) -> Texture2D:
+	if not ACTION_ICON_INDEX.has(id): return null
+	if not action_icons.has(id):
+		var atlas := AtlasTexture.new()
+		atlas.atlas = load("res://assets/ui/actions/action_atlas_playful.png")
+		var index: int = ACTION_ICON_INDEX[id]
+		var cell := Vector2(atlas.atlas.get_width()/4.0,atlas.atlas.get_height()/3.0)
+		atlas.region = Rect2(Vector2(index%4,index/4)*cell,cell)
+		atlas.filter_clip = true
+		action_icons[id] = atlas
+	return action_icons[id]
+
+func _perform_action(action: String) -> void:
+	if action.begins_with("party_"):
+		show_notice("Party functionality is not available yet.")
+		return
+	close_panel()
+	match action:
+		"attack": game.basic_attack()
+		"sit": game.player.toggle_sit()
+		"target": game._cycle_target()
+		_:
+			show_notice("%s emote is not available yet." % action.capitalize())
 
 
 func _render_bestiary() -> void:
@@ -814,8 +942,15 @@ func _render_forge() -> void:
 
 
 func _render_settings() -> void:
-	overlay_title.text = "Settings"
-	overlay_subtitle.text = "Tune camera, graphics and audio, open debug tools, or log out to character selection. Changes apply immediately and save when you close the menu."
+	overlay_title.text = "Options"
+	overlay_subtitle.text = "Changes apply immediately and are saved automatically."
+	var tabs := HBoxContainer.new()
+	overlay_content.add_child(tabs)
+	for i in range(5):
+		var tab := _button(["Camera", "Audio", "Game", "Tools", "Graphics"][i], 11, settings_tab == i)
+		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tab.pressed.connect(func(): settings_tab = i; _render_overlay())
+		tabs.add_child(tab)
 	var camera_card: PanelContainer = _panel(Color("121f25"))
 	overlay_content.add_child(camera_card)
 	var camera_column: VBoxContainer = _column(camera_card, 20, 16)
@@ -828,11 +963,20 @@ func _render_settings() -> void:
 	reverse_check.add_theme_font_size_override("font_size", 13)
 	reverse_check.toggled.connect(_set_camera_reverse_vertical)
 	camera_column.add_child(reverse_check)
+	var click_move := CheckButton.new()
+	click_move.text = "Click ground to move"
+	click_move.button_pressed = game.click_to_move
+	click_move.focus_mode = Control.FOCUS_NONE
+	click_move.toggled.connect(func(enabled: bool):
+		game.click_to_move=enabled
+		if not enabled: game.player.moving_to_click=false
+		if not game.test_mode: game.save_settings())
+	camera_column.add_child(click_move)
 	var sensitivity_row: HBoxContainer = HBoxContainer.new()
 	sensitivity_row.add_theme_constant_override("separation", 14)
 	camera_column.add_child(sensitivity_row)
-	var sensitivity_label: Label = _label("LOOK SENSITIVITY", 11, MUTED)
-	sensitivity_label.custom_minimum_size.x = 170
+	var sensitivity_label: Label = _label("Sensitivity", 11, MUTED)
+	sensitivity_label.custom_minimum_size.x = 80
 	sensitivity_row.add_child(sensitivity_label)
 	var sensitivity_slider: HSlider = HSlider.new()
 	sensitivity_slider.min_value = 0.001
@@ -840,7 +984,7 @@ func _render_settings() -> void:
 	sensitivity_slider.step = 0.0005
 	sensitivity_slider.value = float(game.camera_sensitivity)
 	sensitivity_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sensitivity_slider.custom_minimum_size.x = 220
+	sensitivity_slider.custom_minimum_size.x = 120
 	sensitivity_row.add_child(sensitivity_slider)
 	var sensitivity_value: Label = _label("%.2f° / px" % rad_to_deg(float(game.camera_sensitivity)), 11, TEXT)
 	sensitivity_value.custom_minimum_size.x = 65
@@ -918,13 +1062,14 @@ func _render_settings() -> void:
 
 	var audio_card: PanelContainer = _panel(Color("121f25"))
 	overlay_content.add_child(audio_card)
+	overlay_content.move_child(graphics_card, audio_card.get_index() + 1)
 	var audio_column: VBoxContainer = _column(audio_card, 20, 16)
 	audio_column.add_child(_label("AUDIO", 11, GOLD))
 	var volume_row: HBoxContainer = HBoxContainer.new()
 	volume_row.add_theme_constant_override("separation", 14)
 	audio_column.add_child(volume_row)
 	var volume_label: Label = _label("MASTER VOLUME", 11, MUTED)
-	volume_label.custom_minimum_size.x = 170
+	volume_label.custom_minimum_size.x = 80
 	volume_row.add_child(volume_label)
 	var volume_slider: HSlider = HSlider.new()
 	volume_slider.min_value = 0.0
@@ -932,7 +1077,7 @@ func _render_settings() -> void:
 	volume_slider.step = 0.05
 	volume_slider.value = float(game.master_volume)
 	volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	volume_slider.custom_minimum_size.x = 220
+	volume_slider.custom_minimum_size.x = 120
 	volume_row.add_child(volume_slider)
 	var volume_value: Label = _label("%d%%" % roundi(float(game.master_volume) * 100.0), 11, TEXT)
 	volume_value.custom_minimum_size.x = 65
@@ -959,6 +1104,23 @@ func _render_settings() -> void:
 	logout_button.pressed.connect(game.logout_to_characters)
 	overlay_content.add_child(logout_button)
 	overlay_content.add_child(layout_reset)
+	graphics_card.visible = settings_tab == 4
+	camera_card.visible = settings_tab == 0
+	audio_card.visible = settings_tab == 1
+	click_move.reparent(overlay_content)
+	click_move.visible = settings_tab == 2
+	defaults.visible = settings_tab == 2
+	layout_reset.visible = settings_tab == 2
+	logout_button.visible = settings_tab == 2
+	animations_button.visible = settings_tab == 3
+	debug_button.visible = settings_tab == 3
+	var guide_button := _button("FIELD GUIDE [H]", 11)
+	guide_button.pressed.connect(_switch_panel.bind("guide"))
+	guide_button.visible = settings_tab == 2
+	overlay_content.add_child(guide_button)
+	var done := _button("OK", 11, true)
+	done.pressed.connect(close_panel)
+	overlay_content.add_child(done)
 
 
 func _render_debug() -> void:
@@ -1163,6 +1325,12 @@ func _activate_skill(index: int) -> void:
 	if game.has_method("use_skill"):
 		game.use_skill(index)
 
+func _assign_hotbar(data: Dictionary, slot: int) -> void:
+	if game._in_combat() or game.is_dead: show_notice("Leave combat before changing the hotbar."); return
+	if game.state.assign_hotbar(str(data.get("id","")),slot):
+		game._save_journey()
+		refresh()
+
 
 func _set_camera_reverse_vertical(enabled: bool) -> void:
 	game.camera_reverse_vertical = enabled
@@ -1240,7 +1408,7 @@ func _label(text: String, font_size: int = 12, color: Color = TEXT, serif: bool 
 func _panel(color: Color = PANEL, border: bool = true) -> PanelContainer:
 	var panel: PanelContainer = FrameScript.new()
 	panel.ornate = false
-	panel.add_theme_stylebox_override("panel", _style(Color(0.085, 0.078, 0.065, maxf(color.a, 0.86)), GOLD_DIM if border else Color("494438"), 2, 4))
+	panel.add_theme_stylebox_override("panel", _style(Color(0.085, 0.078, 0.065, 0.86), GOLD_DIM if border else Color("494438"), 2, 4))
 	panel.mouse_filter = Control.MOUSE_FILTER_PASS
 	return panel
 
@@ -1317,16 +1485,17 @@ func _rarity_color(tier: String) -> Color:
 
 
 
-func _register_window(control: Control, id: String) -> void:
+func _register_window(control: Control, id: String, decorated: bool = true, handle_height: int = 22) -> void:
 	floating_windows[id] = control
 	default_positions[id] = control.position
-	control.ornate = true
+	if control is PanelContainer:
+		control.ornate = decorated
 	var handle := Control.new()
 	handle.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	handle.offset_left = 7
 	handle.offset_right = -7
 	handle.offset_top = 4
-	handle.offset_bottom = 26
+	handle.offset_bottom = 4 + handle_height
 	handle.mouse_default_cursor_shape = Control.CURSOR_MOVE
 	handle.tooltip_text = "Drag to move this window"
 	# A top-level Control avoids PanelContainer stretching the title handle over buttons.
@@ -1336,6 +1505,7 @@ func _register_window(control: Control, id: String) -> void:
 	handle_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	handle_layer.add_child(handle)
 	handle.gui_input.connect(_begin_drag.bind(control, id))
+	control.set_meta("drag_handle", handle)
 	if window_positions.has(id):
 		control.set_deferred("position", window_positions[id])
 	_clamp_window.call_deferred(control)
@@ -1455,8 +1625,49 @@ func _reset_layout() -> void:
 
 
 func _panel_size(panel_name: String) -> Vector2:
+	if panel_name == "character": return Vector2(380, 500)
+	if panel_name == "settings": return Vector2(520, 430)
+	if panel_name == "actions": return Vector2(300,390)
 	if panel_name == "debug": return Vector2(600, 760)
-	if panel_name == "skills": return Vector2(1120, 720)
+	if panel_name == "skills": return Vector2(560, 560) if game.state.character_class == "Fighter" else Vector2(1120, 720)
 	if panel_name == "inventory": return Vector2(620, 440)
 	if panel_name == "animations": return Vector2(1000,740)
 	return Vector2(820, 640)
+
+
+
+func _build_drag_guides() -> void:
+	drag_guides = preload("res://scripts/ui_drag_guides.gd").new()
+	drag_guides.hud = self
+	drag_guides.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	drag_guides.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	drag_guides.z_index = 100
+	root.add_child(drag_guides)
+
+func _render_character() -> void:
+	overlay_title.text = "Character Status"
+	overlay_subtitle.text = "%s · Level %d · %s %s" % [game.state.character_name, game.state.level, game.state.character_race, game.state.character_class]
+	character_values.clear()
+	for section: Array in [["Vitals", [["hp", "Health"], ["mp", "Mana"], ["xp", "Experience"]]], ["Equipment & combat", [["weapon", "Weapon"], ["power", "Equipment power"], ["attack", "Attack bonus"], ["armor", "Armor mitigation"], ["melee", "Melee bonus"], ["cast", "Cast bonus"], ["support", "Support bonus"]]], ["Progression", [["gold", "Gold"], ["points", "Available skill points"], ["earned", "Lifetime points discovered"]]]]:
+		var card := _panel()
+		overlay_content.add_child(card)
+		var column := _column(card, 12, 10)
+		column.add_child(_label(section[0], 11, GOLD))
+		for entry: Array in section[1]:
+			var row := HBoxContainer.new()
+			column.add_child(row)
+			var label := _label(entry[1], 11, MUTED)
+			label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(label)
+			var value := _label("", 11, TEXT)
+			row.add_child(value)
+			character_values[entry[0]] = value
+	_update_character()
+
+func _update_character() -> void:
+	if current_panel != "character" or character_values.is_empty(): return
+	var s: Node = game.state
+	var mods: Dictionary = s.get_equipment_modifiers()
+	var values := {"hp": "%d / %d" % [s.hp, s.max_hp + mods.max_hp], "mp": "%d / %d" % [s.mana, s.max_mana + mods.max_mana], "xp": "%.2f%%" % (100.0 * s.xp / (s.level * 100)), "weapon": s.weapon_context().capitalize(), "power": "%.1f" % s.get_equipment_power(), "attack": "%+.0f%%" % ((mods.attack_multiplier - 1.0) * 100), "armor": "%.0f%%" % (mods.armor * 100), "melee": "%+.0f%%" % ((mods.melee_multiplier - 1.0) * 100), "cast": "%+.0f%%" % ((mods.cast_multiplier - 1.0) * 100), "support": "%+.0f%%" % ((mods.support_multiplier - 1.0) * 100), "gold": str(s.gold), "points": str(s.skill_points), "earned": "%d / 50" % s.earned_skill_points}
+	for key: String in values:
+		if is_instance_valid(character_values[key]): character_values[key].text = values[key]

@@ -25,6 +25,19 @@ func _run() -> void:
 	for enemy: Node in game.enemies: enemy.set_physics_process(false)
 	hud=game.hud
 	for i in range(5): await process_frame
+	for id: String in ["status", "clock", "chat", "region", "hotbar", "quest"]:
+		check(hud.floating_windows.has(id), id + " participates in shared dragging and snapping")
+	var shortcuts: Control = hud.floating_windows.hotbar
+	var clock: Control = hud.floating_windows.clock
+	shortcuts.global_position = clock.global_position
+	hud.drag_target = shortcuts
+	hud.drag_id = "hotbar"
+	var shortcut_release := InputEventMouseButton.new()
+	shortcut_release.button_index = MOUSE_BUTTON_LEFT
+	hud._input(shortcut_release)
+	check(clear_of(shortcuts, hud.floating_windows.values()), "Hotbar drop settles clear of other HUD windows")
+	check(hud.window_positions.hotbar == shortcuts.position, "Hotbar placement recorded for persistence")
+	check(not shortcuts is PanelContainer, "Movable hotbar remains frameless")
 	for control: Control in hud.floating_windows.values(): control.hide()
 	var status: Control=hud.floating_windows.status
 	var quest: Control=hud.floating_windows.quest
@@ -93,3 +106,4 @@ func _run() -> void:
 	game.queue_free()
 	await process_frame
 	quit(failures)
+

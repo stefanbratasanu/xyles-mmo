@@ -105,6 +105,12 @@ func _physics_process(delta: float) -> void:
 func cast_slot(slot: int) -> bool:
 	if slot < 0 or slot >= game.state.loadout.size() or game.is_dead: return false
 	var id: String = game.state.loadout[slot]
+	if id.is_empty(): return false
+	if id.begins_with("action:"):
+		game.hud._perform_action(id.trim_prefix("action:"))
+		return false
+	if not game.state.is_skill_available(id): game._fail_notice("This class skill is not unlocked."); return false
+	if id=="fighter_bow" and game.state.weapon_context()!="bow": game._fail_notice("Equip a bow to use Bow Attack."); return false
 	if not channel_id.is_empty():
 		if id == channel_id:
 			stop_channel()

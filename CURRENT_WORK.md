@@ -389,3 +389,41 @@ terrain, vegetation and scenery stream in buffered chunks during play.
 - The pulled camp files existed, but this PC lacked Godot's local imported copies for new models, textures and fire assets. Before importing, the world test reported missing `.godot/imported` files and missing scenery/camp; the ordinary gameplay log did not capture those engine-level resource errors. Ran headless import, restoring the camp. A Direct3D camp preview was inspected. The world, baked-integrity and chunk checks produced their pass messages without script/assertion or missing-file errors, but retain the previously documented renderer/resource cleanup diagnostics at exit. A separate scan loaded all 72 scenery cells, 196 terrain tiles, 144 vegetation cells and eight shared vegetation meshes; no missing assets were reported.
 - Use `PLAY XYLES.bat` to start the game on this PC. The launcher checks an asset/source fingerprint and imported output files, runs Godot import and a world-asset check after changes or missing cache files, and refuses to launch on detected import or world-load errors. A no-change start skips import; first use or an update takes longer. The launcher cannot intercept direct Godot launches. Its fingerprint is metadata-based, so it is not a cryptographic check of asset contents, and not every possible runtime error is caught. Launcher source must be committed and pulled to use it on another computer.
 - Verified forced import, unchanged fast path, recovery after temporarily removing an imported camp-model cache file, and an actual 120-frame test-mode launcher start. Import retains the previously documented local editor addon warning and empty-name diagnostic; renderer cleanup diagnostics remain unresolved. The remote-change checker recorded the incoming changes in the implementation log; no incoming game code or world assets were edited.
+
+## In progress: basic attack and sword grip
+
+/attack command added; sword attack grip and end-to-end combat verification remain outstanding.
+
+Basic attack combat test now passes; sword grip remains outstanding.
+
+Per-skill removal now empties one slot and refunds its upgrades; save/reload and re-equipping are covered by tests. Sword grip remains outstanding.
+
+Actions / Human Fighter redesign in progress: F7 Actions and disabled enchantment flags are in place. Human Fighter class redesign, emote animation and reference-quality icon artwork remain unfinished.
+
+Fighter skill-tree request in progress: saved click-to-move option added. Class unlocks, bow weapon and drag/drop remain outstanding.
+
+Fighter milestone definitions added as data only. Skill unlocking, functional bow, draggable hotbar and save migration are still outstanding.
+
+Fighter milestones, level-gated skill view, hotbar assignment and craftable bow prototype are implemented; rendered drag/drop, bow combat and existing-save migration remain to be verified.
+
+All listed Actions accept hotbar drag/drop and persist, with an original dance icon. Automated drop API test passed; mouse-drag visual verification remains outstanding. Social and party actions remain placeholders.
+
+All Actions now have matching pale-blue silhouette icons in the Actions window and hotbar; action and icon-presence tests pass. Small-size visual review is still pending.
+
+Actions and hotbar use original expressive pale-blue icon artwork; the rendered Actions window was reviewed and the action-hotbar test passed.
+
+## 2026-10-28 - Classic UI refresh
+
+Shared metallic frame polish, compact Adventure navigation including Actions, illustrated Fighter milestone cards, compact grouped Actions, XP strip and contextual hotbar guidance implemented. Rendered HUD/Skills/Actions/Inventory inspected at 1600x900. Action-hotbar and Fighter tests pass; legacy enchantment-panel test still assumes enabled enchantments and the former layout and requires a separate fixture update. Existing saved placements are retained; Options > Reset Window Positions restores current defaults.
+
+Status now follows supplied classic reference: compact header, yellow XP percentage, red HP and blue MP with centered values. Rendered and integration checked.
+
+Angled status frame, no bottom spacer, unified 86% panel opacity; clock/chat/region/hotbar now draggable and snapping with saved positions. Expanded HUD snapping and action-hotbar tests pass; rendered layout checked.
+
+2026-10-29: removed Adventure/System Journal HUD, added bottom-right head/Options/window foldout, live character sheet, tabbed Options, diagonal live bar fills and visible snap bounds. Hotbar grip moved right without instruction text. Rendered and corner UI/snapping/action/world tests passed.
+
+## 2026-10-29 - Pull and GitHub Desktop stash reconciliation
+
+- Preserved the pulled AGENTS.md, the incoming world/lighting changes, and the saved local UI, Fighter and action changes. The clock retains its lighting preview and drag registration; Options includes a Graphics tab. The bow and ornate sword visuals coexist.
+- Headless world, action hotbar, corner UI, HUD snapping, basic attack, enemy telegraph and ornate sword checks passed. Existing progression and skill-panel tests assume enabled enchantments, while the saved redesign disabled them. The combat-effects and visual-preview/sound tests assume a populated starting hotbar, while the saved redesign starts with empty slots; they failed and need fixtures reviewed against the intended design.
+- Headless test-mode launch completed. The rendered test launch failed to initialize Direct3D 12, fell back to Vulkan, then crashed with an illegal instruction in the sandbox; graphical play and audio still need verification. The original GitHub Desktop stash remains available.

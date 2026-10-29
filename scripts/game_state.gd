@@ -15,11 +15,14 @@ const SAVE_PATH := "user://xyles_frontier_save.json"
 const CHARACTER_RACES := ["Human", "Orc", "Elf", "Dark Elf", "Dwarf"]
 const CHARACTER_CLASSES := ["Fighter", "Mystic"]
 const EquipmentSlots = preload("res://scripts/equipment_slots.gd")
+const FighterTree = preload("res://scripts/skills/fighter_tree.gd")
+const ACTION_IDS := ["attack","sit","target","party_invite","party_leave","party_find","wave","bow","cheer","dance"]
 const WEAPON_DEFINITIONS := {
 	"sword": {"name":"Ashforged Sword","base_power":15,"icon":"sword","modifier_slot":"weapon"},
 	"greatsword": {"name":"Ashforged Greatsword","base_power":18,"icon":"sword","modifier_slot":"weapon"},
 	"spear": {"name":"Ashforged Spear","base_power":16,"icon":"spear","modifier_slot":"weapon"},
 	"staff": {"name":"Ashforged Staff","base_power":13,"icon":"sword","modifier_slot":"staff"},
+	"bow": {"name":"Ashforged Bow","base_power":14,"icon":"spear","modifier_slot":"weapon"},
 }
 var equipment_schema_version: int = 2
 
@@ -73,12 +76,21 @@ func _init() -> void:
 
 
 func _define_skills() -> void:
+	# Keep the editable catalog intact; derived class skills use independent copies.
+	skill_catalog = skill_catalog.duplicate(true)
+	for pair: Array in [["fighter_cleave","whirl"],["fighter_bow","blade"],["fighter_guard","block"],["fighter_dash","move"],["fighter_cone","melee"]]:
+		var entry: Dictionary=skill_catalog.data.skills[pair[1]].duplicate(true)
+		var milestone: Dictionary=FighterTree.definition(pair[0])
+		entry.name=milestone.name
+		entry["unmodifiable"]=true
+		if pair[0]=="fighter_bow": entry["weapon_required"]="bow"
+		skill_catalog.data.skills[pair[0]]=entry
 	skills.clear()
 	for id: String in skill_catalog.data.skills:
 		var definition: Dictionary = skill_catalog.data.skills[id]
 		skills[id] = {"name": definition.name, "description": str(definition.type).replace("_", " ").capitalize(), "ranks": [0, 0, 0], "investments": 0, "history": [], "evolutions": []}
-	loadout = skill_catalog.data.default_loadout.duplicate()
-	learned_skills = loadout.duplicate()
+	loadout = ["","","","","","","","","",""]
+	learned_skills = skill_catalog.data.default_loadout.duplicate()
 	compiled_skills.clear()
 
 
@@ -210,12 +222,19 @@ func get_quest_text() -> String:
 
 func get_skill_offers(id: String, stage: int) -> Array:
 	if not skills.has(id) or stage < 0 or stage >= 10: return []
+	if skill_catalog.data.skills[id].get("unmodifiable",false): return []
 	var key := "%s:%d" % [id, stage]
 	if not skill_offers.has(key):
 		var equipped: Array = skills[id].evolutions.duplicate(true)
 		if stage < equipped.size(): equipped.remove_at(stage)
-		skill_offers[key] = skill_catalog.offers(id, equipped, hash(str(skill_seed) + key), weapon_context())
-	return skill_offers[key]
+		var rolled: Array = skill_catalog.offers(id, equipped, hash(str(skill_seed) + key), weapon_context())
+		if not rolled.is_empty(): skill_offers[key] = rolled
+		else: return []
+	var visible: Array = []
+	for entry: Dictionary in skill_offers[key]:
+		var entry_id := str(entry.get("id",""))
+		if skill_catalog.data.modifiers.has(entry_id) and skill_catalog.data.modifiers[entry_id].get("enabled",false): visible.append(entry)
+	return visible
 
 func weapon_context() -> String:
 	for item: Dictionary in equipment:
@@ -233,6 +252,8 @@ func item_weapon_type(item: Dictionary) -> String:
 	return "sword"
 
 func can_install(id: String, stage: int, candidate: Dictionary) -> bool:
+	var candidate_id := str(candidate.get("id",""))
+	if candidate_id != "legacy" and (not skill_catalog.data.modifiers.has(candidate_id) or not skill_catalog.data.modifiers[candidate_id].get("enabled",false)): return false
 	if not skills.has(id) or stage < 0 or stage > skills[id].evolutions.size() or stage >= 10: return false
 	var entries: Array = skills[id].evolutions.duplicate(true)
 	if stage < entries.size(): entries[stage] = candidate
@@ -289,7 +310,12 @@ func reset_evolutions() -> int:
 	return refunded
 
 func compiled_skill(id: String) -> Dictionary:
-	if not compiled_skills.has(id): compiled_skills[id] = skill_catalog.compile(id, skills[id].evolutions)
+	if not compiled_skills.has(id):
+		var active: Array = []
+		for entry: Dictionary in skills[id].evolutions:
+			var key := str(entry.get("id",""))
+			if not skill_catalog.data.skills[id].get("unmodifiable",false) and skill_catalog.data.modifiers.has(key) and skill_catalog.data.modifiers[key].get("enabled",false): active.append(entry)
+		compiled_skills[id] = skill_catalog.compile(id, active)
 	return compiled_skills[id]
 
 func get_skill_effects(id: String) -> Dictionary:
@@ -302,18 +328,43 @@ func get_skill_bonus(id: String) -> float:
 func get_unlocked_active_slots() -> int:
 	return 10
 
+func remove_skill(slot: int) -> int:
+	if slot < 0 or slot >= loadout.size(): return -1
+	var id: String = loadout[slot]
+	if id.is_empty() or not skills.has(id): return -1
+	var skill: Dictionary = skills[id]
+	var refunded: int = skill.evolutions.size()
+	skill.evolutions = []
+	skill.history = []
+	skill.ranks = [0, 0, 0]
+	skill.investments = 0
+	loadout[slot] = ""
+	skill_points = mini(earned_skill_points, skill_points + refunded)
+	changed.emit()
+	_notify("%s removed; %d skill points refunded." % [skill.name, refunded])
+	return refunded
+
 func equip_skill(id: String, slot: int) -> bool:
-	if not learned_skills.has(id) or slot < 0 or slot >= 10: return false
+	if not is_skill_available(id) or slot < 0 or slot >= 10: return false
 	var other := loadout.find(id)
 	if other >= 0: loadout[other] = loadout[slot]
 	loadout[slot] = id
 	changed.emit()
 	return true
 
+func is_skill_available(id: String) -> bool:
+	if id.begins_with("action:"): return id.trim_prefix("action:") in ACTION_IDS
+	var milestone: Dictionary=FighterTree.definition(id)
+	if not milestone.is_empty(): return character_class == "Fighter" and level >= int(milestone.level)
+	return learned_skills.has(id) and character_class != "Fighter"
+
+func assign_hotbar(id: String, slot: int) -> bool:
+	return equip_skill(id,slot)
+
 func discover_skill() -> String:
 	var weights: Dictionary = {}
 	for id: String in skill_catalog.data.skills:
-		if not learned_skills.has(id) and skill_catalog.data.skills[id].get("enabled",true): weights[id] = skill_catalog.data.skills[id].acquisition_weight
+		if FighterTree.definition(id).is_empty() and not learned_skills.has(id) and skill_catalog.data.skills[id].get("enabled",true): weights[id] = skill_catalog.data.skills[id].acquisition_weight
 	var id: String = skill_catalog.weighted(weights, rng)
 	if not id.is_empty():
 		learned_skills.append(id)
@@ -369,7 +420,7 @@ func _restore_evolutions(parsed: Dictionary) -> void:
 	if parsed.get("loadout") is Array and parsed.loadout.size() == 10:
 		var seen: Array = []
 		for id: Variant in parsed.loadout:
-			if not learned_skills.has(str(id)) or seen.has(str(id)): break
+			if not str(id).is_empty() and (not (learned_skills.has(str(id)) or is_skill_available(str(id))) or seen.has(str(id))): break
 			seen.append(str(id))
 		if seen.size() == 10: loadout = seen
 	compiled_skills.clear()

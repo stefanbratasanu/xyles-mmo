@@ -54,6 +54,9 @@ func icon(id: String, stage: int = -1) -> Texture2D:
 	return result
 
 func render() -> void:
+	if hud.game.state.character_class == "Fighter":
+		_render_fighter_tree()
+		return
 	var state: Node = hud.game.state
 	hud.overlay_title.text = "Skills & enchantments"
 	hud.overlay_subtitle.text = "10 ACTIVE SLOTS  /  %d POINTS AVAILABLE  /  %d OF 50 DISCOVERED   •   Click a slot number to change its skill" % [state.skill_points, state.earned_skill_points]
@@ -77,8 +80,6 @@ func render() -> void:
 		return
 	for slot in range(state.loadout.size()):
 		var id: String = state.loadout[slot]
-		var data: Dictionary = state.skills[id]
-		var installed: Array = data.evolutions
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
 		hud.overlay_content.add_child(row)
@@ -88,6 +89,16 @@ func render() -> void:
 		var slot_button: Button = hud._button("SLOT %d ▾" % ((slot+1)%10), 10)
 		slot_button.pressed.connect(_loadout_picker.bind(slot))
 		base.add_child(slot_button)
+		if id.is_empty():
+			var empty := _tile(null,56,hud.GOLD_DIM)
+			empty.text = "+"
+			empty.tooltip_text = "Assign a learned skill"
+			empty.pressed.connect(_loadout_picker.bind(slot))
+			base.add_child(empty)
+			base.add_child(hud._label("Empty",10,hud.MUTED))
+			continue
+		var data: Dictionary = state.skills[id]
+		var installed: Array = data.evolutions
 		var skill_button := _tile(icon(str(state.skill_catalog.data.skills[id].icon)), 56, hud.GOLD)
 		skill_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		skill_button.tooltip_text = "%s\n%s\nClick to enchant" % [data.name,data.description]
@@ -96,6 +107,10 @@ func render() -> void:
 		var name_label: Label = hud._label(data.name,10,hud.TEXT)
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		base.add_child(name_label)
+		var remove_button: Button = hud._button("REMOVE",10)
+		remove_button.tooltip_text = "Empty this slot and refund %d skill points. The skill remains learned." % installed.size()
+		remove_button.pressed.connect(_remove_skill.bind(slot))
+		base.add_child(remove_button)
 		var strip: PanelContainer = hud._panel()
 		strip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		strip.add_theme_stylebox_override("panel",hud._style(Color("171511"),hud.GOLD_DIM,1,0))
@@ -128,6 +143,35 @@ func render() -> void:
 			hud.show_notice("Skill catalog reloaded. Saved enchantment rolls are retained.")
 		else: hud.show_notice("Catalog rejected. Check editor validation."))
 	footer.add_child(reload_button)
+
+func _render_fighter_tree() -> void:
+	var state: Node=hud.game.state
+	hud.overlay_title.text="Fighter skill tree"
+	hud.overlay_subtitle.text="Skills unlock automatically by level. Drag an unlocked skill onto the bottom bar."
+	for node: Dictionary in state.FighterTree.SKILLS:
+		var unlocked: bool=state.is_skill_available(node.id)
+		var card: PanelContainer = hud._panel()
+		hud.overlay_content.add_child(card)
+		var margin: MarginContainer = hud._margin(card, 10, 8)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		margin.add_child(row)
+		var tile: Button = _tile(icon(str(state.skill_catalog.data.skills[node.id].icon)), 48, hud.GOLD if unlocked else hud.GOLD_DIM)
+		tile.set_script(preload("res://scripts/skill_drag_button.gd"))
+		tile.disabled=not unlocked
+		if unlocked: tile.drag_payload={"kind":"hotbar","id":node.id}
+		tile.tooltip_text="Drag to the hotbar." if unlocked else "Unlocks at level %d." % node.level
+		row.add_child(tile)
+		var info := VBoxContainer.new()
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(info)
+		info.add_child(hud._label(str(node.name), 13, hud.TEXT if unlocked else hud.MUTED))
+		info.add_child(hud._label("Level %d  ·  %s" % [node.level, "Learned" if unlocked else "Locked"], 10, hud.GOLD if unlocked else hud.MUTED))
+		var description: Label = hud._label(str(state.skills[node.id].description), 10, hud.MUTED)
+		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		info.add_child(description)
+		if unlocked:
+			tile.pressed.connect(func(): hud.show_notice("Drag this skill to a shortcut at the bottom of the screen."))
 
 func _render_debug() -> void:
 	var state: Node=hud.game.state
@@ -218,6 +262,19 @@ func _reset() -> void:
 	hud.show_notice("Reset complete: %d points refunded." % refunded if saved else "Upgrades reset, but saving failed. Check the save folder.")
 	hud.refresh()
 
+func _remove_skill(slot: int) -> void:
+	if not _can_edit(): return
+	var id: String = hud.game.state.loadout[slot]
+	var refunded: int = hud.game.state.remove_skill(slot)
+	if refunded < 0: return
+	if is_instance_valid(picker): picker.hide()
+	if id == "block": hud.game.block_time = 0.0
+	if id == "support": hud.game.support_time = 0.0
+	hud.game.skill_runtime.clear_combat()
+	var saved: bool = hud.game._save_journey()
+	hud.show_notice("Skill removed: %d points refunded." % refunded if saved else "Skill removed, but saving failed.")
+	hud.refresh()
+
 func _new_picker(title: String) -> VBoxContainer:
 	if is_instance_valid(picker):
 		hud.floating_windows.erase("evolution_picker")
@@ -247,6 +304,7 @@ func _choose(id: String, stage: int) -> void:
 	options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(options)
 	var offers: Array = state.get_skill_offers(id,stage)
+	if offers.is_empty(): options.add_child(hud._label("No enchantments are enabled. Enable them in the Skill Distribution editor.",11,hud.MUTED))
 	# Save the offer as soon as it is discovered, including before selection.
 	hud.game._save_journey()
 	for index in range(offers.size()):

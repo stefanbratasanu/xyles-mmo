@@ -99,3 +99,15 @@ Editing /balancing / quest creation tools have to be easy to use, iterate quickl
 For example, the skill enchantments list for staffs has to have all the available enchantments and the e enchantment values in a distribution list where n can increase / decrease the roll chances for that specific enchantment. And adjusting one, autmataticly adjust the others to always add u pto 100 % or a similar system like this without aunty data leak points and safe.
 The quests system has to use the quest example.png example and so on.
 The skill enhancement has to have a sort of  tree-line where yo ucan see each skill’s enchantment. Skills arranged as columns and values arranges as lines sort of look.
+
+Prototype: /attack performs an unupgradeable basic melee hit (0.8 second cooldown, 3.2 m range).
+
+Skills: removing an equipped skill empties its slot and refunds its upgrades; the skill and discovered offers remain available.
+
+Prototype: enchantment definitions are disabled by default, with saved rolls retained. F7 opens the initial Actions window; Human Fighter redesign is ongoing.
+
+Options: click-to-move is a saved control setting; enemy selection remains active.
+
+Fighter prototype: Cleave and Bow Attack unlock at 1, Guard at 2, Dash at 3, Cone Attack at 4; no enchantments. Verification remains in progress.
+
+All Actions entries can be assigned to the hotbar; unimplemented social and party actions report their placeholder status.

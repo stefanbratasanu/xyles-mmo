@@ -420,6 +420,26 @@ func update_equipment(equipment: Array) -> void:
 		weapon_visual.visible = not sitting
 
 func create_weapon_visual(style: String, variant: String = "") -> Node3D:
+	if style=="bow":
+		var bow:=Node3D.new()
+		var material:=StandardMaterial3D.new()
+		material.albedo_color=Color("795638")
+		for side in [-1.0,1.0]:
+			var limb:=MeshInstance3D.new()
+			var mesh:=BoxMesh.new()
+			mesh.size=Vector3(.055,.74,.055)
+			limb.mesh=mesh
+			limb.material_override=material
+			limb.position=Vector3(.13*side,.34*side,0)
+			limb.rotation.z=-.35
+			bow.add_child(limb)
+		var string_mesh:=MeshInstance3D.new()
+		var rope:=BoxMesh.new()
+		rope.size=Vector3(.012,1.38,.012)
+		string_mesh.mesh=rope
+		bow.add_child(string_mesh)
+		bow.position=Vector3(.095,-.008,.039)
+		return bow
 	var scene: PackedScene={"greatsword":GREATSWORD_MODEL,"staff":STAFF_MODEL,"spear":SPEAR_MODEL}.get(style,SWORD_MODEL)
 	if style == "sword" and variant == "ornate_silver_sword":
 		scene = ORNATE_SWORD_MODEL

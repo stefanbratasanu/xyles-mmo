@@ -1,7 +1,7 @@
 extends RefCounted
 ## Per-weapon, per-delivery action presentation. No gameplay effects are previewed.
 const SAVE_PATH := "res://saves/animation_profiles.json"
-const WEAPONS := ["unarmed","sword","greatsword","staff","spear"]
+const WEAPONS := ["unarmed","sword","greatsword","staff","spear","bow"]
 const ATTACK_TYPES := ["melee_cone","melee_area","melee_projectile","cast_cone","cast_area_self","cast_area_target","cast_projectile","cast_projectile_area","channel_ray","channel_projectiles","dash","cast_effect","block"]
 const MOVEMENT := ["idle","run","sprint","walk_forward","walk_back","walk_left","walk_right","jump","fall","land","death"]
 var path := SAVE_PATH

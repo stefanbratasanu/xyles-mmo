@@ -41,6 +41,7 @@ var camera_yaw: float = 0.25
 var camera_pitch: float = 0.68
 var camera_distance: float = 20.0
 var camera_sensitivity: float = 0.0055
+var click_to_move: bool = true
 var camera_reverse_vertical: bool = true
 var master_volume: float = 1.0
 ## Graphics toggles from Settings. Persisted under [graphics] and applied to the
@@ -420,6 +421,7 @@ func _load_settings() -> void:
 	if config.load(SETTINGS_PATH) != OK:
 		return
 	camera_reverse_vertical = bool(config.get_value("camera", "reverse_vertical", true))
+	click_to_move = bool(config.get_value("controls", "click_to_move", true))
 	camera_sensitivity = clampf(float(config.get_value("camera", "sensitivity", camera_sensitivity)), 0.001, 0.015)
 	master_volume = clampf(float(config.get_value("audio", "master_volume", master_volume)), 0.0, 1.0)
 	_load_graphics_settings(config)
@@ -458,6 +460,7 @@ func save_settings() -> void:
 		return
 	var config := ConfigFile.new()
 	config.set_value("camera", "reverse_vertical", camera_reverse_vertical)
+	config.set_value("controls", "click_to_move", click_to_move)
 	config.set_value("camera", "sensitivity", camera_sensitivity)
 	config.set_value("audio", "master_volume", master_volume)
 	_store_graphics_settings(config)
@@ -503,6 +506,7 @@ func _handle_debug_shortcut(key: int) -> bool:
 
 func reset_settings() -> void:
 	camera_reverse_vertical = true
+	click_to_move = true
 	camera_sensitivity = 0.0055
 	master_volume = 1.0
 	glow_enabled = true
@@ -573,7 +577,7 @@ func _world_click(screen_position: Vector2) -> void:
 	if collider.has_method("take_damage") and not collider.dead:
 		target = collider as CharacterBody3D
 		pending_skill = -1
-	else:
+	elif click_to_move:
 		player.destination = result["position"]
 		player.moving_to_click = true
 		pending_skill = -1
@@ -609,6 +613,27 @@ func use_skill(index: int) -> void:
 		if skill_runtime.cast_slot(index):
 			game_log.combat("skill_used", {"skill": str(state.loadout[index]), "mana_after": snappedf(float(state.mana), 0.1), "player_hp": snappedf(float(state.hp), 0.1)})
 		hud.refresh()
+
+func basic_attack() -> void:
+	if is_dead or hud.blocks_gameplay() or skill_runtime == null: return
+	if float(skill_runtime.skill_cooldowns.get("basic_attack",0)) > 0: return
+	if player.sitting:
+		player.stand_up()
+		return
+	if not is_instance_valid(target) or target.dead: target = _nearest_enemy(3.2)
+	if not is_instance_valid(target) or player.global_position.distance_to(target.global_position) > 3.2:
+		_fail_notice("No enemy in basic attack range.")
+		return
+	skill_runtime.stop_channel()
+	skill_runtime.skill_cooldowns["basic_attack"] = 0.8
+	var context: Dictionary = skill_runtime._context("melee")
+	context.skill = "basic_attack"
+	context.compiled = state.skill_catalog.compile("melee", [])
+	context.power = skill_runtime.preview_power("basic_attack", context.compiled)
+	player.face_point(target.global_position)
+	player.attack_animation("melee_cone")
+	skill_runtime.hit(context,target)
+	game_log.combat("basic_attack", {"target": str(target.display_name)})
 
 func _process_pending_skill() -> void:
 	pass

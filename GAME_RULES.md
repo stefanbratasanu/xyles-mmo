@@ -325,3 +325,17 @@ Visual language:
 - The debug window permits gameplay while open. Configurable physical-key shortcuts default to F2 for invulnerability, F3 for restoring vitals and F4 for spawning the selected training minion batch. They are disabled while chat or blocking panels have focus.
 
 - F1 opens or closes the debug menu by default; the key can be changed in the menu. The shortcut is suppressed while chat or blocking panels are active.
+
+- /attack performs a separate, unupgradeable basic melee attack with a 0.8 second cooldown and 3.2 m range.
+
+- In K, REMOVE empties one equipped slot and refunds only that skill's invested points; the skill remains learned and its discovered offers remain saved. Changes require being out of combat.
+
+- Enchantment definitions are disabled by default; disabled effects are inactive and cannot be offered. Existing invested rolls are retained. F7 opens prototype Actions; party and social emotes are placeholders.
+
+- Options can disable click-to-move independently of enemy selection; an active click path stops when disabled.
+
+- Fighter prototype milestones: Cleave and Bow Attack at level 1, Guard at 2, Dash at 3, and Cone Attack at 4. These skills do not support enchantments. Implementation verification is ongoing.
+
+- Every listed Actions entry may be assigned to the hotbar. Party and social entries remain placeholders until their gameplay is implemented.
+
+Interface update 2026-10-29: permanent Adventure and System Journal are removed. Bottom-right head/gear/arrow access Character Status, Options and all windows. Character stats display existing gameplay values only. Dragging exposes snap boundaries; shortcut grip is on the right.

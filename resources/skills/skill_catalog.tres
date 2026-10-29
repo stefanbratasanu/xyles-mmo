@@ -21,7 +21,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Natural expiry of this skill’s own buff restores health. Reset and removal do not count.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_THIS_BUFF_EXPIRED": 1.0
 },
@@ -47,7 +47,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Enlarges all area nodes supplied by this skill and its enchantments; radius scales by square root. No damage increase.",
-"enabled": true,
+"enabled": false,
 "events": {
 "PASSIVE": 1.0
 },
@@ -70,7 +70,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "At the end of your dash, damages nearby enemies. The direct pulse enables on-hit effects.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_FINISH_CAST": 1.0
 },
@@ -95,7 +95,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Receiving this skill's buff grants brief haste. Proc-created buffs cannot recursively activate this.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_BUFF_RECEIVED": 1.0
 },
@@ -123,7 +123,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Two additional targets. Each hop retains 80% of the previous hit; no revisits. Pierce resolves before chain.",
-"enabled": true,
+"enabled": false,
 "events": {
 "PASSIVE": 1.0
 },
@@ -150,7 +150,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Burst at the last successful contact when a chain exhausts its hops or targets. Cannot restart chaining.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_CHAIN_END": 1.0
 },
@@ -174,7 +174,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Successful chain contacts empower later casts.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_CHAIN_HIT": 1.0
 },
@@ -203,7 +203,7 @@ data = {
 "chance_range": [0.2, 0.4],
 "cost_increase": 0.04,
 "description": "An eligible contact can launch a secondary bolt at a different enemy. Projectile count, Pierce and Chain apply; secondary damage cannot create more trigger effects.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_CHAIN_HIT": 20,
 "ON_ENEMY_HIT_THIS_SKILL": 80
@@ -229,7 +229,7 @@ data = {
 "chance_range": [0.2, 0.45],
 "cost_increase": 0.04,
 "description": "An eligible direct contact can release a secondary area burst.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_CHAIN_HIT": 10,
 "ON_ENEMY_HIT_THIS_SKILL": 70,
@@ -256,7 +256,7 @@ data = {
 "chance_range": [0.2, 0.4],
 "cost_increase": 0.04,
 "description": "An eligible contact can grant a stacking skill-power or movement buff.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_CHAIN_HIT": 20,
 "ON_ENEMY_HIT_THIS_SKILL": 80
@@ -286,7 +286,7 @@ data = {
 "chance_range": [0.15, 0.3],
 "cost_increase": 0.04,
 "description": "An eligible contact can leave a damaging field. Each field is bounded by the global field limit.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_ENEMY_HIT_THIS_SKILL": 70,
 "ON_PROJECTILE_LANDED": 30
@@ -314,7 +314,7 @@ data = {
 "chance_range": [0.25, 0.5],
 "cost_increase": 0.04,
 "description": "Healing can send a pulse to other registered allies. The original recipient is excluded.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_ALLY_HIT": 1
 },
@@ -340,7 +340,7 @@ data = {
 "chance_range": [0.2, 0.4],
 "cost_increase": 0.04,
 "description": "A successful roll restores a fraction of actual contact damage over time.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_CRITICAL_HIT": 20,
 "ON_ENEMY_HIT_THIS_SKILL": 80
@@ -369,7 +369,7 @@ data = {
 "chance_range": [0.2, 0.45],
 "cost_increase": 0.04,
 "description": "An eligible event can restore the rolled resource. Shares the recovery allowance for the cast.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_CHAIN_HIT": 20,
 "ON_ENEMY_HIT_THIS_SKILL": 60,
@@ -398,7 +398,7 @@ data = {
 "chance_range": [0.2, 0.45],
 "cost_increase": 0.04,
 "description": "On a successful chance roll, reduce the enemy stat saved on this enchantment.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_CHAIN_HIT": 20,
 "ON_ENEMY_HIT_THIS_SKILL": 80
@@ -429,7 +429,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "A critical direct hit restores mana, once per cast.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_CRITICAL_HIT": 1.0
 },
@@ -455,7 +455,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Extends this skill's timed buffs, debuffs and fields.",
-"enabled": true,
+"enabled": false,
 "events": {
 "PASSIVE": 1.0
 },
@@ -478,7 +478,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Repeats the skill once at reduced power. The echo cannot repeat itself.",
-"enabled": true,
+"enabled": false,
 "events": {
 "PASSIVE": 1.0
 },
@@ -501,7 +501,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Applies to the supported skill. Values are additive fractions: 0.15 = 15%.",
-"enabled": true,
+"enabled": false,
 "events": {
 "PASSIVE": 1.0
 },
@@ -524,7 +524,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "For ten seconds after casting, a successful evade releases a fixed-power burst. Each ward has its own interval.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_SUCCESSFUL_EVADE": 1.0
 },
@@ -550,7 +550,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Natural expiry of this skill's buff restores mana. Consumption, refresh, death and respec do not qualify.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_THIS_BUFF_EXPIRED": 1.0
 },
@@ -576,7 +576,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Increased damage against enemies already weakened before this hit.",
-"enabled": true,
+"enabled": false,
 "events": {
 "PASSIVE": 1.0
 },
@@ -599,7 +599,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Projectile enemy contacts leave a damaging field. Ticks are not hits.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_PROJECTILE_LANDED": 1.0
 },
@@ -625,7 +625,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "While this ward is active, successful blocks emit a fixed-power burst. The interval is shared across mantles.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_BLOCK": 1.0
 },
@@ -651,7 +651,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Successful casts grant movement speed. Recasting refreshes the same buff.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_FINISH_CAST": 1.0
 },
@@ -679,7 +679,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Restores nearby friendly recipients, excluding the original recipient.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_ALLY_HIT": 1.0
 },
@@ -704,7 +704,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Direct hits create a secondary enemy burst. It cannot re-trigger on-hit enchantments.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_ENEMY_HIT_THIS_SKILL": 1.0
 },
@@ -728,7 +728,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "A kill credited to this skill restores health.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_KILL": 1.0
 },
@@ -754,7 +754,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "For ten seconds after casting, death releases one fixed-power burst. Cannot heal, revive or recurse.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_DEATH": 1.0
 },
@@ -780,7 +780,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Each paid emission builds next-emission damage. Extra projectiles do not multiply stacks.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_PROJECTILE_LAUNCHED": 1.0
 },
@@ -808,7 +808,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Recover a fraction of actual hit damage over two seconds; shares the per-cast recovery budget.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_ENEMY_HIT_THIS_SKILL": 1.0
 },
@@ -835,7 +835,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Finishing a cast grants a mantle. Its rolled incoming-hit event releases a burst; secondary damage cannot trigger retaliation.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_HIT_TAKEN": 60.0,
 "ON_MELEE_DAMAGE_RECEIVED": 25.0,
@@ -862,7 +862,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "After healing, grant a ward that restores health when its holder takes an enemy hit.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_HIT_TAKEN": 1.0
 },
@@ -888,7 +888,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Each distinct enemy grants skill damage for future casts. Max five stacks, once per enemy per cast.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_CHAIN_HIT": 0.4,
 "ON_ENEMY_HIT_THIS_SKILL": 1.0
@@ -917,7 +917,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "A short power buff for this skill, including the triggering cast. Damage increases healing and dash distance when appropriate.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_BEGIN_CAST": 1.0
 },
@@ -945,7 +945,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Converts overhealing into a temporary barrier capped at 15% maximum health.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_ALLY_HIT": 1.0
 },
@@ -969,7 +969,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Continues through enemies along the original shot direction before any chain hops.",
-"enabled": true,
+"enabled": false,
 "events": {
 "PASSIVE": 1.0
 },
@@ -992,7 +992,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Applies to the supported skill. Values are additive fractions: 0.15 = 15%.",
-"enabled": true,
+"enabled": false,
 "events": {
 "PASSIVE": 1.0
 },
@@ -1015,7 +1015,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Adds a projectile aimed at a different enemy. Shared per-cast trigger budget.",
-"enabled": true,
+"enabled": false,
 "events": {
 "PASSIVE": 1.0
 },
@@ -1038,7 +1038,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Receiving a new buff from this skill restores its rolled resource. Refreshing the buff does not count.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_BUFF_RECEIVED": 1.0
 },
@@ -1064,7 +1064,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Applies to the supported skill. Values are additive fractions: 0.15 = 15%.",
-"enabled": true,
+"enabled": false,
 "events": {
 "PASSIVE": 1.0
 },
@@ -1087,7 +1087,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Finishing the skill restores a little mana; one recovery budget per cast.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_FINISH_CAST": 1.0
 },
@@ -1113,7 +1113,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Restores mana on a qualifying direct hit, once per cast.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_CHAIN_HIT": 0.5,
 "ON_ENEMY_HIT_THIS_SKILL": 1.0
@@ -1140,7 +1140,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Finishing the skill restores health, bounded by the recovery budget.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_FINISH_CAST": 1.0
 },
@@ -1166,7 +1166,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "When this skill’s buff expires naturally, gain short movement speed. Cannot renew itself.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_THIS_BUFF_EXPIRED": 1.0
 },
@@ -1194,7 +1194,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Applies to the supported skill. Values are additive fractions: 0.15 = 15%.",
-"enabled": true,
+"enabled": false,
 "events": {
 "PASSIVE": 1.0
 },
@@ -1217,7 +1217,7 @@ data = {
 "chance": 1.0,
 "cost_increase": 0.0,
 "description": "Reduces the rolled enemy stat; up to three stacks, strongest source group applies.",
-"enabled": true,
+"enabled": false,
 "events": {
 "ON_ENEMY_HIT_THIS_SKILL": 1.0
 },
