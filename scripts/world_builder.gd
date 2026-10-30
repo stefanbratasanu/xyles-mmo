@@ -164,6 +164,16 @@ var _ridge_detail: FastNoiseLite
 var _terrain_heights: PackedFloat32Array = PackedFloat32Array()
 var _terrain_colors: PackedColorArray = PackedColorArray()
 var _terrain_grid_size: int = 0
+## Optional editor-authored surface. The original analytic world remains the
+## default; an applied draft supplies the same grid used for its collision.
+var editor_terrain: RefCounted = null
+var editor_removed_trees: Dictionary = {}
+var editor_pick_enabled: bool = false
+var editor_static_edits: Dictionary = {}
+var editor_lakes: Array[Dictionary] = []
+var editor_cleared_base: bool = false
+var editor_zone_cells: Dictionary = {}
+var editor_zones: Dictionary = {}
 var _map_cache: ImageTexture
 var _authored_map: Image
 var _tree_points: Array[Vector2] = []
@@ -602,6 +612,8 @@ func _shore_shape(angle: float, phase: float) -> float:
 
 
 func _pond_shore_radius(pond: Dictionary, angle: float) -> float:
+	if bool(pond.get("editor", false)):
+		return float(pond["radius"])
 	return float(pond["radius"]) * _shore_shape(angle, float(pond["phase"]))
 
 
@@ -635,6 +647,9 @@ func _ground_lowest(x: float, z: float, radius: float) -> Vector3:
 ## Height is a pure function of x/z. The render mesh, the collision mesh, every
 ## prop, spawn point and the click-to-move ray all use this one function.
 func height_at(x: float, z: float) -> float:
+	if editor_terrain != null:
+		var edited_height: float = editor_terrain.sample_height(Vector2(x, z))
+		return edited_height if is_finite(edited_height) else 0.0
 	if not _prepared:
 		if _hills == null:
 			_init_noise()
@@ -686,6 +701,8 @@ func height_at(x: float, z: float) -> float:
 ## Height of the rendered/collidable terrain triangles, for ground overlays.
 ## The analytic height field can differ slightly between mesh vertices.
 func surface_height_at(x: float, z: float) -> float:
+	if editor_terrain != null:
+		return height_at(x, z)
 	if _terrain_grid_size < 2 or _terrain_heights.is_empty() or absf(x) > TERRAIN_EXTENT or absf(z) > TERRAIN_EXTENT:
 		return height_at(x, z)
 	var step: float = (TERRAIN_EXTENT * 2.0) / float(TERRAIN_SEGMENTS)
@@ -735,6 +752,11 @@ func zone_at(point: Vector3) -> Dictionary:
 
 
 func zone_at_xz(p: Vector2) -> Dictionary:
+	if not editor_zone_cells.is_empty():
+		var cell := Vector2i(floori(p.x / 4.0), floori(p.y / 4.0))
+		var zone_id: String = editor_zone_cells.get(cell, "")
+		if editor_zones.has(zone_id):
+			return editor_zones[zone_id]
 	var best: Dictionary = zones[0]
 	var best_metric: float = INF
 	for zone: Dictionary in zones:
@@ -743,6 +765,12 @@ func zone_at_xz(p: Vector2) -> Dictionary:
 			best_metric = metric
 			best = zone
 	return best
+
+func display_zones() -> Array[Dictionary]:
+	var result: Array[Dictionary] = zones.duplicate()
+	for zone: Dictionary in editor_zones.values():
+		result.append(zone)
+	return result
 
 
 ## Boundary polygon in world X/Z for the full-screen map.
@@ -764,7 +792,9 @@ func zone_level_text(zone: Dictionary) -> String:
 
 ## Read-only access to the fen pools for the full-screen map.
 func ponds() -> Array[Dictionary]:
-	return _ponds
+	var result: Array[Dictionary] = _ponds.duplicate()
+	result.append_array(editor_lakes)
+	return result
 
 
 ## World-space rectangle shown by the full-screen map. The mountain rim is left
@@ -797,6 +827,7 @@ func _paint_map_image(size: int) -> Image:
 		return null
 	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
 	var bounds := map_bounds()
+	var map_ponds := ponds()
 	var raster_step: float = (TERRAIN_EXTENT * 2.0) / float(count - 1)
 	var light := Vector3(-0.55, 0.72, -0.42).normalized()
 	# Trunk positions become soft density masses, so the painted map shows where
@@ -832,6 +863,9 @@ func _paint_map_image(size: int) -> Image:
 		var gz: float = (z + TERRAIN_EXTENT) / raster_step
 		for px: int in range(size):
 			var x: float = bounds.position.x + (float(px) + 0.5) / float(size) * bounds.size.x
+			if editor_terrain != null and not is_finite(editor_terrain.sample_height(Vector2(x, z))):
+				image.set_pixel(px, py, Color("101819"))
+				continue
 			var gx: float = (x + TERRAIN_EXTENT) / raster_step
 			var base: Color = _sample_color_grid(gx, gz)
 			var h_left: float = _sample_height_grid(gx - 1.0, gz)
@@ -856,7 +890,7 @@ func _paint_map_image(size: int) -> Image:
 			if int(floor(h_here / 4.0)) != int(floor(h_west / 4.0)) \
 					or int(floor(h_here / 4.0)) != int(floor(h_south / 4.0)):
 				base = base.darkened(0.09)
-			for pond: Dictionary in _ponds:
+			for pond: Dictionary in map_ponds:
 				var delta: Vector2 = point - (pond["center"] as Vector2)
 				var distance: float = delta.length()
 				var shore: float = _pond_shore_radius(pond, atan2(delta.y, delta.x))
@@ -1796,7 +1830,7 @@ func _in_pond(p: Vector2, padding: float) -> bool:
 func water_depth_at(x: float, z: float) -> float:
 	var point := Vector2(x, z)
 	var deepest: float = 0.0
-	for pond: Dictionary in _ponds:
+	for pond: Dictionary in ponds():
 		var delta: Vector2 = point - pond["center"]
 		var distance: float = delta.length()
 		if distance > float(pond["radius"]) * 2.0:
@@ -2228,6 +2262,20 @@ func _activate_static_cell(cell: Vector2i, scene: PackedScene) -> void:
 		# Baked scenes auto-rename repeated nodes, but retain the GLB mesh name.
 		if boulder.mesh != null and (str(boulder.name).begins_with("Boulder") or boulder.mesh.resource_name.begins_with("rock_")):
 			_settle_boulder(boulder)
+	for edit: Dictionary in editor_static_edits.get(cell, []):
+		var target := node.get_node_or_null(NodePath(str(edit.get("path", "")))) as Node3D
+		if target == null:
+			continue
+		if bool(edit.get("removed", false)):
+			target.get_parent().remove_child(target)
+			target.queue_free()
+		else:
+			var p: Array = edit["position"]
+			var r: Array = edit["rotation"]
+			var s: Array = edit["scale"]
+			target.position = Vector3(float(p[0]), float(p[1]), float(p[2]))
+			target.rotation = Vector3(float(r[0]), float(r[1]), float(r[2]))
+			target.scale = Vector3(float(s[0]), float(s[1]), float(s[2]))
 	_static_active[cell] = node
 	_refresh_baked_dynamic_nodes()
 	_apply_time_of_day()
@@ -2480,6 +2528,22 @@ func _activate_vegetation_tile(cell: Vector2i, tile: Resource) -> void:
 	var nodes: Array[Node] = []
 	var ray_positions: Array[Vector3] = []
 	for group: Dictionary in tile.groups:
+		var visible_entries: Array = group["entries"]
+		var visible_colors: Array = group["colors"]
+		var original_indices: Array[int] = []
+		var is_tree: bool = str(group["name"]).begins_with("Trees_") or str(group["name"]) == "FoothillPines"
+		var removal_group := "%d,%d:%s" % [cell.x, cell.y, str(group["name"])]
+		var removed_indices: Dictionary = editor_removed_trees.get(removal_group, {})
+		if not removed_indices.is_empty() or (is_tree and editor_pick_enabled):
+			visible_entries = []
+			visible_colors = []
+			for original_index in group["entries"].size():
+				if removed_indices.has(original_index):
+					continue
+				visible_entries.append(group["entries"][original_index])
+				original_indices.append(original_index)
+				if not group["colors"].is_empty():
+					visible_colors.append(group["colors"][original_index])
 		var mesh_path: String = group["mesh_path"]
 		if not _vegetation_meshes.has(mesh_path):
 			_vegetation_meshes[mesh_path] = load(mesh_path)
@@ -2489,21 +2553,21 @@ func _activate_vegetation_tile(cell: Vector2i, tile: Resource) -> void:
 			continue
 		var multimesh := MultiMesh.new()
 		multimesh.transform_format = MultiMesh.TRANSFORM_3D
-		multimesh.use_colors = not group["colors"].is_empty()
+		multimesh.use_colors = not visible_colors.is_empty()
 		multimesh.mesh = mesh
-		multimesh.instance_count = group["entries"].size()
+		multimesh.instance_count = visible_entries.size()
 		for index in range(multimesh.instance_count):
-			multimesh.set_instance_transform(index, group["entries"][index])
+			multimesh.set_instance_transform(index, visible_entries[index])
 			if multimesh.use_colors:
-				multimesh.set_instance_color(index, group["colors"][index])
+				multimesh.set_instance_color(index, visible_colors[index])
 		var node := MultiMeshInstance3D.new()
 		node.name = "%s_%d_%d" % [group["name"], cell.x, cell.y]
 		node.multimesh = multimesh
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if group["shadows"] else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(node)
 		nodes.append(node)
-		if str(group["name"]).begins_with("Trees_") or str(group["name"]) == "FoothillPines":
-			var tree_entries: Array = group["entries"]
+		if is_tree:
+			var tree_entries: Array = visible_entries
 			var step: int = maxi(1, int(ceil(float(tree_entries.size()) / 12.0)))
 			for index in range(0, tree_entries.size(), step):
 				var origin: Vector3 = (tree_entries[index] as Transform3D).origin
@@ -2517,12 +2581,18 @@ func _activate_vegetation_tile(cell: Vector2i, tile: Resource) -> void:
 			# in a dense forest while characters still collide with the trunks.
 			trunk_body.collision_layer = 8
 			trunk_body.add_to_group("tree_trunks")
+			if editor_pick_enabled:
+				trunk_body.set_meta("editor_cell", cell)
+				trunk_body.set_meta("editor_group", str(group["name"]))
 			var shape := CylinderShape3D.new()
 			shape.radius = 0.43
 			shape.height = 3.0
-			for tree_transform: Transform3D in group["entries"]:
+			for index in tree_entries.size():
+				var tree_transform: Transform3D = tree_entries[index]
 				var collision := CollisionShape3D.new()
 				collision.shape = shape
+				if editor_pick_enabled:
+					collision.set_meta("editor_index", original_indices[index])
 				collision.transform = tree_transform * Transform3D(Basis.IDENTITY, Vector3(0.0, 1.4, 0.0))
 				trunk_body.add_child(collision)
 			node.add_child(trunk_body)

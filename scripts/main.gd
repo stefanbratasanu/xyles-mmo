@@ -138,6 +138,23 @@ func _ready() -> void:
 		add_child(world)
 	if world.get_child_count() == 0:
 		world.build()
+	# An editor draft is a separate local snapshot; the original baked world is
+	# always retained. Tests opt in explicitly to avoid using a player's draft.
+	var editor_map: Dictionary = {}
+	if has_meta("editor_map_payload"):
+		editor_map = get_meta("editor_map_payload")
+	elif not test_mode:
+		var editor_store = preload("res://scripts/world_editor/draft_store.gd").new()
+		var published: Dictionary = editor_store.load_published()
+		editor_map = published.get("payload", {})
+	if not editor_map.is_empty() and not bool(editor_map.get("original", false)):
+		var editor_runtime = preload("res://scripts/world_editor/map_runtime.gd")
+		var map_error: String = editor_runtime.apply(world, editor_map)
+		if not map_error.is_empty():
+			game_log.error("editor_map_load_failed", {"reason": map_error})
+			push_error("Could not apply editor map: " + map_error)
+		else:
+			game_log.world("editor_map_loaded", {"placements": editor_map.get("placements", []).size()})
 	if not state.world_session.is_empty():
 		world.day_number = maxi(1, int(state.world_session.get("day", 1)))
 		world.set_time_of_day(float(state.world_session.get("hour", 8.25)))
@@ -309,7 +326,7 @@ func _process(delta: float) -> void:
 	support_time = maxf(0, support_time - delta)
 	if not is_dead:
 		var mods: Dictionary = state.get_equipment_modifiers()
-		in_safe_zone = player.global_position.distance_to(world.camp_position) < 9.0 or player.global_position.distance_to(world.waygate_position) < 9.5
+		in_safe_zone = player.global_position.distance_to(world.camp_position) < 9.0 or (not world.editor_cleared_base and player.global_position.distance_to(world.waygate_position) < 9.5)
 		var in_combat: bool = _in_combat()
 		state.mana = minf(state.max_mana + float(mods["max_mana"]), state.mana + delta * (3.0 if not in_combat else 1.5) * float(mods["mana_regen"]) * (2.3 if in_safe_zone else 1.0))
 		if not in_combat:
@@ -811,7 +828,9 @@ func enemy_defeated(enemy: CharacterBody3D) -> void:
 			target = null
 		enemies.erase(enemy)
 		return
-	state.register_kill(enemy.kind, enemy.display_name)
+	var defeated_zone: Dictionary = world.zone_at(enemy.home)
+	var custom_region := str(defeated_zone.get("id", ""))
+	state.register_kill(enemy.kind, enemy.display_name, custom_region if world.editor_zones.has(custom_region) else "")
 	game_log.combat("enemy_defeated", {"kind": enemy.kind, "name": enemy.display_name, "player_level": int(state.level)})
 	audio.cue("reward")
 	burst(enemy.global_position, Color("d3b87b"), 1.5)
@@ -940,7 +959,7 @@ func interact() -> void:
 	if seat != null and player.sit_on_log(seat):
 		game_log.gameplay("camp_seat_used", {"position": str(seat.global_position)})
 		return
-	if player.position.distance_to(world.waygate_position) < 10.0:
+	if not world.editor_cleared_base and player.position.distance_to(world.waygate_position) < 10.0:
 		game_log.gameplay("waygate_examined", {"sealed": true, "target": "map_ii"})
 		_on_notice("The waygate is sealed. Beyond it lies Map II, which has not been built yet.")
 		return
@@ -1014,7 +1033,7 @@ func _update_region_and_context() -> void:
 	context_hint = ""
 	if _nearby_camp_seat() != null:
 		context_hint = "[ E ]  Sit by the fire  ·  Move to stand"
-	elif player.position.distance_to(world.waygate_position) < 10.0:
+	elif not world.editor_cleared_base and player.position.distance_to(world.waygate_position) < 10.0:
 		context_hint = "[ E ]  Examine the sealed waygate  ·  safe ground"
 	elif player.position.distance_to(smith_position) < 5.5:
 		context_hint = "[ E ]  Speak to Torven, the blacksmith"

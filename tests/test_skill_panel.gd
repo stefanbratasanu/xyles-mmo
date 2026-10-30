@@ -11,6 +11,12 @@ func _run() -> void:
 	root.size=Vector2i(1600,900)
 	var game: Node=load("res://scenes/main.tscn").instantiate()
 	root.add_child(game)
+	# Exercise the retained Mystic enchantment view with an explicit fixture;
+	# the current Fighter starter loadout is empty and enchantments are disabled.
+	game.state.character_class = "Mystic"
+	game.state.loadout = game.state.skill_catalog.data.default_loadout.duplicate()
+	for id: String in game.state.skill_catalog.data.modifiers:
+		game.state.skill_catalog.data.modifiers[id]["enabled"] = true
 	game.state.earned_skill_points=50; game.state.skill_points=50
 	for stage in range(10): check(game.state.install_evolution("melee",stage,0),"Melee stage "+str(stage))
 	for stage in range(5): check(game.state.install_evolution("cast",stage,0),"Cast stage "+str(stage))

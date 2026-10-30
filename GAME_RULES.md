@@ -363,3 +363,10 @@ Visual language:
 - Every listed Actions entry may be assigned to the hotbar. Party and social entries remain placeholders until their gameplay is implemented.
 
 Interface update 2026-10-29: permanent Adventure and System Journal are removed. Bottom-right head/gear/arrow access Character Status, Options and all windows. Character stats display existing gameplay values only. Dragging exposes snap boundaries; shortcut grip is on the right.
+
+## 10. Local world-editor drafts
+
+- The separate world editor saves drafts locally. Only an explicit Apply to Game selects a snapshot for the next game start; subsequent draft saves do not update the applied snapshot. The original authored map remains available for restoration.
+- A painted custom zone has a stable ID, name, classification and level range. Within its painted cells it overrides the original region lookup; existing enemy spawn slots in that area use its level band, and first bestiary discoveries use that zone's ID. The existing 50-point lifetime cap and category awards are unchanged.
+- Starter, Enemy and Neutral classifications do not independently relocate player spawns or create mobs. New mob species and their spawn time and map/biome remain subject to the approval and documentation rule above.
+- Clearing a draft removes its terrain, roads, lakes and scenery, not the game's existing gameplay spawn definitions. Applying a draft with missing ground at a required player, NPC or enemy spawn is rejected.

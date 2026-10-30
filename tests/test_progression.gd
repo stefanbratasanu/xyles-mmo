@@ -39,6 +39,13 @@ func _same_saved_value(a: Variant, b: Variant) -> bool:
 	return typeof(a) == typeof(b) and a == b
 
 
+func _enable_enchantments_for_test(state: Node) -> void:
+	# The Fighter redesign disables enchantments in the shipped catalog. These
+	# two tests explicitly exercise the retained evolution and save machinery.
+	for id: String in state.skill_catalog.data.modifiers:
+		state.skill_catalog.data.modifiers[id]["enabled"] = true
+
+
 func _test_bestiary() -> void:
 	var state = GameState.new()
 	state.register_kill("normal", "Briarwolf")
@@ -57,6 +64,7 @@ func _test_bestiary() -> void:
 
 func _test_evolutions() -> void:
 	var state = GameState.new()
+	_enable_enchantments_for_test(state)
 	state.earned_skill_points = 20
 	state.skill_points = 20
 	for stage in range(10):
@@ -117,11 +125,13 @@ func _test_crafting_and_death() -> void:
 
 func _test_save_round_trip() -> void:
 	var state = GameState.new()
+	_enable_enchantments_for_test(state)
 	state.register_kill("normal", "Briarwolf")
 	state.start_quest()
 	state.install_evolution("cast", 0, 1)
 	_check(state.save_game("res://.godot/xyles_test_save.json"), "Save should write successfully")
 	var restored = GameState.new()
+	_enable_enchantments_for_test(restored)
 	_check(restored.load_game("res://.godot/xyles_test_save.json"), "Save should reload successfully")
 	_check(restored.earned_skill_points == 2 and restored.skill_points == 1, "Save must preserve earned and unspent points")
 	_check(_same_saved_value(restored.skills["cast"]["evolutions"], state.skills["cast"]["evolutions"]), "Save must preserve individual evolution choices")

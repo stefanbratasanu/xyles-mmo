@@ -107,11 +107,12 @@ func _draw() -> void:
 	var boss_at: Vector2 = _map_point(Vector2(boss.x, boss.z))
 	_draw_diamond(boss_at, Color("b8645c"), "")
 	_centered_text(font, boss_at + Vector2(0.0, -20.0), "REGENT", 9, Color(0.78, 0.72, 0.62, 0.9))
-	_draw_gate(_map_point(Vector2(gate.x, gate.z)), font)
+	if not world.editor_cleared_base:
+		_draw_gate(_map_point(Vector2(gate.x, gate.z)), font)
 
 	# Zone name plates sit on the land they describe, with a plate so the text
 	# stays readable over forest or rock.
-	for zone: Dictionary in world.zones:
+	for zone: Dictionary in world.display_zones():
 		var center: Vector2 = _map_point(zone["center"])
 		_label_plate(font, center + Vector2(0.0, -6.0), str(zone["name"]), 13, Color(0.95, 0.92, 0.84, 1.0))
 		_label_plate(font, center + Vector2(0.0, 12.0), world.zone_level_text(zone), 9, Color(0.80, 0.75, 0.62, 1.0))
@@ -152,7 +153,12 @@ func _draw_side_panels(font: Font, scale_value: float) -> void:
 	var top: float = _map_rect.position.y + 18.0
 	draw_string(font, Vector2(left_x, top), "REGIONS", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.64, 0.68, 0.58, 1.0))
 	var row_y: float = top + 26.0
-	for zone: Dictionary in world.zones:
+	var region_list: Array[Dictionary] = world.display_zones()
+	for index in region_list.size():
+		var zone: Dictionary = region_list[index]
+		if row_y > _map_rect.end.y - 20.0:
+			draw_string(font, Vector2(left_x + 18.0, row_y), "+%d more" % (region_list.size() - index), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.66, 0.66, 0.56, 0.9))
+			break
 		var ground: Color = (zone["ground"] as Color).lightened(0.22)
 		draw_circle(Vector2(left_x + 5.0, row_y - 4.0), 5.0, ground)
 		draw_arc(Vector2(left_x + 5.0, row_y - 4.0), 5.0, 0.0, TAU, 12, Color(0.86, 0.82, 0.70, 0.65), 1.0, true)
@@ -174,8 +180,9 @@ func _draw_side_panels(font: Font, scale_value: float) -> void:
 		Vector2(right_x + 5.0, legend_y + 2.0), Vector2(right_x - 1.0, legend_y - 4.0)]), Color("b8645c"))
 	draw_string(font, Vector2(right_x + 18.0, legend_y), "boss · REGENT", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.78, 0.77, 0.68, 1.0))
 	legend_y += 22.0
-	draw_arc(Vector2(right_x + 5.0, legend_y - 4.0), 6.0, 0.0, TAU, 16, Color("79c3b5"), 2.0, true)
-	draw_string(font, Vector2(right_x + 18.0, legend_y), "waygate · sealed", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.78, 0.77, 0.68, 1.0))
+	if not world.editor_cleared_base:
+		draw_arc(Vector2(right_x + 5.0, legend_y - 4.0), 6.0, 0.0, TAU, 16, Color("79c3b5"), 2.0, true)
+		draw_string(font, Vector2(right_x + 18.0, legend_y), "waygate · sealed", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.78, 0.77, 0.68, 1.0))
 
 	# Compass and scale bar.
 	var compass := Vector2(right_x + 42.0, _map_rect.end.y - 108.0)

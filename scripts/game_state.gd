@@ -137,12 +137,13 @@ func start_quest() -> void:
 	changed.emit()
 
 
-func register_kill(kind: String, monster_name: String) -> void:
+func register_kill(kind: String, monster_name: String, region_override: String = "") -> void:
 	if not CATEGORY_POINTS.has(kind):
 		return
-	var key := current_region + ":" + kind
+	var region := current_region if region_override.is_empty() else region_override
+	var key := region + ":" + kind
 	var entry: Dictionary = bestiary.get(key, {
-		"region": current_region, "category": kind, "kills": 0,
+		"region": region, "category": kind, "kills": 0,
 		"name": monster_name, "discovered": false, "points_awarded": 0,
 	})
 	entry["kills"] = int(entry["kills"]) + 1

@@ -111,3 +111,5 @@ Options: click-to-move is a saved control setting; enemy selection remains activ
 Fighter prototype: Cleave and Bow Attack unlock at 1, Guard at 2, Dash at 3, Cone Attack at 4; no enchantments. Verification remains in progress.
 
 All Actions entries can be assigned to the hotbar; unimplemented social and party actions report their placeholder status.
+
+Local world editor: drafts are saved separately from the explicitly applied local-game snapshot. Painted custom zones carry a stable ID, classification and level range; existing spawn slots in the zone use its level band and discoveries use the zone ID. Zone classification does not automatically create mobs or move the player spawn. Existing mob spawn rules and the lifetime skill-point cap remain in force.
