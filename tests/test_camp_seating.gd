@@ -9,6 +9,18 @@ func run() -> void:
 	game.test_mode = true
 	root.add_child(game)
 	await process_frame
+	var model_id := "human_male"
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--model="):
+			model_id = argument.trim_prefix("--model=")
+			var manifest = JSON.parse_string(FileAccess.get_file_as_string("res://resources/characters/race_models.json"))
+			var found := false
+			for model in manifest.models:
+				if model.id == model_id:
+					assert(model.status == "reviewed", "Seat test needs an installed model")
+					game.player.apply_character_appearance({}, model.race, model.gender)
+					found = true
+			assert(found, "Unknown seat test model")
 	var world = game.world
 	var camp: Node3D = world.find_child("SurvivorCamp", true, false)
 	assert(camp != null)
@@ -85,7 +97,7 @@ func run() -> void:
 		game._update_camera(1.0)
 		for i in range(15):
 			await process_frame
-		root.get_texture().get_image().save_png("res://screenshots/camp_seating_test.png")
+		root.get_texture().get_image().save_png("res://logs/race_build/camp_seating_" + model_id + ".png")
 	var event := InputEventKey.new()
 	event.physical_keycode = KEY_W
 	event.pressed = true
@@ -103,5 +115,5 @@ func run() -> void:
 	assert(absf(standing_local.x - seated_local.x) < 0.1 and absf(standing_local.z - seated_local.z) < 0.1, "Standing must finish at the seat, not the old starting position")
 	game.queue_free()
 	await process_frame
-	print("CAMP SEATING: PASS")
+	print("CAMP SEATING: PASS ", model_id)
 	quit()

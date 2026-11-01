@@ -149,9 +149,13 @@ func render() -> void:
 func _render_fighter_tree() -> void:
 	var state: Node=hud.game.state
 	hud.overlay_title.text="Fighter skill tree"
-	hud.overlay_subtitle.text="Skills unlock automatically by level. Drag an unlocked skill onto the bottom bar."
+	hud.overlay_subtitle.text="Learn available skills from Torven in Emberfall Camp [E]. Drag learned skills onto the bottom bar."
+	var shown := 0
 	for node: Dictionary in state.FighterTree.SKILLS:
 		var unlocked: bool=state.is_skill_available(node.id)
+		if not unlocked: continue
+		shown += 1
+		var status: String = state.class_skill_status(str(node.id))
 		var card: PanelContainer = hud._panel()
 		hud.overlay_content.add_child(card)
 		var margin: MarginContainer = hud._margin(card, 10, 8)
@@ -162,14 +166,14 @@ func _render_fighter_tree() -> void:
 		tile.set_script(preload("res://scripts/skill_drag_button.gd"))
 		tile.disabled=not unlocked
 		if unlocked: tile.drag_payload={"kind":"hotbar","id":node.id}
-		tile.tooltip_text="Drag to the hotbar." if unlocked else "Unlocks at level %d." % node.level
+		tile.tooltip_text="Drag to the hotbar." if unlocked else "Required level %d. Learn from Torven in Emberfall Camp." % node.level
 		if unlocked: tile.set_meta("skill_tooltip_bbcode", hud.skill_description_bbcode(str(node.id)))
 		row.add_child(tile)
 		var info := VBoxContainer.new()
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(info)
 		info.add_child(hud._label(str(node.name), 13, hud.TEXT if unlocked else hud.MUTED))
-		info.add_child(hud._label("Level %d  ·  %s" % [node.level, "Learned" if unlocked else "Locked"], 10, hud.GOLD if unlocked else hud.MUTED))
+		info.add_child(hud._label("Required level %d  ·  %s" % [node.level, status], 10, hud.GOLD if status != "Locked" else hud.MUTED))
 		var description := RichTextLabel.new()
 		description.bbcode_enabled = true
 		description.fit_content = true
@@ -179,6 +183,8 @@ func _render_fighter_tree() -> void:
 		info.add_child(description)
 		if unlocked:
 			tile.pressed.connect(func(): hud.show_notice("Drag this skill to a shortcut at the bottom of the screen."))
+	if shown == 0:
+		hud.overlay_content.add_child(hud._label("No skills learned yet. Speak to Torven in Emberfall Camp [E].", 12, hud.MUTED))
 
 func _render_debug() -> void:
 	var state: Node=hud.game.state

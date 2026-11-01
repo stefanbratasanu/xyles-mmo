@@ -48,13 +48,13 @@ func _run() -> void:
 	assert(float(game.skill_runtime.skill_cooldowns.get(game.state.loadout[2], 0.0)) > 0.0)
 	game.hud._start_debug_rebind("heal")
 	var rebind := InputEventKey.new()
-	rebind.physical_keycode = KEY_F7
+	rebind.physical_keycode = KEY_P
 	rebind.pressed = true
 	assert(game.hud._capture_debug_key(rebind))
-	assert(game.debug_keys["heal"] == KEY_F7)
-	assert(not game.set_debug_key("spawn", KEY_F7))
+	assert(game.debug_keys["heal"] == KEY_P)
+	assert(not game.set_debug_key("spawn", KEY_P))
 	assert(not game.set_debug_key("spawn", KEY_W))
-	assert(not game.set_debug_key("panel", KEY_F7))
+	assert(not game.set_debug_key("panel", KEY_P))
 	game.hud._start_debug_rebind("panel")
 	var panel_rebind := InputEventKey.new()
 	panel_rebind.physical_keycode = KEY_F11
@@ -73,12 +73,12 @@ func _run() -> void:
 	config.set_value("debug_keys", "heal", KEY_W)
 	game._load_debug_keys(config)
 	assert(game.debug_keys["heal"] == KEY_F11)
-	assert(game.set_debug_key("heal", KEY_F7))
+	assert(game.set_debug_key("heal", KEY_P))
 	var old_config := ConfigFile.new()
 	old_config.set_value("debug_keys", "heal", KEY_F1)
 	game._load_debug_keys(old_config)
 	assert(game.debug_keys["heal"] == KEY_F1 and game.debug_keys["panel"] != KEY_F1)
-	game.debug_keys = {"invulnerable": KEY_F2, "heal": KEY_F7, "spawn": KEY_F4, "panel": KEY_F1}
+	game.debug_keys = {"invulnerable": KEY_F2, "heal": KEY_P, "spawn": KEY_F4, "panel": KEY_F1}
 	game.state.hp = 5.0
 	game._unhandled_input(rebind)
 	assert(game.state.hp >= game.state.max_hp)

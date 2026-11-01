@@ -6,6 +6,36 @@ class_name XylesGameState
 signal changed
 signal notice(message: String)
 
+# Transient combat readiness: never serialized into a character save.
+const WEAPON_TRANSITION_SECONDS := 1.0
+var sprint_active := false
+var sprint_weapon_phase := "drawn"
+var sprint_weapon_remaining := 0.0
+
+func reset_sprint_weapon() -> void:
+	sprint_active = false
+	sprint_weapon_phase = "drawn"
+	sprint_weapon_remaining = 0.0
+
+func update_sprint_weapon(delta: float, sprinting: bool, armed: bool) -> void:
+	sprint_active = sprinting
+	if not armed:
+		sprint_weapon_phase = "drawn"
+		sprint_weapon_remaining = 0.0
+		return
+	if sprint_active:
+		sprint_weapon_phase = "sheathed"
+		sprint_weapon_remaining = 0.0
+	elif sprint_weapon_phase == "sheathed":
+		sprint_weapon_phase = "drawing"
+		sprint_weapon_remaining = WEAPON_TRANSITION_SECONDS
+	elif sprint_weapon_phase == "drawing":
+		sprint_weapon_remaining = maxf(0, sprint_weapon_remaining - delta)
+		if sprint_weapon_remaining == 0: sprint_weapon_phase = "drawn"
+
+func sprint_blocks_combat() -> bool:
+	return sprint_active or sprint_weapon_phase != "drawn"
+
 const MAX_LIFETIME_SKILL_POINTS := 50
 const MAX_SKILL_EVOLUTIONS := 10
 const CATEGORY_POINTS := {"normal": 2, "quest": 5, "boss": 3}
@@ -13,6 +43,7 @@ const MODIFIER_CATALOG_PATH := "res://resources/modifiers/modifier_catalog.tres"
 const CRAFT_MULTIPLIERS := {"basic": 1.0, "rare": 1.5, "epic": 2.2, "legendary": 3.2}
 const SAVE_PATH := "user://xyles_frontier_save.json"
 const CHARACTER_RACES := ["Human", "Orc", "Elf", "Dark Elf", "Dwarf"]
+const CHARACTER_GENDERS := ["Male", "Female"]
 const CHARACTER_CLASSES := ["Fighter", "Mystic"]
 const EquipmentSlots = preload("res://scripts/equipment_slots.gd")
 const FighterTree = preload("res://scripts/skills/fighter_tree.gd")
@@ -35,7 +66,9 @@ var compiled_skills: Dictionary = {}
 var modifier_catalog: ModifierCatalog = preload("res://resources/modifiers/modifier_catalog.tres")
 var character_name: String = "Wayfarer"
 var character_race: String = "Human"
+var character_gender: String = "Male"
 var character_class: String = "Fighter"
+var character_appearance: Dictionary = {}
 
 var hp: float = 120.0
 var max_hp: float = 120.0
@@ -172,7 +205,7 @@ func register_kill(kind: String, monster_name: String) -> void:
 		max_hp += 8.0
 		max_mana += 4.0
 		hp = minf(hp + 25.0, max_hp)
-		_notify("Level %d · Vitality increased. Active slot milestone: level 5." % level)
+		_notify("Level %d · Vitality increased.%s" % [level, " Visit Torven in Emberfall Camp to learn available class skills." if character_class == "Fighter" else ""])
 	if kind == "boss":
 		var relic := _make_item("Crownfall Greatblade", "legendary", "weapon", 32, 100.0)
 		inventory.append(relic)
@@ -355,8 +388,20 @@ func equip_skill(id: String, slot: int) -> bool:
 func is_skill_available(id: String) -> bool:
 	if id.begins_with("action:"): return id.trim_prefix("action:") in ACTION_IDS
 	var milestone: Dictionary=FighterTree.definition(id)
-	if not milestone.is_empty(): return character_class == "Fighter" and level >= int(milestone.level)
+	if not milestone.is_empty(): return character_class == "Fighter" and level >= int(milestone.level) and learned_skills.has(id)
 	return learned_skills.has(id) and character_class != "Fighter"
+
+func class_skill_status(id: String) -> String:
+	var definition: Dictionary = FighterTree.definition(id)
+	if definition.is_empty() or character_class != "Fighter" or level < int(definition.level): return "Locked"
+	return "Learned" if learned_skills.has(id) else "Available"
+
+func learn_class_skill(id: String) -> bool:
+	if class_skill_status(id) != "Available": return false
+	learned_skills.append(id)
+	changed.emit()
+	_notify("Learned %s. Open Class skills [K] and drag it onto a shortcut." % FighterTree.definition(id).name)
+	return true
 
 func assign_hotbar(id: String, slot: int) -> bool:
 	return equip_skill(id,slot)
@@ -418,6 +463,12 @@ func _restore_evolutions(parsed: Dictionary) -> void:
 		for id: Variant in parsed.learned_skills:
 			if skills.has(str(id)) and not learned_skills.has(str(id)): learned_skills.append(str(id))
 	if parsed.get("loadout") is Array and parsed.loadout.size() == 10:
+		# Existing equipped milestone skills were usable before trainer learning.
+		# Preserve those assignments without granting every eligible future skill.
+		for saved_id: Variant in parsed.loadout:
+			var milestone: Dictionary = FighterTree.definition(str(saved_id))
+			if not milestone.is_empty() and character_class == "Fighter" and level >= int(milestone.level) and not learned_skills.has(str(saved_id)):
+				learned_skills.append(str(saved_id))
 		var seen: Array = []
 		for id: Variant in parsed.loadout:
 			if not str(id).is_empty() and (not (learned_skills.has(str(id)) or is_skill_available(str(id))) or seen.has(str(id))): break
@@ -668,7 +719,7 @@ func save_game(path: String = SAVE_PATH) -> bool:
 	for id: String in skills:
 		ranks[id] = skills[id]["ranks"]
 		histories[id] = skills[id]["history"]
-	file.store_string(JSON.stringify({"version": 1, "character_name": character_name, "character_race": character_race, "character_class": character_class, "level": level, "xp": xp,
+	file.store_string(JSON.stringify({"version": 1, "character_name": character_name, "character_race": character_race, "character_gender": character_gender, "character_class": character_class, "character_appearance": character_appearance, "level": level, "xp": xp,
 		"gold": gold, "wood": wood, "iron": iron, "hp": hp, "max_hp": max_hp,
 		"mana": mana, "max_mana": max_mana, "skill_points": skill_points,
 		"earned_skill_points": earned_skill_points, "skill_ranks": ranks, "skill_histories": histories,
@@ -703,8 +754,11 @@ func load_game(path: String = SAVE_PATH) -> bool:
 			return false
 	_define_skills()
 	_define_quests()
+	character_appearance = normalize_appearance(parsed.get("character_appearance", {}))
 	character_name = str(parsed.get("character_name", "Wayfarer")).strip_edges().left(24)
 	if character_name.is_empty(): character_name = "Wayfarer"
+	character_gender = str(parsed.get("character_gender", "Male"))
+	if character_gender not in CHARACTER_GENDERS: character_gender = "Male"
 	character_race = str(parsed.get("character_race", "Human"))
 	if character_race not in CHARACTER_RACES: character_race = "Human"
 	character_class = str(parsed.get("character_class", "Fighter"))
@@ -849,3 +903,10 @@ func _evolution_save() -> Dictionary:
 	var result: Dictionary = {}
 	for id: String in skills: result[id] = skills[id].evolutions
 	return result
+
+static func normalize_appearance(value: Variant) -> Dictionary:
+	if not value is Dictionary or value.is_empty(): return {}
+	return {"revision": 1, "body_size": _appearance_level(value.get("body_size"), 2), "muscularity": _appearance_level(value.get("muscularity"), 3)}
+
+static func _appearance_level(value: Variant, fallback: int) -> int:
+	return clampi(int(value), 0, 4) if value is int or value is float else fallback

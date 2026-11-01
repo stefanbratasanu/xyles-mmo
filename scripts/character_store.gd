@@ -53,15 +53,17 @@ func list_characters() -> Array[Dictionary]:
 		if not parsed is Dictionary or int(parsed.get("version", 0)) != 1:
 			results.append({"path": path, "valid": false, "name": "Unreadable save"})
 			continue
-		results.append({"path": path, "valid": true, "name": str(parsed.get("character_name", "Wayfarer")), "race": str(parsed.get("character_race", "Human")), "class": str(parsed.get("character_class", "Fighter")), "level": maxi(1, int(parsed.get("level", 1))), "legacy": path == legacy_path})
+		results.append({"path": path, "valid": true, "name": str(parsed.get("character_name", "Wayfarer")), "race": str(parsed.get("character_race", "Human")), "gender": str(parsed.get("character_gender", "Male")), "class": str(parsed.get("character_class", "Fighter")), "level": maxi(1, int(parsed.get("level", 1))), "legacy": path == legacy_path})
 	return results
 
-func create_character(character_name: String, race: String, character_class: String) -> Dictionary:
+func create_character(character_name: String, race: String, character_class: String, appearance: Dictionary = {}, gender: String = "Male") -> Dictionary:
 	var clean_name := character_name.strip_edges()
 	if clean_name.is_empty() or clean_name.length() > 24 or clean_name.contains("\n") or clean_name.contains("\r"):
 		return {"error": "Enter a name between 1 and 24 characters."}
 	if race not in State.CHARACTER_RACES or character_class not in State.CHARACTER_CLASSES:
 		return {"error": "Choose a valid race and class."}
+	if gender not in State.CHARACTER_GENDERS:
+		return {"error": "Choose a valid model."}
 	for entry: Dictionary in list_characters():
 		if entry.get("valid", false) and str(entry.name).to_lower() == clean_name.to_lower():
 			return {"error": "A character with that name already exists."}
@@ -77,7 +79,9 @@ func create_character(character_name: String, race: String, character_class: Str
 	var state := State.new()
 	state.character_name = clean_name
 	state.character_race = race
+	state.character_gender = gender
 	state.character_class = character_class
+	state.character_appearance = State.normalize_appearance(appearance)
 	var saved := state.save_game(path)
 	state.free()
 	if not saved: return {"error": "Could not save the new character."}

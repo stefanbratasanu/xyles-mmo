@@ -7,7 +7,7 @@
 [ext_resource type="Script" uid="uid://bndow7tfqlhx7" path="res://scripts/combat_effects.gd" id="6_trceg"]
 [ext_resource type="Script" uid="uid://cvc6y8njvh0lc" path="res://scripts/game_hud.gd" id="7_a8y0u"]
 [ext_resource type="Script" uid="uid://b5sjob6of2ff7" path="res://scripts/audio_director.gd" id="8_jkv2x"]
-[ext_resource type="PackedScene" path="res://assets/animations/player_runtime/character.tscn" id="9_player_character"]
+[ext_resource type="PackedScene" path="res://assets/models/characters/races/human_male/character.tscn" id="9_player_character"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_0isci"]
 radius = 0.34

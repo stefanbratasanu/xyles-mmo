@@ -153,6 +153,7 @@ func _ready() -> void:
 		player.name = "Player"
 		add_child(player)
 	player.game = self
+	player.apply_character_appearance(state.character_appearance, state.character_race, state.character_gender)
 	var spawn_at: Vector3 = world.player_spawn + Vector3(0.4, 0.0, 0.6)
 	player.position = Vector3(spawn_at.x, world.height_at(spawn_at.x, spawn_at.z) + 0.15, spawn_at.z)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -441,7 +442,7 @@ func _load_debug_keys(config: ConfigFile) -> void:
 	# Existing settings may already use F1 for another action. Preserve them and
 	# choose an unused default for the newly introduced panel shortcut.
 	if not config.has_section_key("debug_keys", "panel"):
-		for candidate: int in [KEY_F1, KEY_F7, KEY_F11, KEY_G, KEY_J]:
+		for candidate: int in [KEY_F1, KEY_F11, KEY_G, KEY_J]:
 			if candidate not in [saved_keys["invulnerable"], saved_keys["heal"], saved_keys["spawn"]]:
 				saved_keys["panel"] = candidate
 				break
@@ -477,7 +478,7 @@ func _store_graphics_settings(config: ConfigFile) -> void:
 
 func _debug_key_available(key: int) -> bool:
 	if key == KEY_NONE or (key >= KEY_0 and key <= KEY_9): return false
-	return key not in [KEY_W, KEY_A, KEY_S, KEY_D, KEY_X, KEY_E, KEY_TAB, KEY_K, KEY_B, KEY_I, KEY_C, KEY_H, KEY_O, KEY_M, KEY_F5, KEY_F6, KEY_F8, KEY_F9, KEY_F10, KEY_F12, KEY_ENTER, KEY_KP_ENTER, KEY_ESCAPE, KEY_SPACE, KEY_SHIFT, KEY_CTRL, KEY_ALT, KEY_META]
+	return key not in [KEY_W, KEY_A, KEY_S, KEY_D, KEY_X, KEY_E, KEY_TAB, KEY_K, KEY_B, KEY_I, KEY_C, KEY_H, KEY_O, KEY_M, KEY_F5, KEY_F6, KEY_F7, KEY_F8, KEY_F9, KEY_F10, KEY_F12, KEY_ENTER, KEY_KP_ENTER, KEY_ESCAPE, KEY_SPACE, KEY_SHIFT, KEY_CTRL, KEY_ALT, KEY_META]
 
 func set_debug_key(action: String, key: int) -> bool:
 	if not debug_keys.has(action) or not _debug_key_available(key): return false
@@ -489,6 +490,7 @@ func set_debug_key(action: String, key: int) -> bool:
 	return true
 
 func _handle_debug_shortcut(key: int) -> bool:
+	if key in [KEY_F6, KEY_F7]: return false
 	if key == int(debug_keys["panel"]):
 		hud.toggle_panel("debug")
 	elif key == int(debug_keys["invulnerable"]):
@@ -616,6 +618,9 @@ func use_skill(index: int) -> void:
 
 func basic_attack() -> void:
 	if is_dead or hud.blocks_gameplay() or skill_runtime == null: return
+	if state.sprint_blocks_combat() or player.wants_to_sprint():
+		_fail_notice("Finish sprinting and drawing your weapon before attacking.")
+		return
 	if float(skill_runtime.skill_cooldowns.get("basic_attack",0)) > 0: return
 	if player.sitting:
 		player.stand_up()
@@ -943,7 +948,7 @@ func interact() -> void:
 			state.restore()
 		else:
 			state.start_quest()
-			hud.toggle_panel("forge")
+		hud._switch_panel("npc_dialogue")
 		return
 	for resource: Dictionary in gather_nodes:
 		if float(resource["timer"]) <= 0 and player.position.distance_to(resource["node"].position) < 3.0:
@@ -958,6 +963,21 @@ func interact() -> void:
 			game_log.gameplay("resource_gathered", {"type": resource["type"], "amount": 35, "wood": state.wood, "iron": state.iron})
 			return
 	_fail_notice("Move closer to a camp seat, the blacksmith, a resource deposit, or dropped equipment.")
+
+func trainer_in_range() -> bool:
+	return not is_dead and player.position.distance_to(smith_position) < 5.5
+
+func learn_from_trainer(id: String) -> bool:
+	if not trainer_in_range():
+		_fail_notice("Speak to Torven in Emberfall Camp to learn skills.")
+		return false
+	if _in_combat():
+		_fail_notice("Leave combat before learning skills.")
+		return false
+	if not state.learn_class_skill(id): return false
+	game_log.state("class_skill_learned", {"skill": id, "level": state.level, "trainer": "Torven"})
+	hud.refresh()
+	return true
 
 
 func _nearby_camp_seat() -> Node3D:
@@ -998,7 +1018,7 @@ func _update_region_and_context() -> void:
 	elif player.position.distance_to(world.waygate_position) < 10.0:
 		context_hint = "[ E ]  Examine the sealed waygate  ·  safe ground"
 	elif player.position.distance_to(smith_position) < 5.5:
-		context_hint = "[ E ]  Speak to Torven, the blacksmith"
+		context_hint = "[ E ]  Torven · Learn skills / Crafting"
 	else:
 		for resource: Dictionary in gather_nodes:
 			if float(resource["timer"]) <= 0 and player.position.distance_to(resource["node"].position) < 3:

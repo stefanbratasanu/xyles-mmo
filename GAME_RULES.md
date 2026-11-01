@@ -339,3 +339,125 @@ Visual language:
 - Every listed Actions entry may be assigned to the hotbar. Party and social entries remain placeholders until their gameplay is implemented.
 
 Interface update 2026-10-29: permanent Adventure and System Journal are removed. Bottom-right head/gear/arrow access Character Status, Options and all windows. Character stats display existing gameplay values only. Dragging exposes snap boundaries; shortcut grip is on the right.
+
+
+## Generated 3D asset quality preference
+
+- For future generated 3D assets, request high-fidelity textures where the service supports them and target approximately 20,000–200,000 exported vertices. Check the actual exported vertex count and review texture quality, deformation and in-game performance; service polygon targets may not equal exported vertex counts.
+
+- Character body customization target: independent five-level body fat/size (very skinny through very fat) and five-level muscularity (no visible muscle through very muscular), giving 25 combinations. These are cosmetic; no combat/stat changes are implied. The current asset implementation is experimental and not the playable default.
+
+- Character creation now exposes Appearance: a rotatable preview with five independent body-size and muscularity choices. Accepted choices persist with new characters and are applied in the world. Existing saves without appearance data keep their previous visual. Race-specific models remain unimplemented.
+
+## Character creator behavior - 2026-11-01
+
+This supersedes the earlier experimental/default-status notes above. The current player visual is head_revision; absent saved appearance uses its neutral size 2 / muscle 3. All 25 independent size/muscle combinations remain available. Appearance choices are cosmetic and do not alter collision, movement, stats or combat. The creator's outfit and animation controls are inspection-only; saves retain the chosen size and muscularity. Existing journeys are not rewritten by opening or cancelling the creator.
+
+## Race-first character art - 2026-11-01
+
+The user superseded body customization: use one authored build per race/gender
+while Human, Orc, Elf, Dark Elf and Dwarf are refined, with both Male and Female
+models. Gender is cosmetic identity data and defaults to Male for old saves.
+Race/gender and class do not change current stats, abilities or collision.
+The selector lists all ten combinations; pending models display their own
+concepts and are unavailable for new gameplay creation until a reviewed scene
+exists. Existing journeys remain loadable while art is pending. Prior saved body
+indices remain stored but are inactive in rendering. The current fixed-build
+Human male is the only reviewed race scene at this checkpoint.
+
+
+### Race art installation - 2026-11-01
+
+All ten race/gender scenes are now installed and reviewed, superseding the
+Human-only checkpoint above. The five races and both genders are playable with
+one fixed build each. Existing cosmetic/stat/collision rules stay as specified.
+
+### Animation and weapon authoring shortcuts - 2026-11-01
+
+F6 captures the active animation, even with its window open; selecting a new
+clip replaces the current character visual independently of skill. Full-body
+replacement is temporary until a nonloop finishes or Stop Override is used.
+Persistent per-skill mappings still use Save Mapping. F7 opens weapon hand-local
+XYZ position/rotation and Save Grip, scoped to race/gender model and weapon
+variant. These are presentation tools, without combat or stat changes. Actions
+remains in the corner menu. F6 and F7 cannot be assigned as debug shortcuts.
+
+### Human male base revision - 2026-11-01
+
+The default Human male is the new medium-haired fixed-build race model in plain
+dark training shorts. The previous synthetic starter clothing is no longer part
+of his default base. Gameplay stats, identity, collision and abilities are unchanged.
+
+### Movement pace and idle presentation - 2026-11-01
+
+Base movement is reduced by 30 percent, from 5.3 to 3.71m/s before existing
+bonuses. Walk/backpedal/crouch caps receive the same default scale; dash retains
+its skill-specific displacement. Animation playback follows final travel distance
+and the current race's measured stride, so short-legged races cycle faster.
+Manual preview/action playback speed does not alter automatic travel pace.
+
+Ordinary standing, walking and running are relaxed. Combat idle is a separate
+presentation action held briefly after attacks/blocking (four seconds), extended
+while channeling, and then released to relaxed standing. It changes neither
+combat rules nor targeting. F6 temporary overrides and explicit custom mappings
+still apply. Character preview uses the same ordinary travel sources.
+
+### Weapon authoring freeze and mouse alignment - 2026-11-01
+
+F7 Freeze Animation pauses the exact base/upper-body pose until Resume or a new
+F6 clip/lifecycle reset. Gameplay timers continue. Fast Align edits position XY
+with mouse motion and Z with wheel; Ctrl-click instead edits rotation. Click or
+Enter keeps the pass, Esc/right-click restores its start transform, and Save Grip
+persists it. These controls change presentation only.
+
+### Fast Align hand target - 2026-11-01
+
+While aligning, hold the right mouse button to rotate the weapon. Hold Alt to
+rotate the actual hand instead; wheel edits the selected rotation's Z axis.
+Right-click no longer cancels; Escape cancels the complete pass. Save Grip saves
+hand rotation plus weapon transform per model/type/variant. This remains purely
+presentation calibration, with no gameplay/stat changes.
+
+### Forward-diagonal sprint - 2026-11-01
+
+Shift+W+A / Shift+W+D use forward-left/right sprint animations. Directional input
+remains normalized, so diagonal sprint gives no extra movement speed. Playback
+uses the corresponding race-specific stride calibration and preserves gait phase.
+
+### Shift-sprint weapon readiness - 2026-11-01
+
+Only Shift-sprinting puts the equipped weapon on the back. It follows the torso
+with a subtle step-synchronized jiggle; natural source arm motion is preserved.
+Normal running keeps the weapon in hand. No forced shoulder/elbow poses or
+procedural reach animation. Skills and basic attacks cannot start while sprinting;
+starting sprint stops active channels. Existing projectiles/effects continue.
+Leaving sprint starts a one-second readiness delay, then the weapon returns to
+the hand and combat becomes available. Re-entering sprint cancels readiness.
+This transient state is not saved and resets on death/model/equipment changes.
+No changes to movement speeds or stride calibration. F7 freeze also freezes sway.
+
+### Class skill training at Torven - 2026-11-01
+
+This supersedes automatic Fighter milestone unlocks. Speak to Torven, the camp
+blacksmith/instructor, with E in Emberfall Camp. His dialogue shows all authored
+Fighter skills: Cleave/Bow Attack level 1, Guard level 2, Dash level 3 and Cone
+Attack level 4. Every entry displays its required level. Under-level skills are
+Locked; eligible unlearned skills are Available; trained skills are Learned.
+Learning is free and spends no enchantment skill points. Training requires the
+correct class, required level, NPC interaction range and being out of combat.
+Eligibility alone does not permit casting/equipping: learn first, then assign
+from K. Repeated training has no effect. Existing equipped skills remain usable
+when loading pre-trainer saves; other eligible skills need training. Learned
+flags persist. Mystic training levels are not authored; its existing acquisition
+behavior is unchanged. Torven's dialogue retains access to crafting/quest flow.
+
+K shows learned class skills only. Unlearned abilities, whether locked by level
+or eligible for training, appear only at the trainer NPC. Empty K directs the
+player to Torven rather than displaying unlearned milestone cards.
+
+### Sword idle hand presentation - 2026-11-01
+
+Sword standing and combat-ready idle use a relaxed palm-to-forearm alignment and
+closed grip, rather than a wrist bend chosen to force blade direction. This is
+an authored presentation change only; combat rules, attack/movement timing and
+saved F7 calibration remain unchanged.

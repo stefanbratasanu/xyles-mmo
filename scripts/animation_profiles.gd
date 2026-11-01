@@ -3,7 +3,7 @@ extends RefCounted
 const SAVE_PATH := "res://saves/animation_profiles.json"
 const WEAPONS := ["unarmed","sword","greatsword","staff","spear","bow"]
 const ATTACK_TYPES := ["melee_cone","melee_area","melee_projectile","cast_cone","cast_area_self","cast_area_target","cast_projectile","cast_projectile_area","channel_ray","channel_projectiles","dash","cast_effect","block"]
-const MOVEMENT := ["idle","run","sprint","walk_forward","walk_back","walk_left","walk_right","jump","fall","land","death"]
+const MOVEMENT := ["idle","combat_idle","run","sprint","sprint_forward_left","sprint_forward_right","walk_forward","walk_back","walk_left","walk_right","jump","fall","land","death"]
 var path := SAVE_PATH
 var overrides: Dictionary = {}
 
@@ -24,13 +24,19 @@ func default_entry(weapon: String, action: String) -> Dictionary:
 		speed=2.8 if action=="cast_effect" else 2.0
 	elif action=="block": clip="protof/"+base+"_block"
 	elif action=="dash": clip="procedural_roll"; upper=false
-	elif action in ["idle","run","sprint"] or action.begins_with("walk_"):
-		clip=("actions/staff_"+action) if weapon in ["staff","spear"] else "protof/"+base+"_"+action
+	elif action == "combat_idle":
+		clip="travel/sword_ready" if weapon == "sword" else ("actions/staff_idle" if weapon in ["staff","spear"] else "protof/"+base+"_idle")
+	elif action in ["idle","run","sprint"] or action.begins_with("sprint_") or action.begins_with("walk_"):
+		clip="travel/" + travel_prefix(weapon) + action
 	elif action=="jump": clip="protof/greatsword_JumpToApex2HandMelee" if weapon=="greatsword" else "protof/jump"
 	elif action=="fall": clip="protof/greatsword_Falling2HandMelee" if weapon=="greatsword" else "protof/fall"
 	elif action=="land": clip="protof/greatsword_LandingLight2HandMelee" if weapon=="greatsword" else "protof/land"
 	elif action=="death": clip="protof/greatsword_DeathFront2HandMelee" if weapon=="greatsword" else "protof/death"
 	return {"clip":clip,"speed":speed,"upper_body":upper}
+
+static func travel_prefix(weapon: String) -> String:
+	if weapon in ["greatsword", "staff", "spear"]: return "pole_"
+	return "" if weapon == "unarmed" else "carry_"
 
 func resolve(weapon: String, action: String, available: PackedStringArray = []) -> Dictionary:
 	var entry: Dictionary=overrides.get(weapon,{}).get(action,default_entry(weapon,action)).duplicate(true)

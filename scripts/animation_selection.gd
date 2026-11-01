@@ -15,6 +15,8 @@ var preview_character: Node3D
 var preview_viewport: SubViewport
 var current_clip: Label
 var saved_mapping: Label
+var captured_clip := ""
+var capture_label: Label
 
 func _init(owner_hud: CanvasLayer) -> void:
 	hud=owner_hud
@@ -22,9 +24,13 @@ func _init(owner_hud: CanvasLayer) -> void:
 
 func render() -> void:
 	hud.overlay_title.text="Animation selection"
-	hud.overlay_subtitle.text="Choose a weapon and attack type, preview the gesture, then save that mapping. Combat damage and timing stay with the skill."
+	hud.overlay_subtitle.text="F6 captures the animation currently playing. Select a new clip to replace it on your character immediately."
 	var column:=VBoxContainer.new()
 	hud.overlay_content.add_child(column)
+	capture_label = hud._label("", 11, hud.GOLD)
+	capture_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(capture_label)
+	_update_capture_label()
 	var selectors:=HBoxContainer.new()
 	column.add_child(selectors)
 	selectors.add_child(hud._label("Weapon",11,hud.GOLD))
@@ -63,7 +69,10 @@ func render() -> void:
 	clip_list.custom_minimum_size=Vector2(470,300)
 	clip_list.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	clip_list.item_selected.connect(func(i: int):
-		draft.clip=str(clip_list.get_item_metadata(i)); _draft_changed())
+		draft.clip=str(clip_list.get_item_metadata(i)); _draft_changed()
+		if not captured_clip.is_empty():
+			_preview()
+			play_selected_on_character())
 	controls.add_child(clip_list)
 	var options:=HBoxContainer.new()
 	controls.add_child(options)
@@ -86,18 +95,48 @@ func render() -> void:
 		var button: Button=hud._button(str(item[0]),10)
 		button.pressed.connect(item[1])
 		buttons.add_child(button)
+	var live := HBoxContainer.new()
+	controls.add_child(live)
+	var play: Button = hud._button("PLAY ON CHARACTER", 11)
+	play.pressed.connect(play_selected_on_character)
+	live.add_child(play)
+	var stop_live: Button = hud._button("STOP OVERRIDE", 11)
+	stop_live.pressed.connect(hud.game.player.stop_animation_override)
+	live.add_child(stop_live)
 	status=hud._label("Mappings are saved separately for each weapon and action.",11,hud.MUTED)
 	status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	controls.add_child(status)
 	_build_preview(split)
 	_populate_clips()
 	_draft_changed()
-	var note: Label=hud._label("Spear defaults use a fencing thrust and staff movement from the supplied collection. Choose any imported gesture to fine-tune it. Preview plays visuals only.",11,hud.MUTED)
+	var note: Label=hud._label("Travel playback follows movement speed and race stride. Speed here controls previews and actions; ordinary walk/run pace is automatic. Combat idle is separate from relaxed idle.",11,hud.MUTED)
 	note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(note)
 
 func _refresh() -> void:
 	if hud.current_panel=="animations": hud._render_overlay()
+
+func capture_current_animation() -> void:
+	var player = hud.game.player
+	var active: AnimationPlayer = player.animation_player
+	if player.upper_body_player != null and player.upper_body_player.is_playing(): active = player.upper_body_player
+	captured_clip = str(active.current_animation)
+	if captured_clip.is_empty(): captured_clip = "rest pose"
+	_update_capture_label()
+	if is_instance_valid(status): status.text = "Captured current animation. Select a new clip to replace it."
+
+func _update_capture_label() -> void:
+	if is_instance_valid(capture_label):
+		capture_label.text = "Captured: " + captured_clip + " · select a replacement below" if not captured_clip.is_empty() else "Press F6 to capture and replace the current animation."
+
+func play_selected_on_character() -> void:
+	if draft.is_empty():
+		draft = hud.game.player.animation_entry(selected_action, selected_weapon).duplicate(true)
+	var played: bool = hud.game.player.play_animation_override(str(draft.clip), float(draft.speed))
+	var message := "Animation override: " + str(draft.clip) if played else "Cannot play this clip now. Select an imported clip in Options > Animation Selection."
+	hud.show_notice(message)
+	if is_instance_valid(status): status.text = message
+	if played: hud.game.game_log.ui("animation_override", {"clip": str(draft.clip), "speed": draft.speed})
 
 func _populate_clips() -> void:
 	if not is_instance_valid(clip_list): return
@@ -107,8 +146,13 @@ func _populate_clips() -> void:
 	if selected_action=="dash": clips.insert(0,"procedural_roll")
 	for clip: String in clips:
 		if clip.begins_with("selected_once/") or clip.begins_with("sit/"): continue
-		if not search_text.is_empty() and not clip.to_lower().contains(search_text.to_lower()): continue
-		clip_list.add_item(clip)
+		var category := ""
+		if clip in ["protof/unarmed_idle", "protof/sword_idle", "protof/greatsword_idle", "actions/staff_idle", "travel/sword_ready", "travel/fencing_idle", "travel/fencing_breathe", "travel/sword_breathe", "travel/greatsword_breathe"]:
+			category = "[Combat stance] "
+		elif clip.begins_with("travel/"):
+			category = "[Relaxed travel] "
+		if not search_text.is_empty() and not (category + clip).to_lower().contains(search_text.to_lower()): continue
+		clip_list.add_item(category + clip)
 		clip_list.set_item_metadata(clip_list.item_count-1,clip)
 		if clip==draft.clip: clip_list.select(clip_list.item_count-1)
 	clip_list.ensure_current_is_visible()
@@ -171,12 +215,18 @@ func _build_preview(parent: Control) -> void:
 	camera.position=Vector3(2.6,1.45,3.5)
 	camera.look_at(Vector3(0,.95,0))
 	camera.fov=35
-	preview_character=hud.game.player.CHARACTER_SCENE.instantiate()
+	var models = load("res://scripts/character_models.gd")
+	var model_scene: PackedScene = hud.game.player.CHARACTER_SCENE
+	for entry in models._entries:
+		if entry.id == hud.game.player.character_model_id and entry.status == "reviewed": model_scene = load(entry.scene)
+	preview_character=model_scene.instantiate()
 	preview_character.rotation.y=0
 	preview_viewport.add_child(preview_character)
+	preview_character.initialize_body()
 	preview_player=preview_character.get_node("AnimationPlayer")
-	preview_player.add_animation_library("protof",hud.game.player.PROTOF_ANIMATIONS)
-	preview_player.add_animation_library("actions",hud.game.player.ACTION_ANIMATIONS)
+	for library in preview_player.get_animation_library_list(): preview_player.remove_animation_library(library)
+	for library in hud.game.player.animation_player.get_animation_library_list():
+		preview_player.add_animation_library(library, hud.game.player.animation_player.get_animation_library(library))
 	preview_upper_player=AnimationPlayer.new()
 	preview_upper_player.root_node=NodePath("..")
 	preview_upper_player.process_priority=100
@@ -188,6 +238,7 @@ func _build_preview(parent: Control) -> void:
 		skeleton.add_child(attachment)
 		attachment.bone_name="humanoid_ R Hand"
 		attachment.add_child(hud.game.player.create_weapon_visual(selected_weapon))
+
 	var idle: Dictionary=hud.game.player.animation_entry("idle",selected_weapon)
 	preview_player.play(str(idle.clip))
 

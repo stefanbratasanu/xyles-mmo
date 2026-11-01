@@ -84,7 +84,7 @@ func _physics_process(delta: float) -> void:
 	_tick_projectiles(delta)
 	_tick_fields()
 	if not channel_id.is_empty():
-		if game.is_dead or game.hud.blocks_gameplay():
+		if game.is_dead or game.hud.blocks_gameplay() or game.state.sprint_blocks_combat() or game.player.wants_to_sprint():
 			stop_channel()
 			return
 		channel_elapsed += delta
@@ -108,6 +108,9 @@ func cast_slot(slot: int) -> bool:
 	if id.is_empty(): return false
 	if id.begins_with("action:"):
 		game.hud._perform_action(id.trim_prefix("action:"))
+		return false
+	if game.state.sprint_blocks_combat() or game.player.wants_to_sprint():
+		game._fail_notice("Finish sprinting and drawing your weapon before using skills.")
 		return false
 	if not game.state.is_skill_available(id): game._fail_notice("This class skill is not unlocked."); return false
 	if id=="fighter_bow" and game.state.weapon_context()!="bow": game._fail_notice("Equip a bow to use Bow Attack."); return false

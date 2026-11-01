@@ -10,12 +10,15 @@ func _run() -> void:
 	game.test_mode=true
 	var state: Node=game.state
 	state.character_class="Fighter"
+	for id: String in state.FighterTree.available(100): state.learned_skills.erase(id)
 	for level in range(1,5):
 		state.level=level
-		check(state.is_skill_available("fighter_cleave") and state.is_skill_available("fighter_bow"),"Level 1 skills")
-		check(state.is_skill_available("fighter_guard")== (level>=2),"Guard level")
-		check(state.is_skill_available("fighter_dash")== (level>=3),"Dash level")
-		check(state.is_skill_available("fighter_cone")== (level>=4),"Cone level")
+		for definition: Dictionary in state.FighterTree.SKILLS:
+			var eligible: bool = level >= int(definition.level)
+			if eligible and not state.learned_skills.has(definition.id):
+				check(not state.is_skill_available(definition.id), "Eligible skill still requires training")
+				check(state.learn_class_skill(definition.id), "Learn at required level")
+			check(state.is_skill_available(definition.id) == eligible, "Learned skill level gate")
 	state.level=1
 	check(not state.assign_hotbar("fighter_dash",0),"Cannot equip locked skill")
 	check(state.assign_hotbar("fighter_cleave",0),"Equip unlocked skill")
@@ -24,7 +27,7 @@ func _run() -> void:
 	game.hud.toggle_panel("skills")
 	await process_frame
 	check(game.hud.overlay_title.text=="Fighter skill tree","Fighter tree opens")
-	var path="res://.godot/fighter-tree-test.json"
+	var path="res://logs/fighter-tree-test.json"
 	check(state.save_game(path),"Save")
 	var loaded: Node=load("res://scripts/game_state.gd").new()
 	check(loaded.load_game(path),"Load")

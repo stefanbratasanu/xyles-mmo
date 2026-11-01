@@ -1,6 +1,7 @@
 extends CharacterBody3D
 
-const CHARACTER_SCENE = preload("res://assets/animations/player_runtime/character.tscn")
+const CHARACTER_SCENE = preload("res://assets/models/characters/races/human_male/character.tscn")
+const FighterAnimationAdapter = preload("res://scripts/fighter_animation_adapter.gd")
 const PROTOF_ANIMATIONS = preload("res://assets/animations/player_runtime/protof_animations.tres")
 const SWORD_MODEL = preload("res://assets/animations/player_runtime/sword.tscn")
 const ORNATE_SWORD_MODEL = preload("res://assets/models/weapons/ornate_silver_sword.glb")
@@ -8,6 +9,9 @@ const GREATSWORD_MODEL = preload("res://assets/animations/player_runtime/greatsw
 const STAFF_MODEL = preload("res://assets/animations/player_runtime/staff.tscn")
 const SPEAR_MODEL = preload("res://assets/animations/player_runtime/spear.tscn")
 const ACTION_ANIMATIONS = preload("res://assets/animations/player_runtime/action_animations.tres")
+const TRAVEL_ANIMATIONS = preload("res://assets/animations/player_runtime/travel_animations.res")
+const COMBAT_STANCE_SECONDS := 4.0
+var combat_stance_time := 0.0
 const AnimationProfiles = preload("res://scripts/animation_profiles.gd")
 var animation_profiles = AnimationProfiles.new()
 var channel_animation_active := false
@@ -18,10 +22,25 @@ var animation_player: AnimationPlayer
 var upper_body_player: AnimationPlayer
 var upper_body_library := AnimationLibrary.new()
 var authored_animation_speeds: Dictionary = {}
+var _source_animation_libraries: Dictionary = {}
 var weapon_attachment: BoneAttachment3D
+var fighter_visual: Node3D
 var weapon_visual: Node3D
 var weapon_style := "unarmed"
 var weapon_visual_variant := ""
+var character_model_id := "human_male"
+var weapon_grips = preload("res://scripts/weapon_grips.gd").new()
+var hand_modifier: SkeletonModifier3D
+var sprint_weapon_visual: Node3D
+var hand_rotation_degrees := Vector3.ZERO:
+	set(value):
+		hand_rotation_degrees = value
+		if is_instance_valid(hand_modifier): hand_modifier.offset_degrees = value
+var animation_override := false
+var animation_frozen := false
+var _frozen_base_playing := false
+var _frozen_upper_playing := false
+var _frozen_during_roll := false
 var action_active := false
 var is_dying := false
 var destination := Vector3.ZERO
@@ -49,7 +68,10 @@ const BACKWARD_SPEED_FACTOR := 0.60
 const CROUCH_SPEED_FACTOR := 0.40
 const JUMP_SPEED := 7.2
 const SPRINT_SPEED_FACTOR := 1.50
-const BASE_MOVEMENT_SPEED := 5.3
+const DEFAULT_MOVEMENT_SCALE := .70
+const BASE_MOVEMENT_SPEED := 5.3 * DEFAULT_MOVEMENT_SCALE
+var stride_scale := 1.0
+var stride_speeds: Dictionary = {}
 const MAX_WALK_ANIMATION_RATE := 1.4
 const DODGE_DURATION := 0.55
 ## Waist height. Lakes are for wading only, so anything deeper stops the body.
@@ -60,11 +82,14 @@ const WADE_SLOW_SHALLOW := 0.72
 const WADE_SLOW_DEEP := 0.32
 
 func _ready() -> void:
+	weapon_grips.load_grips()
 	var speed_file := FileAccess.open(AUTHORED_SPEEDS_PATH, FileAccess.READ)
 	if speed_file != null:
 		var parsed: Variant = JSON.parse_string(speed_file.get_as_text())
 		if parsed is Dictionary:
 			authored_animation_speeds = parsed
+	var travel_speeds: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets/animations/player_runtime/travel_speeds.json"))
+	if travel_speeds is Dictionary: authored_animation_speeds.merge(travel_speeds)
 	collision_layer = 2
 	collision_mask = 1 | 4
 	var shape: CollisionShape3D = get_node_or_null("CollisionShape3D") as CollisionShape3D
@@ -92,10 +117,19 @@ func _ready() -> void:
 	if animation_player != null:
 		animation_player.add_animation_library(&"protof", PROTOF_ANIMATIONS)
 		animation_player.add_animation_library(&"actions", ACTION_ANIMATIONS)
+		animation_player.add_animation_library(&"travel", TRAVEL_ANIMATIONS)
 		animation_player.add_animation_library(&"sit", SIT_ANIMATIONS)
+		var rig := character.get_node("Skeleton3D") as Skeleton3D
+		var source_rests: Array = character.get_meta("animation_source_rests")
+		for library_name in animation_player.get_animation_library_list():
+			_source_animation_libraries[library_name] = animation_player.get_animation_library(library_name)
+			var adapted := FighterAnimationAdapter.adapt(animation_player.get_animation_library(library_name), rig, source_rests)
+			animation_player.remove_animation_library(library_name)
+			animation_player.add_animation_library(library_name, adapted)
 		animation_profiles.load_profiles(animation_player.get_animation_list())
+		_update_stride_reference(rig, source_rests)
 		animation_player.animation_finished.connect(_on_animation_finished)
-		_play_locomotion("protof/unarmed_idle")
+		_play_locomotion(str(animation_entry("idle").clip))
 		upper_body_player = AnimationPlayer.new()
 		upper_body_player.name = "UpperBodyActions"
 		upper_body_player.root_node = NodePath("..")
@@ -108,8 +142,16 @@ func _ready() -> void:
 		_build_log_seat_pose(skeleton)
 		weapon_attachment = BoneAttachment3D.new()
 		weapon_attachment.name = "EquippedWeapon"
+		# The rig follows the generated anatomy; animations use adapted offsets.
+		fighter_visual = skeleton.get_node("HumanFighter") as Node3D
 		skeleton.add_child(weapon_attachment)
 		weapon_attachment.bone_name = "humanoid_ R Hand"
+		sprint_weapon_visual = preload("res://scripts/sprint_weapon_visual.gd").new()
+		sprint_weapon_visual.actor = self
+		skeleton.add_child(sprint_weapon_visual)
+		hand_modifier = preload("res://scripts/hand_grip_offset.gd").new()
+		hand_modifier.name = "HandGripOffset"
+		skeleton.add_child(hand_modifier)
 	var ring: MeshInstance3D = get_node_or_null("SelectionRing") as MeshInstance3D
 	if not is_instance_valid(ring):
 		ring = MeshInstance3D.new()
@@ -131,17 +173,22 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(game):
 		return
+	var frame_start := global_position
+	combat_stance_time = maxf(0.0, combat_stance_time - delta)
 	if rolling:
 		roll_elapsed = minf(roll_elapsed + delta, DODGE_DURATION)
 		var roll_angle := -TAU * roll_elapsed / DODGE_DURATION
-		visual.rotation.x = roll_angle
-		visual.position = Vector3(0.0, 0.7 * (1.0 - cos(roll_angle)), 0.7 * sin(roll_angle)).rotated(Vector3.UP, visual.rotation.y)
+		if not animation_override and not animation_frozen:
+			visual.rotation.x = roll_angle
+			visual.position = Vector3(0.0, 0.7 * (1.0 - cos(roll_angle)), 0.7 * sin(roll_angle)).rotated(Vector3.UP, visual.rotation.y)
 		if roll_elapsed >= DODGE_DURATION:
 			rolling = false
-			visual.rotation.x = 0.0
-			visual.position = Vector3.ZERO
-			action_active = false
-			animation_player.stop()
+			if not animation_frozen:
+				visual.rotation.x = 0.0
+				visual.position = Vector3.ZERO
+			if not animation_override and not animation_frozen:
+				action_active = false
+				animation_player.stop()
 	invulnerable_time = maxf(0, invulnerable_time - delta)
 	dash_time = maxf(0, dash_time - delta)
 	var input_dir := Vector2.ZERO
@@ -168,6 +215,17 @@ func _physics_process(delta: float) -> void:
 	var crouching: bool = controls_enabled and Input.is_key_pressed(KEY_CTRL)
 	var sprinting: bool = controls_enabled and Input.is_key_pressed(KEY_SHIFT) and input_dir.y < 0.0 and not walking and not crouching
 	var channeling: bool = game.skill_runtime != null and not game.skill_runtime.channel_id.is_empty()
+	var previous_weapon_phase: String = game.state.sprint_weapon_phase
+	if game.is_dead or is_dying:
+		game.state.reset_sprint_weapon()
+	else:
+		game.state.update_sprint_weapon(delta, sprinting, weapon_style != "unarmed")
+	if previous_weapon_phase != game.state.sprint_weapon_phase:
+		game.game_log.gameplay("sprint_weapon_transition", {"phase": game.state.sprint_weapon_phase})
+	if sprinting and channeling:
+		game.skill_runtime.stop_channel()
+		channeling = false
+	if channeling: combat_stance_time = COMBAT_STANCE_SECONDS
 	var jump_pressed: bool = controls_enabled and not channeling and Input.is_physical_key_pressed(KEY_SPACE)
 	var on_ground := is_on_floor()
 	if jump_pressed and not jump_key_held and on_ground and not crouching and dash_time <= 0.0:
@@ -190,7 +248,7 @@ func _physics_process(delta: float) -> void:
 		direction = Vector3.ZERO
 	if dash_time > 0:
 		direction = move_direction
-	var speed_value: float = 5.3 + game.state.get_skill_bonus("move") * 0.12
+	var speed_value: float = BASE_MOVEMENT_SPEED + game.state.get_skill_bonus("move") * 0.12
 	var speed_factor := 1.0
 	if sprinting:
 		speed_factor = SPRINT_SPEED_FACTOR
@@ -204,9 +262,13 @@ func _physics_process(delta: float) -> void:
 	if direction.length_squared() > 0.0 and dash_time <= 0.0 and (walking or crouching or input_dir.y > 0.0):
 		var walk_input := input_dir if input_dir.length_squared() > 0.0 else Vector2.UP
 		var walk_clip := _movement_animation(walk_input, walking, crouching, true, false).trim_prefix("protof/")
+		# Preserve the existing movement-speed cap while replacing presentation.
+		if walk_clip.begins_with("travel/"):
+			var gait := walk_clip.trim_prefix("travel/").trim_prefix("carry_").trim_prefix("pole_")
+			walk_clip = ("actions/staff_" if weapon_style in ["staff", "spear"] else weapon_style + "_") + gait
 		var clip_speed := float(authored_animation_speeds.get(walk_clip, 0.0))
 		if clip_speed > 0.05:
-			speed_value = minf(speed_value, clip_speed * MAX_WALK_ANIMATION_RATE)
+			speed_value = minf(speed_value, clip_speed * MAX_WALK_ANIMATION_RATE * DEFAULT_MOVEMENT_SCALE)
 	if dash_time > 0:
 		speed_value = dash_speed
 	if channeling: speed_value *= float(game.state.skill_catalog.data.rules.channel_speed)
@@ -255,6 +317,7 @@ func _physics_process(delta: float) -> void:
 		game.game_log.gameplay("fell_out_of_world", {"from": "(%.1f, %.1f, %.1f)" % [position.x, position.y, position.z]})
 		position = game.world.player_spawn + Vector3.UP * 0.4
 		velocity = Vector3.ZERO
+		frame_start = global_position
 	if direction.length_squared() > 0.01:
 		move_direction = direction
 		var facing_yaw: float = game.camera_yaw if input_dir.length_squared() > 0.0 and dash_time <= 0.0 else atan2(-direction.x, -direction.z)
@@ -262,7 +325,9 @@ func _physics_process(delta: float) -> void:
 		if animation_player != null and animation_player.current_animation in ["protof/land", "protof/greatsword_LandingLight2HandMelee"]:
 			action_active = false
 	if not action_active and not is_dying:
-		var speed := Vector2(velocity.x, velocity.z).length()
+		# Include shoreline rollback and world-edge clamping as well as collisions.
+		var actual_velocity := (global_position - frame_start) / maxf(delta, .00001)
+		var speed := Vector2(actual_velocity.x, actual_velocity.z).length()
 		var moving := speed > 0.15
 		if was_airborne:
 			var falling: Dictionary=animation_entry("fall")
@@ -270,27 +335,31 @@ func _physics_process(delta: float) -> void:
 		else:
 			var animation_input := input_dir if input_dir.length_squared() > 0.0 else (Vector2.UP if moving else Vector2.ZERO)
 			var clip := _movement_animation(animation_input, walking, crouching, moving, sprinting)
+			if game.state.sprint_weapon_phase != "drawn" and clip.begins_with("travel/"):
+				clip = "travel/" + clip.trim_prefix("travel/").trim_prefix("carry_").trim_prefix("pole_")
 			var reference_factor := CROUCH_SPEED_FACTOR if crouching else (BACKWARD_SPEED_FACTOR if animation_input.y > 0.0 and not walking else (WALK_SPEED_FACTOR if walking else (SPRINT_SPEED_FACTOR if sprinting and animation_input.y < 0.0 else 1.0)))
 			var fallback_speed := BASE_MOVEMENT_SPEED * reference_factor
-			var authored_speed := float(authored_animation_speeds.get(clip.trim_prefix("protof/"), fallback_speed))
-			var rate := clampf(speed / maxf(authored_speed, 0.05), 0.25, 6.0) if moving else 1.0
+			var rate := locomotion_rate(clip, speed, fallback_speed) if moving else 1.0
 			var action_name := _locomotion_action(animation_input,walking,moving,sprinting)
-			if action_name in animation_profiles.actions(): rate *= float(animation_entry(action_name).speed)
+			if not moving and action_name in animation_profiles.actions(): rate *= float(animation_entry(action_name).speed)
 			_play_locomotion(clip, rate)
 
 func _process(delta: float) -> void:
 	# The main AnimationPlayer updates first; the manual overlay then writes only
 	# upper-body tracks, leaving the current leg movement intact.
-	if upper_body_player != null and upper_body_player.is_playing():
+	if not animation_frozen and upper_body_player != null and upper_body_player.is_playing():
 		upper_body_player.advance(delta)
+
+func wants_to_sprint() -> bool:
+	return is_instance_valid(game) and not game.is_dead and not sitting and not game.hud.blocks_gameplay() and not bool(game.get("ui_text_input")) and Input.is_key_pressed(KEY_SHIFT) and Input.is_physical_key_pressed(KEY_W) and not Input.is_key_pressed(KEY_ALT) and not Input.is_key_pressed(KEY_CTRL)
 
 func _movement_animation(input_dir: Vector2, walking: bool, crouching: bool, moving: bool, sprinting: bool = false) -> String:
 	if not moving:
 		if crouching:
 			return "protof/greatsword_IdleCrouchBreathe2HandMelee" if weapon_style == "greatsword" else "protof/crouch_idle"
-		return str(animation_entry("idle").clip)
-	var horizontal := signi(int(input_dir.x))
-	var vertical := signi(int(input_dir.y))
+		return str(animation_entry("combat_idle" if combat_stance_time > 0 else "idle").clip)
+	var horizontal := int(signf(input_dir.x))
+	var vertical := int(signf(input_dir.y))
 	var direction := "forward" if vertical < 0 else ("back" if vertical > 0 else "")
 	if horizontal != 0:
 		var side := "left" if horizontal < 0 else "right"
@@ -303,18 +372,18 @@ func _movement_animation(input_dir: Vector2, walking: bool, crouching: bool, mov
 			return "protof/greatsword_Crouch" + str(crouch_names[direction]) + "2HandMelee"
 		return "protof/crouch_" + direction
 	if sprinting and vertical < 0:
-		return str(animation_entry("sprint").clip)
+		return str(animation_entry("sprint_" + direction if horizontal != 0 else "sprint").clip)
 	var gait := "walk" if walking or vertical > 0 else "run"
 	if gait == "run" and direction == "forward":
 		return str(animation_entry("run").clip)
 	var key := gait+"_"+direction
 	if key in animation_profiles.actions(): return str(animation_entry(key).clip)
-	var family := "actions/staff" if weapon_style in ["staff","spear"] else "protof/"+weapon_style
-	return "%s_%s_%s" % [family,gait,direction]
+	return "travel/" + AnimationProfiles.travel_prefix(weapon_style) + key
 
 func _locomotion_action(input_dir: Vector2,walking: bool,moving: bool,sprinting: bool) -> String:
-	if not moving: return "idle"
-	if sprinting and input_dir.y<0: return "sprint"
+	if not moving: return "combat_idle" if combat_stance_time > 0 else "idle"
+	if sprinting and input_dir.y<0:
+		return "sprint_forward_left" if input_dir.x<0 else ("sprint_forward_right" if input_dir.x>0 else "sprint")
 	if not walking and input_dir.y<=0: return "run"
 	if input_dir.y>0: return "walk_back"
 	if input_dir.y<0: return "walk_forward"
@@ -323,13 +392,40 @@ func _locomotion_action(input_dir: Vector2,walking: bool,moving: bool,sprinting:
 func animation_entry(action: String, style: String = "") -> Dictionary:
 	return animation_profiles.resolve(weapon_style if style.is_empty() else style,action,animation_player.get_animation_list() if animation_player!=null else PackedStringArray())
 
+func locomotion_rate(clip: String, horizontal_speed: float, fallback: float = 5.3) -> float:
+	var key := clip.trim_prefix("travel/").trim_prefix("carry_").trim_prefix("pole_")
+	var reference := float(authored_animation_speeds.get(clip.trim_prefix("protof/"), fallback)) * stride_scale
+	if clip.begins_with("travel/"): reference = float(stride_speeds.get(key, reference))
+	return maxf(0.0, horizontal_speed) / maxf(reference, .05)
+
+func _update_stride_reference(skeleton: Skeleton3D, source_rests: Array) -> void:
+	var original_globals: Array[Transform3D] = []
+	for index in range(skeleton.get_bone_count()):
+		var parent := skeleton.get_bone_parent(index)
+		original_globals.append(source_rests[index] if parent < 0 else original_globals[parent] * source_rests[index])
+	var source_length := 0.0
+	var fitted_length := 0.0
+	for side in ["L", "R"]:
+		var thigh := skeleton.find_bone("humanoid_ " + side + " Thigh")
+		var calf := skeleton.find_bone("humanoid_ " + side + " Calf")
+		var foot := skeleton.find_bone("humanoid_ " + side + " Foot")
+		source_length += original_globals[thigh].origin.distance_to(original_globals[calf].origin) + original_globals[calf].origin.distance_to(original_globals[foot].origin)
+		fitted_length += skeleton.get_bone_global_rest(thigh).origin.distance_to(skeleton.get_bone_global_rest(calf).origin) + skeleton.get_bone_global_rest(calf).origin.distance_to(skeleton.get_bone_global_rest(foot).origin)
+	stride_scale = fitted_length / maxf(source_length, .001)
+	stride_speeds = {}
+	if FileAccess.file_exists("res://assets/animations/player_runtime/travel_strides.json"):
+		var data: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets/animations/player_runtime/travel_strides.json"))
+		if data is Dictionary: stride_speeds = data.get(character_model_id, {})
+
 func available_animations() -> PackedStringArray:
 	return animation_player.get_animation_list() if animation_player!=null else PackedStringArray()
 
 func play_profile_action(action: String) -> bool:
+	if animation_override or animation_frozen: return false
 	if animation_player==null: return false
 	var entry:=animation_entry(action)
 	if entry.clip=="procedural_roll": return false
+	if action in animation_profiles.ATTACK_TYPES and action != "cast_effect": combat_stance_time = COMBAT_STANCE_SECONDS
 	channel_animation_active=action.begins_with("channel")
 	if entry.upper_body: return _play_upper_body_action(str(entry.clip),float(entry.speed),channel_animation_active)
 	# An idle/loop clip selected as an attack still finishes cleanly.
@@ -354,6 +450,13 @@ func play_skill_animation(delivery_type: String, variant: String = "") -> bool:
 func stop_skill_animation(_delivery_type: String = "") -> void:
 	if not channel_animation_active: return
 	channel_animation_active=false
+	if animation_frozen:
+		# Ending a gameplay channel must not reset the held authoring pose.
+		_frozen_upper_playing = false
+		if animation_player.current_animation.begins_with("selected_loop/"):
+			_frozen_base_playing = false
+			action_active = false
+		return
 	if upper_body_player!=null: upper_body_player.stop()
 	if animation_player!=null and animation_player.current_animation.begins_with("selected_loop/"):
 		animation_player.stop(); action_active=false
@@ -410,14 +513,72 @@ func update_equipment(equipment: Array) -> void:
 	if next_style == weapon_style and next_variant == weapon_visual_variant:
 		return
 	weapon_style = next_style
+	if is_instance_valid(game): game.state.reset_sprint_weapon()
 	weapon_visual_variant = next_variant
+	hand_rotation_degrees = weapon_grips.hand_rotation(weapon_grip_key()) if next_style != "unarmed" else Vector3.ZERO
 	if is_instance_valid(weapon_visual):
 		weapon_visual.queue_free()
 		weapon_visual = null
 	if weapon_attachment != null and weapon_style != "unarmed":
 		weapon_visual = create_weapon_visual(weapon_style, weapon_visual_variant)
 		weapon_attachment.add_child(weapon_visual)
+		weapon_grips.apply(weapon_grip_key(), weapon_visual)
 		weapon_visual.visible = not sitting
+	if is_instance_valid(sprint_weapon_visual): sprint_weapon_visual.configure()
+
+func weapon_grip_key() -> String:
+	return "|".join([character_model_id, weapon_style, weapon_visual_variant if not weapon_visual_variant.is_empty() else "default"])
+
+func reset_weapon_grip() -> void:
+	hand_rotation_degrees = Vector3.ZERO
+	if not is_instance_valid(weapon_visual): return
+	var original := create_weapon_visual(weapon_style, weapon_visual_variant)
+	weapon_visual.transform = original.transform
+	original.free()
+
+func play_animation_override(clip: String, speed: float = 1.0) -> bool:
+	if animation_player == null or not animation_player.has_animation(clip) or sitting or seat_returning or is_dying: return false
+	if not is_finite(speed) or speed < .1 or speed > 4: return false
+	set_animation_frozen(false)
+	if upper_body_player != null: upper_body_player.stop()
+	channel_animation_active = false
+	animation_override = true
+	if rolling:
+		visual.rotation.x = 0.0
+		visual.position = Vector3.ZERO
+	action_active = true
+	animation_player.stop()
+	animation_player.speed_scale = speed
+	animation_player.play(clip, 0.0)
+	animation_player.advance(0.0)
+	return true
+
+func stop_animation_override() -> void:
+	set_animation_frozen(false)
+	if not animation_override: return
+	animation_override = false
+	action_active = false
+	animation_player.stop()
+	animation_player.speed_scale = 1.0
+
+func set_animation_frozen(frozen: bool) -> void:
+	if animation_frozen == frozen or animation_player == null: return
+	animation_frozen = frozen
+	if frozen:
+		_frozen_base_playing = animation_player.is_playing()
+		_frozen_upper_playing = upper_body_player != null and upper_body_player.is_playing()
+		_frozen_during_roll = rolling
+		animation_player.pause()
+		if upper_body_player != null: upper_body_player.pause()
+	else:
+		if _frozen_base_playing: animation_player.play()
+		if _frozen_upper_playing and upper_body_player != null: upper_body_player.play()
+		if _frozen_during_roll and not rolling:
+			visual.rotation.x = 0.0
+			visual.position = Vector3.ZERO
+			if not animation_override:
+				action_active = false
+				animation_player.stop()
 
 func create_weapon_visual(style: String, variant: String = "") -> Node3D:
 	if style=="bow":
@@ -507,6 +668,9 @@ func stand_up() -> void:
 		_play_action("sit/exit")
 
 func death_animation() -> void:
+	stop_animation_override()
+	if is_instance_valid(game): game.state.reset_sprint_weapon()
+	combat_stance_time = 0.0
 	sitting = false
 	seat_offset = Vector3.ZERO
 	stand_requested = false
@@ -581,7 +745,7 @@ func _build_log_seat_pose(skeleton: Skeleton3D) -> void:
 	var transition := _make_seat_transition(animation_player.get_animation("sit/enter"), pose)
 	library.add_animation("transition", transition)
 	animation_player.stop()
-	_play_locomotion("protof/unarmed_idle")
+	_play_locomotion(str(animation_entry("idle").clip))
 
 
 ## Both clips use the same skeleton. Interpolate their keyed local transforms
@@ -610,18 +774,30 @@ func _make_seat_transition(standing: Animation, seated: Animation) -> Animation:
 	return result
 
 func revive_animation() -> void:
+	set_animation_frozen(false)
+	combat_stance_time = 0.0
 	is_dying = false
 	action_active = false
 	_play_locomotion(str(animation_entry("idle").clip))
 
+func _is_travel_gait(clip: String) -> bool:
+	if not clip.begins_with("travel/"): return false
+	var key := clip.get_file().trim_prefix("carry_").trim_prefix("pole_")
+	return key.begins_with("walk_") or key.begins_with("run") or key.begins_with("sprint") or key == "jog"
+
 func _play_locomotion(animation_name: String, playback_rate: float = 1.0) -> void:
+	if animation_override or animation_frozen: return
 	if animation_player == null or not animation_player.has_animation(animation_name):
 		return
 	animation_player.speed_scale = playback_rate
 	if animation_player.current_animation != animation_name or not animation_player.is_playing():
+		var preserve_phase := _is_travel_gait(str(animation_player.current_animation)) and _is_travel_gait(animation_name) and animation_player.is_playing()
+		var phase := animation_player.current_animation_position / maxf(animation_player.current_animation_length, .001) if preserve_phase else 0.0
 		animation_player.play(animation_name, 0.15)
+		if preserve_phase: animation_player.seek(fposmod(phase, 1.0) * animation_player.current_animation_length, true)
 
 func _play_upper_body_action(animation_name: String, playback_speed: float = 1.0, looping: bool = false) -> bool:
+	if animation_override or animation_frozen: return false
 	if animation_player == null or upper_body_player == null or not animation_player.has_animation(animation_name):
 		return false
 	var clip_key := animation_name.trim_prefix("protof/").replace("/","_")
@@ -640,6 +816,7 @@ func _play_upper_body_action(animation_name: String, playback_speed: float = 1.0
 	return true
 
 func _play_action(animation_name: String) -> void:
+	if animation_override or animation_frozen: return
 	if animation_player == null or not animation_player.has_animation(animation_name):
 		return
 	if upper_body_player != null:
@@ -649,6 +826,11 @@ func _play_action(animation_name: String) -> void:
 	animation_player.play(animation_name, 0.1)
 
 func _on_animation_finished(animation_name: StringName) -> void:
+	if animation_frozen: return
+	if animation_override:
+		animation_override = false
+		action_active = false
+		return
 	if animation_name == &"seat/transition":
 		if seat_returning:
 			seat_returning = false
@@ -693,3 +875,56 @@ func dash() -> void:
 	if entry.clip!="procedural_roll":
 		rolling=false
 		play_profile_action("dash")
+
+func apply_character_appearance(appearance: Dictionary, race: String = "Human", gender: String = "Male") -> void:
+	stop_animation_override()
+	if is_instance_valid(game): game.state.reset_sprint_weapon()
+	var models = load("res://scripts/character_models.gd")
+	var scene: PackedScene = models.scene(race, gender)
+	if scene == null:
+		# Existing journeys remain loadable while their race art is pending.
+		scene = CHARACTER_SCENE
+		character_model_id = "human_male"
+	else:
+		character_model_id = str(models.entry(race, gender).id)
+	var replacement = scene.instantiate()
+	var source: MeshInstance3D = replacement.get_node("Skeleton3D/HumanFighter")
+	var body := fighter_visual as MeshInstance3D
+	for surface in range(body.mesh.get_surface_count()): body.set_surface_override_material(surface, null)
+	body.mesh = source.mesh
+	body.skin = source.skin.duplicate()
+	var skeleton := body.get_node(body.skeleton) as Skeleton3D
+	var source_skeleton: Skeleton3D = replacement.get_node("Skeleton3D")
+	for bone in range(skeleton.get_bone_count()):
+		var source_bone := source_skeleton.find_bone(skeleton.get_bone_name(bone))
+		if source_bone >= 0: skeleton.set_bone_rest(bone, source_skeleton.get_bone_rest(source_bone))
+	skeleton.reset_bone_poses()
+	_update_stride_reference(skeleton, replacement.get_meta("animation_source_rests"))
+	for bind in range(body.skin.bind_count):
+		var bone := skeleton.find_bone(body.skin.get_bind_name(bind))
+		body.skin.set_bind_bone(bind, bone)
+		body.skin.set_bind_pose(bind, skeleton.get_bone_global_rest(bone).affine_inverse())
+	var character := visual.get_node("Character")
+	character.set_script(replacement.get_script())
+	if replacement.get("race_model_id") != null:
+		character.race_model_id = replacement.race_model_id
+	# Body customization is paused while race models are authored. Preserve old
+	# save data on disk, but render the single reference build for now.
+	character.body_size = 2
+	character.muscularity = 3
+	character.initialize_body()
+	for library_name in _source_animation_libraries:
+		var adapted := FighterAnimationAdapter.adapt(_source_animation_libraries[library_name], skeleton, character.get_meta("animation_source_rests"))
+		animation_player.remove_animation_library(library_name)
+		animation_player.add_animation_library(library_name, adapted)
+	if animation_player.has_animation_library(&"seat"):
+		animation_player.remove_animation_library(&"seat")
+	_build_log_seat_pose(skeleton)
+	if is_instance_valid(sprint_weapon_visual): sprint_weapon_visual.configure()
+	combat_stance_time = 0.0
+	_play_locomotion(str(animation_entry("idle").clip))
+	replacement.free()
+	if is_instance_valid(weapon_visual):
+		reset_weapon_grip()
+		weapon_grips.apply(weapon_grip_key(), weapon_visual)
+		hand_rotation_degrees = weapon_grips.hand_rotation(weapon_grip_key())

@@ -35,3 +35,84 @@ Status: compact level/name header above full-width yellow XP percentage, red HP 
 Status uses the user's diagonal right-edge cut. Shared panel interiors use 86% opacity. Clock, chat, region label and frameless hotbar join persistent dragging/snapping; the hotbar has a separate grip above the slots. The full-screen map stays full-screen.
 
 2026-10-29 supersedes permanent menu/journal layout: bottom-right head opens Character Status, gear opens tabbed Options, arrow folds out all windows. No permanent Adventure or System Journal. Shortcuts use a right-side dot grip; active drag shows gold bounds and cyan peers with the snap gap. Resource fill ends are diagonal at partial as well as full values.
+
+- Character creation's Appearance button opens a modal framed live preview with independent size/muscularity choices, a rotation control, and Back / Use Appearance actions. Keep its brown/bronze/ivory styling consistent with the selection form.
+
+## 2026-11-01 - Character appearance inspection
+
+- Appearance keeps all five independent body-size and five muscularity choices (25 combinations). Opening or accepting the modal must preserve the exact pair; never reduce it to three paired builds.
+- The modal has an isolated, antialiased preview at twice the displayed resolution. Drag or the slider rotates; wheel zooms; Full Body / Face / Reset control framing. Rest, Idle, Walk and Run inspect the same animation rig used by the player.
+- Show Outfit is a preview-only toggle. The initial body inspection view exposes the silhouette; accepting appearance persists only the two body indices. The gameplay character wears the current starter outfit.
+- Keep keyboard focus inside the modal. Back and Escape discard pending values and return focus to Appearance. Use Appearance accepts. The frame and all controls fit the supported minimum 1100 x 650 window and larger displays.
+
+## Race-first preview - 2026-11-01
+
+This supersedes the body-size/muscularity controls above. Keep one fixed build
+per race/gender while all five races are authored. The creation form has Race,
+Male/Female model and Class. Appearance retains the same bronze/brown/ivory frame,
+compact text, rotatable model, close-up and pose tools for reviewed 3D assets.
+Pending assets show their own race/gender reference with a clear preparation
+status, never the Human model labeled as another race. Their creation button is
+disabled. All ten entries and the form fit the minimum 1100x650 viewport.
+
+
+### Installed race previews - 2026-11-01
+
+All ten entries now use their live 3D scene in Appearance. Keep Race and Model
+(Male/Female) on the creation form; fixed-build inspection has no body sliders.
+The outfit inspection control is only enabled for assets with separable outfit
+coverage, never inferred merely from multiple material surfaces (hair may be a
+separate surface). New race undergarments are part of the authored PBR mesh.
+
+### Weapon calibration and animation capture - 2026-11-01
+
+F7 owns Weapon Position: paired XYZ rows for metres/degrees, live changes, Save
+Grip, Reset to Model and Stop Animation. Use the existing shared floating frame
+and helper buttons/labels. Default placement is at the right; drag and viewport
+clamping use the existing window manager. Clearly identify model/weapon, empty
+hands and save errors. F6 captures without closing the animation window; selecting
+a new clip plays on the character. Keep temporary replacement visibly distinct
+from persistent skill mapping. Actions has no F7 label and remains in the menu.
+
+### Animation authoring categories - 2026-11-01
+
+F6 lists label Relaxed travel and Combat stance, and search includes those labels.
+Idle and Combat idle are separate mappings. Clarify that in-world ordinary travel
+playback is distance-matched automatically; Speed still controls preview/action
+playback. Keep the existing compact animation window and helpers.
+
+### F7 Fast Align - 2026-11-01
+
+Replace Stop Animation with Freeze Animation / Resume Animation. Keep Fast Align
+on a separate compact row, with plain-click position and Ctrl-click rotation
+instructions. Show active mouse/wheel axes and commit/cancel guidance. Numeric
+fields follow mouse edits. Save Grip remains distinct from finishing a mouse
+pass. Use the existing draggable/clamped bronze frame and helper controls.
+
+### Fast Align right-drag / Alt - 2026-11-01
+
+Update the F7 inline instructions: hold right button to rotate the weapon, hold
+Alt to rotate the hand, wheel for Z. Show hand rotation values and active target.
+Escape cancels; remove the previous right-click-cancel hint. Keep the existing
+600x440 floating frame, numeric rows, freeze/resume and Save Grip controls.
+
+Animation Selection includes separate Sprint forward left / Sprint forward right
+mappings alongside straight Sprint; retain the existing dropdown and clip list.
+
+### Torven dialogue and required levels - 2026-11-01
+
+Use the shared draggable brown/bronze/ivory window for NPC dialogue. Torven's
+550x580 dialogue lists five compact square-icon skill rows directly in the box;
+show skill name and Required level N with Locked / Available / Learned text.
+Locked icons are muted and their buttons disabled. Eligible rows have LEARN;
+learned rows have a disabled LEARNED button. No second trainer window. Retain
+crafting and Class skills links below the list. K is for assignment and clearly
+directs untrained players to Torven. Refresh status when level/class/training
+changes, including while the dialogue remains open. Existing scrolling/clamping
+supports 1100x650. Reference ideas: compact list hierarchy, inset bronze rows,
+square icons, ivory labels, restrained gold availability emphasis; original
+Godot assets/helpers only, no reference screenshots shipped.
+
+K learned-only follow-up: hide all unlearned skill cards in K. Keep locked and
+available training entries with required levels exclusively in NPC dialogue.
+Show a short trainer direction when K has no learned skills.

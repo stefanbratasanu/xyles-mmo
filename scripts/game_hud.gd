@@ -66,6 +66,7 @@ const LAYOUT_PATH := "res://saves/ui_layout.cfg"
 const FrameScript = preload("res://scripts/classic_frame.gd")
 const WindowSnap = preload("res://scripts/window_snap.gd")
 var animation_view: RefCounted
+var weapon_position_view: RefCounted
 var forge_weapon := "sword"
 var minion_spawn_count := 5
 var minion_spawn_level := 1
@@ -84,6 +85,7 @@ func setup(owner_game: Node) -> void:
 	skill_view = preload("res://scripts/skill_panel.gd").new(self)
 	inventory_view = preload("res://scripts/inventory_panel.gd").new(self)
 	animation_view = preload("res://scripts/animation_selection.gd").new(self)
+	weapon_position_view = preload("res://scripts/weapon_position_panel.gd").new(self)
 	heading_font = SystemFont.new()
 	heading_font.font_names = PackedStringArray(["Tahoma", "Arial", "sans-serif"])
 	_load_layout()
@@ -122,18 +124,27 @@ func setup(owner_game: Node) -> void:
 
 
 func _process(delta: float) -> void:
+	if weapon_position_view != null: weapon_position_view.update_context()
 	if is_instance_valid(drag_guides): drag_guides.queue_redraw()
 	if toast_timer > 0.0:
 		toast_timer -= delta
 		toast.modulate.a = minf(toast_timer, 1.0)
 		toast.visible = toast_timer > 0.0
 
+func _exit_tree() -> void:
+	if weapon_position_view != null: weapon_position_view.finish_alignment(false)
+
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed or event.echo:
 		return
 	var key: int = event.physical_keycode
-	var panel_keys: Dictionary = {KEY_K: "skills", KEY_B: "bestiary", KEY_I: "inventory", KEY_C: "forge", KEY_H: "guide", KEY_O: "settings", KEY_F6:"animations", KEY_F7:"actions"}
+	if key == KEY_F6:
+		animation_view.capture_current_animation()
+		if current_panel != "animations": _switch_panel("animations")
+		get_viewport().set_input_as_handled()
+		return
+	var panel_keys: Dictionary = {KEY_K: "skills", KEY_B: "bestiary", KEY_I: "inventory", KEY_C: "forge", KEY_H: "guide", KEY_O: "settings", KEY_F7:"weapon_position"}
 	if panel_keys.has(key):
 		toggle_panel(str(panel_keys[key]))
 		get_viewport().set_input_as_handled()
@@ -287,7 +298,7 @@ func _build_menu() -> void:
 	_place(corner_menu, Vector2(-212, -490), Vector2(200, 430), Vector2(1, 1))
 	var column := _column(corner_menu, 10, 10)
 	column.add_child(_label("Windows", 11, GOLD))
-	for item: Array in [["Character", "character"], ["Inventory [I]", "inventory"], ["Class skills [K]", "skills"], ["Actions [F7]", "actions"], ["Bestiary [B]", "bestiary"], ["Crafting [C]", "forge"], ["Field guide [H]", "guide"], ["Animations [F6]", "animations"], ["Debug", "debug"], ["Options [O]", "settings"]]:
+	for item: Array in [["Character", "character"], ["Inventory [I]", "inventory"], ["Class skills [K]", "skills"], ["Actions", "actions"], ["Bestiary [B]", "bestiary"], ["Crafting [C]", "forge"], ["Field guide [H]", "guide"], ["Animations", "animations"], ["Weapon position [F7]", "weapon_position"], ["Debug", "debug"], ["Options [O]", "settings"]]:
 		var button := _button(item[0], 10)
 		button.pressed.connect(func(): corner_menu.hide(); toggle_panel(item[1]))
 		column.add_child(button)
@@ -583,7 +594,7 @@ func _build_overlay() -> void:
 	overlay_footer = footer
 	footer.add_theme_constant_override("separation", 3)
 	outer.add_child(footer)
-	for item: Array in [["Skills [K]", "skills"], ["Bestiary [B]", "bestiary"], ["Items [I]", "inventory"], ["Forge [C]", "forge"], ["Guide [H]", "guide"], ["Actions [F7]","actions"], ["Animations [F6]","animations"], ["Options [O]", "settings"]]:
+	for item: Array in [["Skills [K]", "skills"], ["Bestiary [B]", "bestiary"], ["Items [I]", "inventory"], ["Forge [C]", "forge"], ["Guide [H]", "guide"], ["Actions","actions"], ["Animations","animations"], ["Options [O]", "settings"]]:
 		var btn := _button(str(item[0]), 11)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.pressed.connect(_switch_panel.bind(str(item[1])))
@@ -635,7 +646,7 @@ func refresh() -> void:
 	var region: Variant = game.get("region_name")
 	if region is String:
 		region_label.text = region.to_upper()
-	progression_text.text = "[K] Class skills   ·   [F7] Actions   ·   Drag onto a shortcut"
+	progression_text.text = "[K] Class skills   ·   Actions   ·   Drag onto a shortcut"
 	resource_text.text = game.skill_runtime.status_text() if not game.skill_runtime.buffs.is_empty() or not game.skill_runtime.channel_id.is_empty() else "%d GOLD     %d WOOD     %d IRON" % [int(s.gold), int(s.wood), int(s.iron)]
 	var cooldown_data: Variant = game.get("cooldowns")
 	if cooldown_data is Array:
@@ -678,7 +689,7 @@ func refresh() -> void:
 		clock_label.text = "%s   DAY %02d" % [world.clock_text(), int(world.day_number)]
 		clock_phase.text = str(world.phase_text()).to_upper()
 	if is_panel_open():
-		var signature: String = str([s.skill_points, s.earned_skill_points, s.skills, s.bestiary, s.equipment, s.inventory, s.gold, s.wood, s.iron, s.loadout, _near_forge()])
+		var signature: String = str([s.level, s.character_class, s.learned_skills, s.skill_points, s.earned_skill_points, s.skills, s.bestiary, s.equipment, s.inventory, s.gold, s.wood, s.iron, s.loadout, _near_forge(), game.trainer_in_range() if current_panel == "npc_dialogue" else false, game._in_combat() if current_panel == "npc_dialogue" else false])
 		if signature != panel_signature:
 			panel_signature = signature
 			_render_overlay()
@@ -721,6 +732,7 @@ func toggle_panel(panel_name: String) -> void:
 
 
 func close_panel() -> void:
+	weapon_position_view.finish_alignment(false)
 	inventory_view._hide_item_tooltip()
 	debug_rebind_action = ""
 	if current_panel == "settings" and game.has_method("save_settings"):
@@ -733,6 +745,7 @@ func close_panel() -> void:
 
 
 func _switch_panel(panel_name: String) -> void:
+	weapon_position_view.finish_alignment(false)
 	inventory_view._hide_item_tooltip()
 	corner_menu.hide()
 	debug_rebind_action = ""
@@ -745,7 +758,9 @@ func _switch_panel(panel_name: String) -> void:
 	window_frame.mouse_filter = Control.MOUSE_FILTER_STOP if panel_name == "debug" else Control.MOUSE_FILTER_PASS
 	var desired := _panel_size(panel_name)
 	window_frame.size = desired.min(get_viewport().get_visible_rect().size - Vector2(24, 40))
-	window_frame.position = window_positions.get(panel_name, (get_viewport().get_visible_rect().size - window_frame.size) * 0.5)
+	var default_position := (get_viewport().get_visible_rect().size - window_frame.size) * 0.5
+	if panel_name == "weapon_position": default_position = Vector2(get_viewport().get_visible_rect().size.x - window_frame.size.x - 24, 110)
+	window_frame.position = window_positions.get(panel_name, default_position)
 	_clamp_window(window_frame)
 	if is_instance_valid(skill_view.picker):
 		skill_view.picker.hide()
@@ -802,9 +817,11 @@ func _render_overlay() -> void:
 		"bestiary": _render_bestiary()
 		"inventory": _render_inventory()
 		"forge": _render_forge()
+		"npc_dialogue": _render_trainer_dialogue()
 		"settings": _render_settings()
 		"character": _render_character()
 		"animations": animation_view.render()
+		"weapon_position": weapon_position_view.render()
 		"actions": _render_actions()
 		"debug": _render_debug()
 		_: _render_guide()
@@ -812,6 +829,56 @@ func _render_overlay() -> void:
 
 func _render_skills() -> void:
 	skill_view.render()
+
+func _render_trainer_dialogue() -> void:
+	overlay_title.text = "Torven · Emberfall Camp"
+	overlay_subtitle.text = "Blacksmith & combat instructor · You are level %d" % game.state.level
+	var greeting := _label("Learn your class skills here when you reach their required level. Training is free; skill points are for enchantments.", 12, TEXT)
+	greeting.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	overlay_content.add_child(greeting)
+	if game.state.character_class == "Fighter":
+		for definition: Dictionary in game.state.FighterTree.SKILLS:
+			var id := str(definition.id)
+			var status: String = game.state.class_skill_status(id)
+			var card := _panel()
+			card.set_meta("trainer_skill", id)
+			overlay_content.add_child(card)
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 12)
+			_margin(card, 10, 8).add_child(row)
+			var icon := TextureRect.new()
+			icon.texture = skill_view.icon(str(game.state.skill_catalog.data.skills[id].icon))
+			icon.custom_minimum_size = Vector2(40, 40)
+			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon.modulate = Color.WHITE if status != "Locked" else Color(.45, .45, .45)
+			row.add_child(icon)
+			var info := VBoxContainer.new()
+			info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(info)
+			info.add_child(_label(str(definition.name), 13, TEXT if status != "Locked" else MUTED))
+			info.add_child(_label("Required level %d · %s" % [definition.level, status], 11, GOLD if status == "Available" else MUTED))
+			var learn := _button("LEARN" if status == "Available" else status.to_upper(), 11)
+			learn.custom_minimum_size = Vector2(92, 32)
+			learn.disabled = status != "Available" or not game.trainer_in_range() or game._in_combat()
+			learn.set_meta("learn_skill", id)
+			learn.tooltip_text = skill_description_bbcode(id).replace("[b]", "").replace("[/b]", "")
+			if status == "Available" and not game.trainer_in_range(): learn.tooltip_text = "Move closer to Torven to learn this skill."
+			elif status == "Available" and game._in_combat(): learn.tooltip_text = "Leave combat before learning skills."
+			learn.pressed.connect(_learn_trainer_skill.bind(id))
+			row.add_child(learn)
+	else:
+		overlay_content.add_child(_label("No Mystic training milestones have been authored yet.", 12, MUTED))
+	var crafting := _button("Browse Torven's crafting services", 12)
+	crafting.pressed.connect(_switch_panel.bind("forge"))
+	overlay_content.add_child(crafting)
+	var skills := _button("Open Class skills [K] to assign learned abilities", 12)
+	skills.pressed.connect(_switch_panel.bind("skills"))
+	overlay_content.add_child(skills)
+
+func _learn_trainer_skill(id: String) -> void:
+	game.learn_from_trainer(id)
+	if current_panel == "npc_dialogue": _render_overlay()
 
 func _render_actions() -> void:
 	overlay_title.text = "Actions"
@@ -1131,7 +1198,7 @@ func _render_settings() -> void:
 	overlay_content.add_child(defaults)
 	var layout_reset := _button("RESET WINDOW POSITIONS", 11)
 	layout_reset.pressed.connect(_reset_layout)
-	var animations_button:=_button("ANIMATION SELECTION [F6]",11)
+	var animations_button:=_button("ANIMATION SELECTION",11)
 	animations_button.pressed.connect(_switch_panel.bind("animations"))
 	overlay_content.add_child(animations_button)
 	var debug_button := _button("DEBUG MENU", 11)
@@ -1587,6 +1654,9 @@ func _begin_drag(event: InputEvent, control: Control, id: String) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if weapon_position_view != null and weapon_position_view.handle_input(event):
+		get_viewport().set_input_as_handled()
+		return
 	if _capture_debug_key(event):
 		get_viewport().set_input_as_handled()
 		return
@@ -1664,6 +1734,8 @@ func _reset_layout() -> void:
 
 
 func _panel_size(panel_name: String) -> Vector2:
+	if panel_name == "npc_dialogue": return Vector2(550, 580)
+	if panel_name == "weapon_position": return Vector2(600, 440)
 	if panel_name == "character": return Vector2(380, 500)
 	if panel_name == "settings": return Vector2(520, 430)
 	if panel_name == "actions": return Vector2(300,390)
