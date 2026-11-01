@@ -1,7 +1,49 @@
 # CURRENT_WORK.md
 
-Last updated: **2026-10-29**
+Last updated: **2026-10-30**
 Branch: `main`
+
+## World editor (2026-10-30)
+
+- Editor navigation now uses WASD/QE over the viewport, mouse-wheel zoom, right-mouse look and Shift speed controls. Ctrl+Z keeps up to 20 session actions, grouping a continuous brush drag; restoring a large terrain state can take time. Zones view overlays the original five regions and custom painted areas with a legend, and describes the existing enemy-level midpoint rule. The zone brush shows a yellow mouse ring and pending cells.
+- New Project can start from a copy of the currently applied snapshot or an empty map. Lake placement and brushing carve a shallow basin, blend a dirt shoreline and save that terrain with the draft. Brushed lakes keep separation between banks; moving/scaling a lake afterward does not reshape the shore. Existing spawn requirements and explicit Apply remain in force.
+- `XYLES WORLD EDITOR.exe` launches the separate editor using the Godot executable and project assets in the game folder; it is not a standalone export. Map I is the only source map. The interface contains a 3D viewport, free camera, 3D asset and material cards, placement and asset brushes, terrain painting/sculpting, object editing, and a confirmed clear-all operation. New Project, Load Project, Save Draft and Apply to Game are on the top bar.
+- Drafts and an independently applied snapshot live in per-user local storage; saving or loading a draft does not change the game. The applied snapshot loads on the next game start and the editor identifies it. Restoring the original map is available in Drafts. Clear-all also removes terrain, roads and lakes, but preserves gameplay spawn definitions; applying requires ground under required spawn locations.
+- Custom zones are painted and finished with right-click. They provide starter/enemy/neutral classification and level ranges; existing enemies use their painted zone's levels. They do not create mobs or move player spawns. The existing rule requiring Alin or Stefan's spawn decisions for new mobs still applies.
+- Original compound objects such as the camp's shared-collision fence cannot all be edited individually. Original roads and lakes are not editable as individual paths; clear and rebuild to remove them. Edited terrain tiles are loaded together, and painted objects are individual nodes; large edited maps have not been performance benchmarked. See `Documentation/WORLD_EDITOR.md` for controls and limitations. Interactive mouse-driven acceptance remains outstanding because Windows capture timed out; rendered previews and scripted input checks were used instead.
+- The editor's draft, terrain, asset, zone, workflow, runtime and game-integration checks passed, as did world, baked-integrity, streaming, traversal, enemy telegraph, progression, combat-effects, skill-panel and action tests. Rendered layout tests and the executable smoke launch passed. Several Godot tests report renderer/resource cleanup diagnostics at exit.
+
+## Forest shafts, stun feedback and aggro behavior (2026-10-29)
+
+- Map I's shafts are restricted to dense tree areas. Their full slanted path is
+  checked for trunks, roads, sites and ponds; checks are spread across frames.
+  They appear after 10:00 and fade from 16:00 to 17:00. Night clouds fade away.
+- Boulder meshes are sunk into sampled terrain as static cells load. Stunned
+  creatures display rotating yellow stars above the head, below the health bar.
+- Aggro modes are passive (retaliates when hit), territorial (3 m proximity)
+  and aggressive (existing longer range). Bars are yellow, orange and red before
+  combat respectively, and red in combat. Existing enemies stay aggressive.
+- Forest/AI/streaming tests and rendered previews were run; review the effects,
+  creature bars and transitions in live play. Origin has newer LFS/UI commits;
+  they have not been pulled into this checkout and local edits remain uncommitted.
+
+## Forest collisions, sun shafts and new-character equipment (2026-10-29)
+
+- Baked vegetation cells now create streamed trunk colliders for characters;
+  the camera ignores that layer. A boar charge stops on solid obstacles and a
+  tree impact stuns it for two seconds. Review navigation and chunk-loading
+  performance in an interactive session.
+- Removed the separate Blender root spikes and refreshed the shared baked tree
+  meshes without regenerating the authored world or its placements.
+- New characters start with the ornate silver sword equipped, no other equipment
+  or bag items, and zero wood and iron. Existing saves retain their contents.
+- Positional audio uses the character's location with the camera's orientation.
+  Forest shafts use localized crossed cards, varied in intensity and width,
+  follow the sun and fade at night; Graphics can disable them. SSAO's 1×–3×
+  levels are stronger and more visible in direct light. Inspect the mix and
+  effects while playing and measure performance on target PCs.
+- Daytime sky is bluer, with less sky-wide fog and a narrower horizon band;
+  distance fog over world geometry remains to conceal streaming boundaries.
 
 ## Lighting preview, TAA and sword swing (2026-10-29)
 

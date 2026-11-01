@@ -16,6 +16,11 @@ func _run() -> void:
 	root.add_child(game)
 	for i in range(15):
 		await process_frame
+	# Starter hotbar slots are intentionally empty in the Fighter redesign;
+	# equip the two abilities this effect-pool test exercises explicitly.
+	game.state.character_class = "Mystic"
+	game.state.loadout[3] = "move"
+	game.state.loadout[1] = "cast"
 	var enemy: Node3D = game.enemies[0]
 	for creature in game.enemies:
 		creature.set_physics_process(false)

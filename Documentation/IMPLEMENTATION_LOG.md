@@ -1,5 +1,6 @@
 # Implementation log
 
+
 This is the **engineering memory** of Xyles MMO. It is not a changelog of
 player-facing features and it is not a replacement for `CURRENT_WORK.md`.
 `CURRENT_WORK.md` says what is true *now*; this file says *what we changed,
@@ -489,7 +490,6 @@ MultiMesh transforms. Map II is still unbuilt.
 - Nothing was changed automatically. Confirm each action with the user before editing or reverting.
 
 **Status.** Awaiting the user's decision. This report did not modify any game code.
-
 
 ## 2026-10-28 - Read-only installed enchantment inspection
 
@@ -1307,86 +1307,95 @@ Verified: Direct3D 12 captures of corner menu, character sheet, Options and drag
 
 **Verification and limits.** Headless import completed with existing editor diagnostics and sandbox filesystem/certificate errors. Headless test-mode smoke, world, action hotbar, corner UI, HUD snapping, basic attack, enemy telegraphs and ornate sword checks passed. Progression and skill-panel checks fail because the saved skill redesign disables enchantments and changes the panel; combat-effects and visual-preview/sound checks assume a populated starting hotbar but the saved redesign starts empty. Review these fixtures and intended behavior before treating those areas as verified. A rendered test launch failed D3D12 initialization, fell back to Vulkan and crashed with illegal instruction (0xc000001d); no graphical or interactive verification was completed. Engine cleanup warnings persist.
 
-## 2026-10-29 - GitHub Git LFS migration
+## 2026-10-29 20:59 - Remote changes from another machine (automatic)
 
-**Intent and changes.** Use GitHub's default LFS service with the existing origin, preserving shared history. `.gitattributes` tracks game-asset GLB, PNG, JPEG, WAV, OGG, MP3, RES and SCN files and two large runtime animation TRES resources; 509 existing assets were staged as LFS pointers without altering their working files. Installed the repository-local LFS pre-push hook. Other contributors need Git LFS installed before pulling, and should run `git lfs pull` and the existing asset import/launcher if needed. Old Git blobs remain in history; this does not reduce historic repository size.
+**Source.** `origin/main` moved from `8a5c1f4b` to `2115754f`. Local HEAD is `2115754f`.
 
-**Verification and limits.** All 509 staged pointers were checked against working-file SHA-256 hashes and local LFS objects (about 141 MiB unique content). The headless world and baked integrity tests passed; sandbox user-log/certificate warnings and known shutdown diagnostics remain. GitHub upload, quota, credentials and a fresh checkout on the other machine have not yet been verified. A prior sandbox Direct3D launch crashed, so no new graphical launch was attempted.
+**Commits not authored on this PC** (local identity: `d.alin_09@yahoo.com`):
 
-## 2026-10-29 - Highlight skill modifiers and immediate item descriptions
+- `2115754f` 2026-10-29T20:43:37+02:00 **Stefan Bratasanu** - mine (45 files, +1287/-140) [already in local HEAD]
 
-**Intent and design.** Make current skill modifiers visible and remove the delay for inventory item descriptions. The reference topic was reachable, but its linked images were unavailable; followed the existing compact dark bronze/ivory interface and used gold to distinguish sources.
+**New commits authored on this PC:** 1 (not reported as external).
 
-**Changed.** Skill cards and shortcut tooltips derive current values from the existing compiled skill and runtime power preview. Equipment base-power and relevant damage/support multipliers, plus enabled installed enchantments, are identified and highlighted. Broken equipment's reduced power follows the runtime rule and inactive modifiers are omitted. Inventory item and material hover uses an immediate viewport-clamped panel which closes on exit or window changes. No combat or progression formula was changed.
+**Files touched by the external commits:**
 
-**Verification and limits.** Headless `test_ui_modifier_hover.gd` checks actual panel opening, live equipment power, broken equipment, enabled/disabled enchantments and immediate hover lifecycle. Action-hotbar, Fighter-tree and world tests passed. A headless test-mode launch completed without script/parse errors. Visual playtesting was not performed because the previous sandbox Direct3D launch crashed; inspect tooltip sizing and appearance interactively. Sandbox log/certificate and existing shutdown-resource diagnostics remain.
+- `assets/ui/actions/action_atlas.png`
+- `assets/ui/actions/action_atlas_minimal.png`
+- `assets/ui/actions/action_atlas_playful.png`
+- `assets/ui/actions/dance.png`
+- `assets/ui/character_head.svg`
+- `CURRENT_WORK.md`
+- `Documentation/IMPLEMENTATION_LOG.md`
+- `Documentation/PROJECT_DOCUMENTATION.txt`
+- `Documentation/UI_STANDARD.md`
+- `GAME_RULES.md`
+- `resources/skills/skill_catalog.tres`
+- `scripts/animation_profiles.gd`
+- `scripts/classic_frame.gd`
+- `scripts/game_hud.gd`
+- `scripts/game_state.gd`
+- `scripts/main.gd`
+- `scripts/player.gd`
+- `scripts/skill_drag_button.gd`
+- `scripts/skill_panel.gd`
+- `scripts/skills/fighter_tree.gd`
+- `scripts/skills/skill_runtime.gd`
+- `scripts/status_resource_bar.gd`
+- `scripts/ui_drag_guides.gd`
+- `tests/test_action_hotbar.gd`
+- `tests/test_actions_rework.gd`
+- `tests/test_basic_attack.gd`
+- `tests/test_corner_ui.gd`
+- `tests/test_fighter_tree.gd`
+- `tests/test_hud_snapping.gd`
+- `tests/test_remove_skill.gd`
+- Generated Godot metadata: 15 `.uid`/`.import` file(s) (regenerate with a headless import)
 
-## 2026-10-29 - Hyper3D human fighter draft
+**Flags.**
 
-**Intent and changes.** Generated an isolated human fighter from the user-supplied reference using Hyper3D Rodin Gen-2.5-Medium, a 30,000-quad target and GLB output. Saved PBR and shaded exports with provenance in `assets/models/characters/human_fighter/`. The image-to-3D service required a JPEG extension because the original `.png` was actually JPEG; an unchanged temporary copy under ignored `logs/` was used for upload. No existing playable character was replaced.
+- Core file changed: `scripts/game_hud.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/game_state.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/main.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/player.gd`. Re-run the game and the tests before trusting it.
+- Hard failure calls on 7 added line(s).
 
-**Verification and limits.** The generated GLBs each contain one mesh with 30,330 vertices and 54,984 triangles, without skins or animations. Godot headless import ran and both scenes loaded successfully. The import logged an error for the original mislabeled reference under `addons/`, in addition to known editor/sandbox diagnostics. Visual fidelity, topology, performance, rigging and compatibility with the animation library were not verified. No interactive graphics launch was attempted because of the prior sandbox crash.
+**Proposed actions (not applied).**
 
-## 2026-10-29 - Default generated human fighter
+- **Re-verify:** launch the game, run the tests, and re-read the changed core files against `GAME_RULES.md`.
+- Nothing was changed automatically. Confirm each action with the user before editing or reverting.
 
-**Intent and changes.** At the user's request, rigged the generated fighter with Hyper3D's human skeleton (job `02a13b4b-7c39-4073-986e-6363d98ef21b`) and made `fighter_rigged.glb` the default player visual. `scripts/fighter_retarget.gd` maps major joints and fingers from the existing animation skeleton using global rest-relative rotation; the original mesh is hidden while its rig continues to drive gameplay, existing clips and seat calculations. Weapon attachment is on the new right hand with a rest-orientation correction. The generated mesh is about 55k triangles. No combat or progression rules were changed.
+**Status.** Awaiting the user's decision. This report did not modify any game code.
 
-**Verification and limits.** Headless startup, `test_fighter_retarget.gd`, camp seating, animation selection, basic attack and world tests passed. The retarget test confirms mapped bones, run leg movement and weapon parent. A 500-iteration headless microbenchmark averaged about 0.09 ms per bridge update on this machine; it is not a gameplay frame-rate measurement. An offline Blender reference render and a run pose reconstructed from the in-engine skeleton were inspected; small shoulder skin artifacts are visible. No actual in-game rendered or interactive test was performed after the previous sandbox graphics crash. Different proportions, seat alignment, all combat animations, hand grip, deformation and performance in gameplay need user review. The mislabeled supplied reference continues to cause a separate import diagnostic; known sandbox log/certificate and exit diagnostics remain.
+## 2026-10-29 - Forest collision, light shafts and starting equipment
 
-**Reference import correction.** Renamed the supplied JPEG from `.png` to `.jpg` without changing its bytes; the final headless import recognized it and no longer reported the mislabeled-file error. Existing editor empty-name and sandbox certificate/settings errors remain.
+**Intent and changes.** The user requested solid trees and props for mobs, a two-second stun when charging boars hit trees, removal of the pointed tree-base pieces, the Blender silver sword as the sole starting item, sun shafts, and fire audio heard from the character. Baked vegetation uses MultiMesh instances and previously had no trunk colliders. Each loaded tree group now owns a shared-shape trunk collision body, removed with its streamed cell; a dedicated physics layer keeps the orbit camera from collapsing against trunks. Existing solid prop collisions also stop a charge. Enemy charge impact with a tree ends the charge and stuns it for two seconds. The Blender generator discards separate root cones while retaining its random sequence, and `refresh_tree_meshes.gd` updates the five shared baked meshes without rebuilding placements. New characters equip the existing ornate silver sword and start with no bag items or wood/iron; current saves are not migrated or cleared. An AudioListener3D follows the player while using the camera orientation, affecting positional sounds including fire.
 
-## 2026-10-29 - Fighter pose and sword grip correction
+**Lighting.** Godot Forward+ volumetric fog scatters the existing directional sun and its shadows; regular fog remains for distant streaming. The sun's volumetric energy falls to zero at night. The Graphics option persists and permits disabling the extra GPU effect. Reference: https://docs.godotengine.org/en/stable/tutorials/3d/volumetric_fog.html .
 
-**Evidence and cause.** The user reported poor walking and supplied a screenshot with the sword displaced from the hand. The latest real session recorded no gameplay errors and had no marker. A test-mode OpenGL reproduction showed the same issue. Comparison to the original animated character showed that the generated rig's arms and legs start at different angles; copying only global rest-relative rotations retained those differences, placing the arms and hands incorrectly. This was an error in our retargeting, although the generated skin also has imperfections.
+**Verification and limits.** Re-exported the trees in Blender and imported them in Godot. Character creation, ornate-sword, forest collision/stun/listener/light-setting, world, enemy telegraph, basic attack, torch and chunk-streaming checks passed; the character-name and sword tests were adjusted for the current HUD casing and new starting equipment. A Direct3D screenshot tour and an on/off forest comparison were inspected; the separate root spikes are gone and the sunlight is subtle in the reviewed view. The effect, collision navigation, mix and performance still need interactive review; no controlled performance benchmark was run. The screenshot tour logged slow frames during its rapid teleports and engine shutdown reported the existing resource/RID leak diagnostics. The remote-change check flagged Stefan's already-pulled core changes for re-verification; no external commit was reverted.
 
-**Changed.** `fighter_retarget.gd` computes rest-direction corrections for arm, leg, foot and finger segments, then applies the existing animation's rest-relative motion. `player.gd` compensates for the hand correction when orienting the weapon mount. Gameplay, animation timing and the underlying clips are unchanged. `test_fighter_retarget.gd` now checks source and target limb directions and sword proximity.
+## 2026-10-29 - Localized forest shafts and stronger SSAO
 
-**Verification and limits.** Captured and compared original, before and corrected test-mode OpenGL sword idle and multiple walk/run frames. The corrected pose and grip are closer to the original. Headless retarget, camp seating, animation-selection and basic-attack checks passed. These frames do not substitute for interactive playback: different body proportions, generated skin weights, weapon variants, combat and seat alignment still need review. Existing test shutdown diagnostics remain.
+**Intent and references.** The user rejected the broad light wash and requested distinct beams with varied brightness and softness. Compared a real [redwood forest photograph](https://ianplant.com/photo/907045/20564086/sunbeams-in-the-forest-5-redwood-national-park-california) and a [game forest example](https://www.3djuegos.com/juegos/the-witcher-3-wild-hunt/noticias/los-mejores-bosques-de-videojuego-190728-95263). Godot documents volumetric fog and NVIDIA describes the role of occluders in light shafts, but the first global-volume result visibly washed out the whole view.
 
-## 2026-10-29 - Fighter face and shorts refinement
+**Changes.** Replaced that global volumetric wash with localized, depth-tested crossed shader cards batched with the streamed vegetation, varying length, width and opacity. Their apparent slant follows the sun, they fade at night, and the graphics toggle hides their draw calls. This is an art-directed approximation: the cards are placed near trees and depth-tested against visible geometry, but they are not calculated from actual canopy gaps or physical shadow volumes. SSAO intensity is now 2.5 times the selected 1–3 level (formerly 1.5) and light affect is 0.35 (formerly 0.12), so occlusion remains more visible in sunlight. Existing settings retain their selected level.
 
-**Evidence and intent.** The user reported a bad side profile and shorts texture/deformation while running. The recent runtime log had no error or marker relevant to the report. Blender rest-profile renders confirmed the face asymmetry is present in the generated source. Weight inspection showed the central lower pelvis was almost entirely split between the two thigh bones, with little hip influence; this is a plausible contributor to the moving shorts artifact, not a confirmed diagnosis of temporal flicker.
+**Verification and limits.** A Direct3D on/off forest comparison showed distinct localized light bands without the old screen-wide wash; separate 1× and 3× SSAO frames were inspected. Headless forest checks cover shaft setting, streaming nodes, changing sun direction and night visibility, plus the collision and listener changes. The world test checks the revised SSAO values and settings persistence. Run an interactive movement and target-PC performance review: screen-facing geometry is an approximation and the cost of additional transparent draws has not been benchmarked. The parallel rendered capture and world test initially shared a timestamped runtime log and the world-log assertion failed; the world test passed when rerun alone. Existing scripted-shutdown RID/resource diagnostics remain.
 
-**Changed.** `assets/models/characters/human_fighter/refine_fighter.py` produces a separate `fighter_refined.glb` from the preserved Hyper3D rig. It mirrors the better side, transfers original skin weights, adjusts hip/thigh influence near the shorts, and restores the non-tattooed upper-arm texture. `player.gd` loads the refined copy. The symmetry also changes body geometry and UVs; this is not a hand-authored replacement face.
+## 2026-10-29 - Restore blue daytime sky
 
-**Verification and limits.** Inspected both profiles in Blender and in an isolated Godot OpenGL render, plus several test-mode running frames from behind before and after. The facial profile is improved; close-up neck/shoulder shading still shows a transition. Retarget, camp seating, animation selection and basic attack checks passed, and the final asset imported. Still frames do not prove that a motion-dependent shorts shimmer is resolved; interactive playback and other lighting/poses remain to be reviewed. Sandbox certificate/editor-setting and existing engine shutdown diagnostics remain.
+**Intent and changes.** The user reported a grey daytime sky. The prior horizon-hiding pass used a grey-green daytime horizon, blended a wide grey fog band into the sky, and allowed scene fog to affect the sky. Changed the daytime gradient to blue, narrowed the shader's mist band, and reduced fog influence on the sky while retaining world fog density and the existing night/dusk progression. This preserves the intended concealment of distant streamed scenery without tinting the whole sky grey.
 
-## 2026-10-29 - Two-view fighter regeneration
+**Verification and limits.** Inspected Direct3D day and night frames: the daytime view is blue with clouds and the night view remains dark with stars. Headless forest and world tests passed, including checks for the blue-day shader parameter, reduced sky fog and retained distance fog. The progression fixture now supplies its own materials and damaged armor instead of depending on removed starting items; its crafting/death checks had no errors, but 13 enchantment-related assertions still fail because the current Fighter redesign has that system disabled (already recorded in the prior reconciliation entry). No interactive horizon-traversal or performance benchmark was done. Existing scripted-shutdown diagnostics remain.
 
-**Intent and changes.** Regenerated the human fighter with Hyper3D Rodin Gen-2.5-High from the user's front and side reference images to improve the texture and profile. Saved the resulting PBR and shaded GLBs in `assets/models/characters/human_fighter/regenerated/`; generation ID and details are in its README. Preserved the existing playable model and rig.
+## 2026-10-29 22:13 - Remote changes from another machine (automatic)
 
-**Verification and limits.** The two exports each contain approximately 55,456 triangles and have no skeleton or animations. Both imported and loaded in Godot. Blender front and both profile renders were inspected: shorts have more detail, but one side has rough/pitted skin and the other still has a distorted mouth. The result is a draft, not integrated or rigged; texture quality and movement remain unresolved. Existing Godot import empty-name and sandbox certificate/editor-settings warnings remain.
+**Source.** `origin/main` moved from `2115754f` to `df45631d`. Local HEAD is `2115754f`.
 
-## 2026-10-29 - Rig two-view fighter
+**Commits not authored on this PC** (local identity: `d.alin_09@yahoo.com`):
 
-**Intent and changes.** At the user's request, submitted the regenerated two-view fighter to Hyper3D's human rigging pipeline. Saved PBR and shaded rigged GLBs under `assets/models/characters/human_fighter/regenerated/` and recorded job provenance in its README. The user requested high-fidelity textures and approximately 20,000–200,000 vertices for future generated assets; this preference is recorded in GAME_RULES. The current playable character remains unchanged.
-
-**Verification and limits.** Both rigged GLBs contain 30,034 exported vertices, 55,456 triangles, one 52-joint skin and no animation clips. Godot headless import completed and both variants loaded; all 52 joints mapped through the current animation bridge, and a sampled running-leg direction matched the source. A Blender rest-pose render was inspected. There was no interactive or in-game visual animation test; skinning in motion, the generated rough skin, and the previously identified mouth-profile defect remain unresolved. Existing sandbox certificate/editor settings and editor empty-name diagnostics remain.
-
-## 2026-10-29 - Regenerated fighter rig animation preview
-
-**Changed and verified.** Kept the two-view rigged model as a separate draft. Used a temporary test-mode scene to attach it to the current retargeting bridge and weapon, and inspected OpenGL frames of sword idle, run and attack. The model follows the clips and the sword stays near the hand in the sampled frames, but shoulder skinning remains imperfect. These are sampled stills, not an interactive motion or full weapon/seat test. The existing playable fighter was not replaced.
-
-## 2026-10-29 - Switch playable fighter to regenerated rig
-
-**Changed.** At the user's request, `scripts/player.gd` now loads `regenerated/fighter_rigged_pbr.glb` as the default player visual. The original animation bridge and weapon attachment remain, and the earlier refined model is preserved.
-
-**Verification and limits.** Headless fighter-retarget, camp seating, basic attack and animation-selection tests passed after the switch. The same rig was inspected in test-mode OpenGL idle, run and attack frames before switching. Interactive motion, seating, weapon variants and visual appearance need review; the generated rough skin, uneven mouth profile and shoulder deformation remain known issues. Existing sandbox log/certificate and test-shutdown diagnostics persist.
-
-## 2026-10-29 - Higher-density fighter attempt
-
-**Intent and changes.** The user reported distorted-looking body and possible baked lighting or low texture quality. Submitted a new generation from the same front and side references using the connected Hyper3D tool: Gen-2.5-High, Quad target 50,000, texture de-lighting enabled, and a prompt for natural anatomy and even unlit skin. Job `8ab73a67-c853-47c9-958f-5f464afa4105` completed and returns PBR and shaded GLBs. The available MCP/CLI controls do not expose the API's Extreme-High tier or high-resolution texture options. No game assets or code were replaced.
-
-**Verification and limits.** Completion and output names confirmed by Hyper3D. The output has not been downloaded, inspected, rigged, or tested; actual vertices, texture dimensions, appearance and suitability remain unknown. No claim of improvement is made.
-
-## 2026-10-29 23:40 - Remote changes from another machine (automatic)
-
-**Source.** `origin/main` moved from `df45631d` to `c1a85845`. Local HEAD is `df45631d`.
-
-**Commits not authored on this PC** (local identity: `bratasanu.stefan@gmail.com`):
-
-- `c1a85845` 2026-10-29T23:39:29+02:00 **XyLeS** - Merge branch 'main' of https://github.com/stefanbratasanu/xyles-mmo (517 files, +203/-65372) [not in local HEAD]
-- `945aa434` 2026-10-29T23:26:47+02:00 **XyLeS** - Update 8 (32 files, +851/-56) [not in local HEAD]
+- `df45631d` 2026-10-29T21:02:23+02:00 **Stefan Bratasanu** - lfs update (7 files, +174/-2) [not in local HEAD]
+- `5580b0ab` 2026-10-29T20:46:02+02:00 **Stefan Bratasanu** - Track game assets with Git LFS (512 files, +29/-65370) [not in local HEAD]
 
 **Files touched by the external commits:**
 
@@ -1445,23 +1454,17 @@ Verified: Direct3D 12 captures of corner menu, character sheet, Options and drag
 - `assets/models/props/rock_3.glb`
 - `assets/models/props/stone_1.glb`
 - `assets/models/props/stone_2.glb`
-- `assets/models/trees/generate_trees.py`
 - `assets/models/trees/tree_birch.glb`
 - `assets/models/trees/tree_dead.glb`
 - `assets/models/trees/tree_oak.glb`
 - `assets/models/trees/tree_pine.glb`
-- ... and 473 more source file(s)
-- Generated Godot metadata: 4 `.uid`/`.import` file(s) (regenerate with a headless import)
+- `assets/models/weapons/ornate_silver_sword.glb`
+- ... and 457 more source file(s)
 
 **Flags.**
 
-- Core file changed: `scripts/enemy.gd`. Re-run the game and the tests before trusting it.
 - Core file changed: `scripts/game_hud.gd`. Re-run the game and the tests before trusting it.
-- Core file changed: `scripts/game_state.gd`. Re-run the game and the tests before trusting it.
-- Core file changed: `scripts/main.gd`. Re-run the game and the tests before trusting it.
-- Core file changed: `scripts/player.gd`. Re-run the game and the tests before trusting it.
-- Core file changed: `scripts/world_builder.gd`. Re-run the game and the tests before trusting it.
-- Hard failure calls on 6 added line(s).
+- Hard failure calls on 1 added line(s).
 
 **Proposed actions (not applied).**
 
@@ -1470,710 +1473,37 @@ Verified: Direct3D 12 captures of corner menu, character sheet, Options and drag
 
 **Status.** Awaiting the user's decision. This report did not modify any game code.
 
-## 2026-10-29 - User-tweaked playable fighter
 
-**Changes.** Downloaded the user's edited Hyper3D model (`df18cad1-2a09-4c2f-9058-f4302348557b`): OBJ plus texture images, with no OBJ material library. Submitted humanoid rigging job `9f8ddefd-f041-42bc-9ac7-37b72d4917a3` and selected its PBR GLB in `player.gd`, retaining the prior assets and game animation bridge. The rigged export has 63,990 vertices, 52 joints, no animation clips, an embedded 4K diffuse texture and 2K normal and metallic/roughness textures.
+## 2026-10-29 - Shaft placement, night clouds, stun and aggro modes
 
-**Verification and limits.** Headless import and fighter-retarget, camp-seating, basic-attack and animation-selection tests passed. OpenGL test-mode idle and run frames were inspected with the material visible; interactive playback, all poses and weapon grips need review. Existing sandbox certificate/editor-settings and exit diagnostics persist. The remote checker found two incoming commits from another machine; they remain unmerged and its report is preserved above.
+**Intent and changes.** Fixed reported shafts crossing trunks or appearing over roads/open areas: Map I vegetation cells create candidate beams, and full slanted paths are checked against the authored tree index, road corridors, sites and ponds, with a four-tree density threshold. Checks repeat as the sun moves and are staged one batch per frame; unloaded nodes are referenced by instance ID. Shaft intensity ramps up from 10:00 to 11:00, stays full until 16:00 and fades out by 17:00, using the existing visual day/night preview. Night cloud opacity now reaches zero. Existing baked boulders are identified by their rock mesh resource name (their node names are often auto-generated) and settled partly into sampled ground when static chunks load, moving collision with them; the offline generator uses the same settling rule. Stun uses three rotating yellow star labels above the creature's head and below its health bar for the two-second stun.
 
-## 2026-10-29 - Fighter skin normal correction
+**Aggro.** Added passive, territorial and aggressive modes. Passive creatures do not initiate proximity aggro but retaliate when attacked, as clarified by the user; territorial creatures detect within 3 m, while aggressive creatures keep the existing kind-specific detection radius. All retaliate when damaged. Health bars identify the behavior in yellow, orange or red before combat; an engaged or recently damaged creature's bar is red. The combat color clears eight seconds after the last damage when no longer engaged. Existing wolves, boars and guardians retain their aggressive behavior. Rules are recorded in GAME_RULES.md.
 
-**Evidence and change.** After the user reported the face looked wrong, compared a Blender render of the downloaded OBJ using its diffuse texture to the rigged PBR GLB. The rigged normal map greatly exaggerated fine facial and skin detail; the downloaded source geometry and color also already differ from the reference. `player.gd` duplicates the generated material and disables its normal map at runtime, keeping the 4K color texture and other PBR properties; the GLB remains unchanged.
+**Verification and limits.** The forest test checks time windows, clearance, boulder settling, stun placement/duration and audio listener; the aggro test covers the three modes, passive retaliation and colors. World, enemy telegraph and chunk-streaming tests were run, including unloading while queued shaft checks exist. Direct3D captures were inspected for a cloud-free night, grounded boulder, and stars below the health bar. A local forest check found 4.8–10.8 ms worst staged checks in successive runs using two batches per frame; the final version was reduced to one batch per frame. This is not a full frame-time or slower-PC benchmark. The card-based shafts are still an approximation and need interactive review across terrain and time. Existing shutdown RID/resource warnings persist. The remote check found two newer commits, including an LFS migration and UI changes; they were not pulled or altered, and local uncommitted changes remain.
 
-**Verification and limits.** Fighter retarget test passed and an OpenGL test-mode idle frame showed smoother skin. This cannot repair the source model's facial proportions or texture, and the user's interactive visual review is still needed. Existing sandbox and renderer shutdown warnings remain.
+## 2026-10-29 - GitHub Git LFS migration
 
-## 2026-10-29 - Original-skeleton binding investigation
+**Intent and changes.** Use GitHub's default LFS service with the existing origin, preserving shared history. `.gitattributes` tracks game-asset GLB, PNG, JPEG, WAV, OGG, MP3, RES and SCN files and two large runtime animation TRES resources; 509 existing assets were staged as LFS pointers without altering their working files. Installed the repository-local LFS pre-push hook. Other contributors need Git LFS installed before pulling, and should run `git lfs pull` and the existing asset import/launcher if needed. Old Git blobs remain in history; this does not reduce historic repository size.
 
-**Intent and evidence.** The user requested checking whether the animation-pack character's bone structure could be adapted to the generated fighter. The original player rig has 55 bones including root and helper bones; the Hyper3D rig has 52 joints with different bone rest positions, orientations and skin weights. Neither provides facial articulation. The face in the downloaded OBJ remains visually unlike the supplied reference even in a static diffuse-only render, so its proportions and texture are independent of retargeting.
+**Verification and limits.** All 509 staged pointers were checked against working-file SHA-256 hashes and local LFS objects (about 141 MiB unique content). The headless world and baked integrity tests passed; sandbox user-log/certificate warnings and known shutdown diagnostics remain. GitHub upload, quota, credentials and a fresh checkout on the other machine have not yet been verified. A prior sandbox Direct3D launch crashed, so no new graphical launch was attempted.
 
-**Experiment.** In a temporary test-mode probe, mapped the generated skin's joints directly to corresponding original-skeleton bones, built rest bind transforms, and attached the weapon to the original hand. Rendered sword idle and run frames using OpenGL. The body retained some movement but hands and fingers stretched severely and the face did not improve; this straightforward bind is not usable. It was not applied to the playable character. A proper transfer requires fitting the rest pose and reauthoring skin weights, then visually testing all poses; facial geometry/texture requires separate correction.
+## 2026-10-29 - Highlight skill modifiers and immediate item descriptions
 
-**Verification and limits.** OpenGL test-mode probe completed; no gameplay files changed by the experiment. Existing playable character and retarget bridge remain. Test-exit rendering resource diagnostics persist.
+**Intent and design.** Make current skill modifiers visible and remove the delay for inventory item descriptions. The reference topic was reachable, but its linked images were unavailable; followed the existing compact dark bronze/ivory interface and used gold to distinguish sources.
 
-## 2026-10-30 - Fitted original skeleton experiment
+**Changed.** Skill cards and shortcut tooltips derive current values from the existing compiled skill and runtime power preview. Equipment base-power and relevant damage/support multipliers, plus enabled installed enchantments, are identified and highlighted. Broken equipment's reduced power follows the runtime rule and inactive modifiers are omitted. Inventory item and material hover uses an immediate viewport-clamped panel which closes on exit or window changes. No combat or progression formula was changed.
 
-**Intent and experiment.** At the user's request, continued testing adaptation of the original animation-pack bones to the Hyper3D fighter. A temporary test-mode script maps all matching bones, transforms each weighted vertex and normal from the generated rig's rest pose to the original skeleton's rest positions and directions, rebuilds bind poses, and attaches the weapon to the original right hand. No player code or source assets were replaced.
+**Verification and limits.** Headless `test_ui_modifier_hover.gd` checks actual panel opening, live equipment power, broken equipment, enabled/disabled enchantments and immediate hover lifecycle. Action-hotbar, Fighter-tree and world tests passed. A headless test-mode launch completed without script/parse errors. Visual playtesting was not performed because the previous sandbox Direct3D launch crashed; inspect tooltip sizing and appearance interactively. Sandbox log/certificate and existing shutdown-resource diagnostics remain.
 
-**Result and limits.** Inspected OpenGL sword-idle and running frames. The previous direct bind's exploding fingers no longer appeared, but the torso was visibly stretched and deformed, and the face remained unlike the reference. The experiment is unsuitable for integration; its script and images are in ignored `logs/`. This does not complete a proper rebind: manual rest-pose fitting and weight painting plus full animation review remain, and the face geometry/texture needs separate correction. Existing test-mode renderer shutdown diagnostics persist.
+**Verification and limits.** Headless `test_ui_modifier_hover.gd` checks actual panel opening, live equipment power, broken equipment, enabled/disabled enchantments and immediate hover lifecycle. Action-hotbar, Fighter-tree and world tests passed. A headless test-mode launch completed without script/parse errors. Visual playtesting was not performed because the previous sandbox Direct3D launch crashed; inspect tooltip sizing and appearance interactively. Sandbox log/certificate and existing shutdown-resource diagnostics remain.
 
-## 2026-10-30 - Native animation-pack skin for the playable fighter
+## 2026-10-30 - World editor foundation (incomplete)
 
-**Problem.** The generated fighter's 52-joint rest pose, spine pivots and skin weights did not match the original animation-pack skeleton. Merely mapping bones or moving every weighted vertex to each original joint distorted the torso and hands. The requested fix was to adapt the original rig to the generated model.
+**Intent.** Begin a separate world editor with editable map drafts and an explicit selection of which draft the local game uses. Clearing must include terrain, roads, lakes and assets; the user also requested terrain sculpting and surface painting.
 
-**Implemented.** The player now loads `assets/models/characters/human_fighter/native_skin/fighter.tscn` under its existing `Skeleton3D`, hides the original body and binds the new body directly to the original 55-bone skeleton. It uses 53 named skin binds, including the original hand and finger bones. No separate fighter skeleton or per-frame retarget bridge is created. The weapon remains on the original right-hand attachment. Existing animations, upper-body overlays, seating, movement and gameplay code keep the original rig.
+**Changes.** Added `scripts/world_editor/draft_store.gd` for local JSON drafts, backup recovery and a separate published snapshot, and `scripts/world_editor/terrain_grid.gd` for importing the current baked height/color grid, representing absent terrain cells, sculpting, surface IDs, triangle-consistent height sampling and per-tile mesh construction. Added `WORLD EDITOR PREVIEW.bat` and a read-only Godot scene that loads Map I and flies a camera over the streamed world. The data modules are not connected to gameplay and do not replace any current map. A published snapshot here is storage only; no in-game Apply to Game feature exists yet.
 
-**Asset preparation.** The build exports both bodies and the original rig; rotates/translates generated limbs into the original rest pose while leaving axial torso/head geometry in place; welds imported UV splits; relaxes the shoulder transition; transfers weights by nearest-surface interpolation from `SK_Protof-Actor`; smooths weights and limits/normalizes four influences. Welding before weight smoothing prevents the visible UV-seam cracks found in the first native test. The final compressed mesh resource has 53,975 exported vertices and 100,000 triangles. Its material references the user's original 4096px diffuse and 2048px roughness maps, without the exaggerated normal map. Source files are preserved. The repeatable pipeline is saved in `scripts/dev/fighter_skin/`; intermediate files are placed under ignored `logs/fighter_skin_build/` with `.gdignore`. `fighter_retarget.gd` is retained only as an offline source of rest mappings.
+**Verification.** Ran `tests/test_world_editor_drafts.gd` and `tests/test_world_editor_terrain.gd` headlessly; both passed, covering independent published copies, backup recovery, invalid draft IDs, grid import, clear, sculpt, sampling, JSON round-trip and mesh/collision generation. The rendered preview test loaded the map, simulated camera movement, saved a screenshot that was inspected, and printed its pass message; the engine emitted resource/renderer cleanup errors at shutdown. Ran the existing headless `tests/test_world.gd` before changes; it printed its pass message and then emitted renderer/resource leak diagnostics at shutdown. No editor executable, interactive asset or terrain editing, or in-game draft application has been implemented or verified.
 
-**Verification.** Rebuilt successfully with Godot 4.7.2 and Blender 4.4.3. Updated `tests/test_fighter_retarget.gd` to validate the native binding: single original skeleton, correct bind names/indices, 4K texture, requested vertex range, normalized weights for every vertex, identical weights at UV duplicates, rest-position error below 0.0001m (measured maximum 0.0000742m), bounded sampled skin positions in idle/run/attack/seated clips and sword attachment. It passed, as did camp seating, animation selection (242 imported clips) and basic attack. Inspected front/side/back OpenGL captures of sword idle, walk, run, attack and a seated pose. Test-mode normal startup completed without parse errors, script errors or runtime `[ERROR]` events. Existing Godot renderer shutdown RID/resource diagnostics remain; headless sandbox runs also report unavailable home-log/certificate writes.
-
-**Limits.** This improves the body binding and animation compatibility; the downloaded model's facial proportions and baked skin shading remain. A separate head-smoothing experiment softened the eyes excessively and was not included. The rendered checks sample poses rather than all 242 clips; a full interactive Direct3D 12 motion review remains. Remote changes previously reported from another machine are still unmerged. No commits or pushes were made.
-
-## 2026-10-30 - Correct rejected fighter body fitting and shading
-
-**User feedback and diagnosis.** The screenshot showed that the preceding native-skin conversion was visibly unacceptable. The earlier claim that rig compatibility was resolved overstated the evidence. Independent geometry/normal audits under logs/ found the original fitting blended large limb-joint translations into chest/waist vertices shared with shoulder/thigh weights. Matched surface points showed outer-chest displacement up to about 12cm and waist/pelvis displacement up to 13cm. Custom normals also survived mesh deformation and shoulder smoothing: the final native model had 9,330 corners differing strongly from geometric normals and 779 inverted directions. The existing tests checked numerical bounds but missed these visual defects.
-
-**Correction.** Added `scripts/dev/fighter_skin/build_anatomy_rig.gd`, which adapts the original animation-pack hierarchy and bone axes/positions to the generated anatomy. It does not reshape vertices: only the established uniform scale/placement is applied. The new `assets/models/characters/human_fighter/anatomy_rig/character.tscn` and body.res retain 63,990 vertices, 100,000 triangles, original UVs/weights/normals and 4K diffuse. `scripts/fighter_animation_adapter.gd` duplicates and caches libraries, adapts bone-position keys to the fitted rests while retaining motion deltas and original rotations, and adds missing static bone tracks. `player.gd` adapts libraries before building its seating pose. `scenes/main.tscn` and the player's fallback scene both use the new character. The old native_skin version is retained and marked superseded. No texture regeneration or provider requests were used.
-
-**Verification.** Updated `tests/test_fighter_retarget.gd` to compare every output vertex/UV/normal against the actual input. Source-shape error is zero; maximum packed-normal vector error is 0.000130, and maximum CPU rest-skin error is 0.000133m (weight packing). Normalized weights, UV-seam equality, bind names, single skeleton, material resolution, bounded animated vertices and weapon attachment pass. Camp seating, animation selection (242 clips) and basic attack pass. Inspected OpenGL front/side/back captures and Direct3D 12 Forward+ low-angle/close captures for idle, walk, run, attack and seated poses. Rendered sessions completed without script/parse errors; existing renderer-exit resource diagnostics persist. Runtime logs show no handled ERROR events in these flows.
-
-**Limits.** The conversion-induced chest/waist stretching and invalid shading normals are removed. Source facial likeness, baked shading/tattoo artifacts and automatic skinning limitations remain, and sampled poses are not a full 242-clip interactive acceptance test. No shared Git history, remote commits or user saves were changed.
-
-## 2026-10-31 - Head-focused replacement and 5-by-5 body draft
-
-**Request.** Improve the unacceptable generated face, then provide independent five-level size/fat and five-level muscularity choices (25 combinations), not five bundled physiques.
-
-**Assets and implementation.** Downloaded the already-submitted Hyper3D job `17559b21-2d9c-4a46-a9c8-d8164cd5e696` (Gen-2.5-High, 30k quad target, de-lighting) using cropped supplied front/profile references. Head output: 28,808 vertices, 2K textures. Neutral front and both profiles have clearer eyes/lips than the old source. `head_revision/` contains the raw head, combined source, and experimental original-hierarchy rig. The combined export has 68,987 vertices with separate 4K body/2K head atlases. `build_head_revision.py` joins neck boundaries, samples original neck weights/colors, welds UV duplicates while preserving corner UVs, and creates joint-centered endpoint morphs. `build_head_rig.gd` preserves multiple materials and blend shapes when adapting the original animation skeleton. `fighter_body_shapes.gd` exposes independent 0–4 values; `fighter_body_surface.gdshader` softens baked abdominal detail on low-muscle/high-fat combinations. Material instances are isolated per actor.
-
-**Verification and limitations.** `test_fighter_body_shapes.gd` passes all 25 combinations, normalized weights, geometry bounds, requested vertex range, and independent instances. D3D12 test-mode grids of initial iterations exposed stretched torso boundaries, visible muscle detail at the soft endpoint and stale-normal artifacts. Corrected hard torso/limb boundaries, smoothed endpoint displacement, and regenerated normals; kept the asset experimental because neck transition and extreme-body art still require refinement. Test-mode renders do not alter saves. The original playable default is unchanged, and no character-creation UI/persistence was added. This is partial asset work, not an accepted final art pass. Godot headless sandbox reports certificate/user-log access errors; renderer runs use normal local-cache access. No pull, commit, push or changes to the two incoming remote commits.
-
-## 2026-10-31 - Expose the creator from character creation
-
-**Cause.** The preceding pass created only asset/preset infrastructure. `character_select.gd` had no entry point, preview or appearance persistence, so the user could not access customization.
-
-**Change.** Added APPEARANCE to the existing creation form and a modal preview using its existing classic_frame, dark brown/bronze/ivory styling and helper buttons/labels. Reviewed the reference topic; its linked main screenshot failed to load, so followed UI_STANDARD and the existing menu's visual language. Two five-choice selectors update the isolated 3D preview; rotation permits profile/back review. USE APPEARANCE accepts, BACK/Escape cancels. The screen identifies the draft art status. `character_store.gd` accepts appearance data; `game_state.gd` normalizes and persists it with backward-compatible empty defaults. `main.gd` applies the chosen appearance after loading. `player.gd` installs the selected mesh and clones/rebinds its skin precisely to the existing animated skeleton, preserving gameplay/weapon logic. The body controller exposes explicit material initialization for this path. Existing saves without appearance data keep their old visual.
-
-**Verification.** Extended `tests/test_characters.gd` through the real button signal, five-by-five controls, live preview, acceptance/cancel, save/load, malformed values, rig compatibility within export precision and world application. Also corrected its obsolete uppercase-only HUD-name assertion to match existing mixed-case HUD behavior. Headless and D3D12 tests pass (0 failures). Inspected `.godot/appearance-creator-preview.png`: correct front-facing model, visible controls, rotation and action buttons within the frame. No script/parse errors in the rendered flow; pre-existing shutdown resource diagnostics remain. No shared-history changes, user-save edits or remote pull. This fixes creator access and persistence, not the outstanding body/neck art quality.
-
-## 2026-10-31 - Correct neck atlas mapping and non-shrinking body morph smoothing
-
-**Findings.** The collar faces use the body material but previously copied UVs from both neighboring materials, sampling unrelated body-atlas regions for donor-head coordinates. The morph relaxation averaged absolute positions, unnecessarily shrinking extremities. The soft-body shader sampled mip 7 of a 4K atlas (32px equivalent), losing local skin detail and risking UV-island color bleed.
-
-**Changes.** `build_head_revision.py` now derives all collar UVs from nearest original body samples and smooths displacement vectors rather than absolute vertex positions. `fighter_body_surface.gdshader` uses a local nine-tap mip-5 filter instead of the coarse atlas sample. Rebuilt head_revision source.glb/body.res/character.tscn; combined vertex count is 69,191. Extended `test_fighter_body_shapes.gd` to assert head/neck invariance across all 25 presets.
-
-**Verification.** Shape checks pass (25 combinations, normalized weights, instance independence, finite bounds, fixed head/neck); character-flow tests pass including save/load and playable application. Rendered all combinations in D3D12 through `apply_character_appearance`, then sampled largest/softest idle, walk, run, attack and seated poses. No parse/script errors. The source neck color boundary and patchy/angular torso appearance remain visible, including with directional shadows disabled. Do not interpret passing tests as final visual acceptance. No user saves, remote commits or gameplay rules changed; no new provider generation used. Existing renderer shutdown resource diagnostics persist.
-
-## 2026-10-31 - Fix neck color boundary, cut-ring crease and exported blend data
-
-**Request.** Fix the remaining neck seam and related defects. The prior UV correction alone left a material-color discontinuity and a tangent crease at the joined rings.
-
-**Implementation.** `build_head_revision.py` now samples a common neck color, converts it from sRGB to linear, stores a smooth localized alpha mask on both head/body vertices, relaxes geometry across the welded join, and recalculates face normals. Blender previews blend the source texture toward that common color rather than multiplying a one-sided ratio. The runtime `fighter_body_surface.gdshader` uses the same blend. `fighter_body_shapes.gd` initializes this shader for both materials from the mesh resource, preserving per-instance softness and making initialization repeatable. An in-game white-model check exposed Blender exporting a white placeholder as COLOR_0 with the named blend attribute as COLOR_1. The build now remaps the actual attribute to COLOR_0 in the GLB JSON while preserving binary data and textures; this addresses the actual cause of missing blend data in Godot. Rebuilt combined asset: 69,207 vertices.
-
-**Verification.** `test_fighter_body_shapes.gd` now checks that both surfaces contain localized masks, non-white linear skin targets and the runtime shader, in addition to all 25 combinations, stable head/neck, weights and instance isolation. It passes. `test_characters.gd` passes creation, preview, save/load and playable application. Inspected neutral Blender renders and D3D12 front/both-profile close-ups; the sharp horizontal neck line and material boundary are removed in these views. Sampled largest/softest idle, walking, running, sword attack and sitting captures retain the join. No script/parse errors; existing shutdown RID/resource warnings persist. Source torso/tattoo shading and extreme physique realism are still art limitations, not claimed fixed. No new external generation, save modification, pull or commit.
-
-## 2026-10-31 - Rebuild the rejected skinny/heavy appearance presets
-
-**Failure.** User screenshots showed an enlarged muscular torso with stick-thin limbs at the skinny end and inflated hips/high abdomen at the heavy end. Four independent additive endpoint deformations could compound size/muscle reductions. Texture blur also retained the source sculpt's actual abdominal grooves. Bounds tests had not established acceptable anatomical proportions.
-
-**Implementation.** Added `scripts/dev/fighter_skin/physique_shapes.py` and connected it to the repeatable head-revision build. It produces a complete target for each size/muscle combination (24 targets plus the existing neutral basis), with one active target at runtime. Soft geometry uses a continuous abdominal envelope rather than merely scaling the existing carved abdomen; joint-centered volume changes taper into wrists/ankles and preserve the head/neck join. Heavy volume concentrates around the abdomen with restrained back/hip expansion. A geometric pelvis expansion experiment created an obvious shorts ring and was excluded after profile review. `fighter_body_shapes.gd` selects the complete named preset while preserving existing saved indices. The shader reduces broad painted muscle contrast toward the sampled skin tone while retaining fine detail. Motion inspection also found thigh weights above the pelvis: the build fades those influences into Hips across the lower abdomen (3,060 affected vertices), retaining leg/shorts and hand/finger bindings elsewhere. The combined asset retains 69,207 exported vertices, 4K body/2K head maps and the original 55-bone animation hierarchy.
-
-**Verification.** Extended body-shape checks to ensure one complete preset is selected, size steps increase actual torso width (excluding arms via skin weights), skinny/soft limb displacement stays limited, the lower back is restrained, and upper-abdomen skin has no thigh bleed. Corrected the test's back/front sign to match the imported +Z-forward mesh. All 25 combinations pass these checks, existing head/neck/color-channel checks and normalized weights. Added `test_fighter_physique_motion.gd`: all 150 preset/rest/idle/walk/run/attack/seated checks pass, with max rest-bind error 0.0000727m. `test_characters.gd` passes, including actual saved-target activation. Captured all 25 builds from front/profile using the reusable `review_physiques.gd` in D3D12. Inspected extreme-preset walk/run/attack/seated images and ran the actual camp sit/stand interaction with the heavy preset (PASS). No script/parse errors; existing renderer shutdown RID/resource diagnostics persist. Source skin/tattoo and facial detail remain rough; this pass fixes the rejected physique construction rather than claiming final art fidelity. Logs and comparison PNGs are under ignored `logs/physique_rebuild/`. No external generation, user-save changes, pull, commit or push.
-
-## 2026-10-31 14:44 - Remote changes from another machine (automatic)
-
-**Source.** `origin/main` moved from `c1a85845` to `f4316f79`. Local HEAD is `df45631d`.
-
-**Commits not authored on this PC** (local identity: `bratasanu.stefan@gmail.com`):
-
-- `f4316f79` 2026-10-30T17:27:46+02:00 **XyLeS** - Wolrd (54 files, +3762/-23) [not in local HEAD]
-
-**Files touched by the external commits:**
-
-- `CURRENT_WORK.md`
-- `Documentation/IMPLEMENTATION_LOG.md`
-- `Documentation/PROJECT_DOCUMENTATION.txt`
-- `Documentation/WORLD_EDITOR.md`
-- `GAME_RULES.md`
-- `scenes/world_editor.tscn`
-- `scenes/world_editor_preview.tscn`
-- `scripts/dev/world_editor_launcher.cs`
-- `scripts/game_state.gd`
-- `scripts/main.gd`
-- `scripts/world_builder.gd`
-- `scripts/world_editor/asset_catalog.gd`
-- `scripts/world_editor/draft_store.gd`
-- `scripts/world_editor/map_editor.gd`
-- `scripts/world_editor/map_preview.gd`
-- `scripts/world_editor/map_runtime.gd`
-- `scripts/world_editor/terrain_grid.gd`
-- `scripts/world_editor/zone_data.gd`
-- `scripts/world_map.gd`
-- `tests/test_combat_effects.gd`
-- `tests/test_progression.gd`
-- `tests/test_skill_panel.gd`
-- `tests/test_world_editor_assets.gd`
-- `tests/test_world_editor_drafts.gd`
-- `tests/test_world_editor_game.gd`
-- `tests/test_world_editor_game_terrain.gd`
-- `tests/test_world_editor_lake_visual.gd`
-- `tests/test_world_editor_preview.gd`
-- `tests/test_world_editor_runtime.gd`
-- `tests/test_world_editor_terrain.gd`
-- `tests/test_world_editor_updates.gd`
-- `tests/test_world_editor_visual.gd`
-- `tests/test_world_editor_workflow.gd`
-- `tests/test_world_editor_zones.gd`
-- `WORLD EDITOR PREVIEW.bat`
-- `XYLES WORLD EDITOR.exe`
-- Generated Godot metadata: 18 `.uid`/`.import` file(s) (regenerate with a headless import)
-
-**Flags.**
-
-- Core file changed: `scripts/game_state.gd`. Re-run the game and the tests before trusting it.
-- Core file changed: `scripts/main.gd`. Re-run the game and the tests before trusting it.
-- Core file changed: `scripts/world_builder.gd`. Re-run the game and the tests before trusting it.
-- Executable/script added or changed: `WORLD EDITOR PREVIEW.bat`. Do not run it until reviewed.
-- Executable/script added or changed: `XYLES WORLD EDITOR.exe`. Do not run it until reviewed.
-- Hard failure calls on 171 added line(s).
-
-**Proposed actions (not applied).**
-
-- **Re-verify:** launch the game, run the tests, and re-read the changed core files against `GAME_RULES.md`.
-- **Ask first:** review the addon/executable diff with the user before it is allowed to run.
-- Nothing was changed automatically. Confirm each action with the user before editing or reverting.
-
-**Status.** Awaiting the user's decision. This report did not modify any game code.
-
-
-## 2026-11-01 - Restore and verify the complete 5-by-5 character creator
-
-**Request and regression.** Continue until the character creator follows the user's independent five size/fat levels and five muscularity levels, with a usable preview and correct playable result. Inspection found later local changes that exposed only three paired builds and quantized accepted values on reopening. Restored the two independent controls in character_select.gd, removed the paired-build helper from fighter_body_shapes.gd, and added an exact 4/0 reopen/accept regression plus coverage of all 25 reachable pairs.
-
-**Presentation and interaction.** Added character_appearance_preview.gd: private SubViewport world, twice the displayed render resolution, 4x MSAA, soft key/fill illumination, drag/slider rotation, bounded wheel zoom, Full Body / Face / Reset framing and adapted Rest / Idle / Walk / Run previews. Portrait framing tracks head translation. The modal fits the supported minimum and larger viewports, uses the existing brown/bronze/ivory frame and choice styling, traps Tab traversal, cancels on Escape and restores focus to Appearance. Back, repeat accept and late signals are guarded. Outfit visibility is inspection-only; accepted saves retain the two cosmetic indices. The reference topic was reviewed; its main screenshot was unavailable, so the written UI standard and existing helpers supplied compact spacing, frame language and colour roles. No reference artwork was shipped.
-
-**Asset work.** Extended physique_shapes.py with smoother low-muscle torso/limb sections and fuller heavy limbs. Rejected a direct anterior projection after rendered review exposed inverted patches: finite bounds were insufficient validation. The installed fat deformation uses a continuous spatial field rather than discontinuous hip/leg skin weights. Added a front-triangle orientation check relative to the neutral mesh; across approximately ten thousand selected front-torso triangles per preset, the installed version has a maximum of 3 reversals versus 437 in the rejected prototype. Head/neck positions remain fixed. Added outfit_geometry.py with continuous lofted/voxel-unioned cloth sections and rounded boots. build_outfit.py now reads the clean head build, rejects already dressed input, interpolates and diffuses garment weights/morph fields, and exports a body-coverage alpha mask. The runtime shader hides covered skin only while dressed; the creator restores it for silhouette inspection. The optional hair surface stays hidden in both contexts to match the bald source reference. Shared material resources are not mutated during initialization. The rebuilt asset has 130,937 exported vertices, eight surfaces, the original 55-bone hierarchy, 4K body and 2K head atlases. No new external generation or charges.
-
-**Verification.** test_fighter_body_shapes.gd passes 25 combinations, single-target selection, progressive waist width, limb/back bounds, fixed head/neck, normalized weights, independent materials, reversible coverage and front-surface orientation. test_fighter_physique_motion.gd passes 150 preset/pose checks with maximum rest-bind error about 0.000073m. test_fighter_retarget.gd passes with zero position error against source geometry. test_characters.gd passes actual control signals, all 25 pairs, Tab/Shift-Tab, Escape, rotation endpoints, view/pose/outfit controls, accept/cancel/reopen, malformed data, save/load and playable application. review_selector.gd reports zero layout failures at 1100x650, 1600x900 and 1920x1080; portraits, extreme front/profile builds, outfit views and motion samples were inspected in D3D12 Forward+. Rendered all 25 builds from front/profile with review_physiques.gd. The heavy-preset camp sit/stand flow passes. Tested runtime flow has no handled ERROR events or script/parse errors. Existing renderer-exit RID/resource diagnostics persist. Native evidence is under ignored logs/character_polish and logs/physique_rebuild.
-
-**Limits and repository state.** Generated skin/tattoo detail and facial likeness retain source-art limitations; geometry checks do not establish subjective visual perfection or acceptance of every frame of every animation. Choices remain cosmetic and do not change collision or stats. Updated CURRENT_WORK, UI_STANDARD, GAME_RULES and asset rebuild notes. The remote check found no new commits beyond f4316f79; the three incoming commits were not pulled or altered. No user saves, commit, push or history rewrite.
-
-## 2026-11-01 - Race-first models, male/female support and reusable armor tooling
-
-**Scope correction.** User replaced the five-by-five body objective with five races first, one fixed authored build each, and confirmed original classic Lineage 2 inspired proportions. They then added female models and requested reliable necks, rigging, fidelity and streamlined armor generation. This entry supersedes the prior body-control objective; the underlying experimental morph data is retained for possible later work, but no size/muscle controls remain in the selector.
-
-**Art and catalog.** Created nine original front-reference images with built-in ImageGen: male Orc/Elf/Dark Elf/Dwarf, and female Human/Orc/Elf/Dark Elf/Dwarf. References match the supplied Human style and neutral A-pose setup; female figures are adult and clothed in opaque athletic undergarments. Saved all references under assets/concepts/characters/races. resources/characters/race_models.json defines ten explicit entries, intended heights, concept paths, readiness and fidelity targets. The existing Human male is the only reviewed 3D scene. Pending entries display their own reference and preparation status; new creation is disabled until a reviewed scene exists. They are never shown as a Human mesh labeled as a different race. Existing journeys remain loadable with the current fallback while art is pending. No new paid 3D generation was submitted.
-
-**Identity and runtime.** Added backward-compatible character_gender persistence and validation (Male for old saves) in game_state/character_store, plus the Male/Female selector. New creation and rendering use the fixed reference build without rewriting old body indices on disk. The preview and player resolve the same reviewed catalog scene. player.gd copies each model's skeleton rests, clears old material overrides, rebinds skin and rebuilds adapted libraries. New race materials retain provider PBR data through race_character.gd; they do not receive the old Human tint or replacement-head neck band. fighter_animation_adapter.gd now keys its cache by rest transforms as well as library identity, preventing human joint translations leaking into dwarf proportions. Added a regression that changes pelvis height and checks the resulting position track. A camp test caught duplicate seat-library registration during reapplication; removed the old library before rebuilding the pose and reverified sitting/standing.
-
-**Tools.** scripts/dev/characters/race_pipeline.py uses the installed Hyper3D CLI, requests Gen-2.5-High/50k quads/de-lighting/GLB with high-fidelity 4K albedo requested in the prompt, records job state before submission and never automatically retries an uncertain paid action. curl_fetch.mjs provides a Windows HTTPS fallback with credentials in process pipes only, cancellation and URL-only diagnostics. build_race_rig.gd fits the original animation skeleton to source anatomy with uniform geometry placement, rejects unmapped bones/multiple meshes and preserves PBR materials. normalize_skin.py retains raw inputs, normalizes four influences and equalizes duplicated-seam weights. audit_model.py checks body budget, actual albedo sizes, rig count, weights, seam consistency and open neck boundaries; it excludes Blender bone widgets. fit_armor.py creates a chest modeling seed or binds an authored armor mesh by closest-triangle barycentric interpolation, supports explicit rigid-bone plates, enforces rest clearance, rejects misalignment and writes an audit report. Equipment exports exclude source body geometry. Commands, prompts, acceptance limits and current readiness are documented in Documentation/Characters/RACE_AND_ARMOR_WORKFLOW.md.
-
-**Verification.** Updated test_characters.gd for fixed builds, both genders, old-save defaults, all ten reference previews, pending-model creation guards and save/load. Headless and rendered passes report zero failures. test_race_catalog.gd reports zero failures for ten entries and race-specific animation caching. Rendered the form/preview at 1100x650, 1600x900 and 1920x1080; all ten entries reviewed, zero layout failures. Existing fighter anatomy checks pass, and rendered camp sitting/standing passes after the seat-library fix. Generic race builder smoke test creates a 55-bone/63,990-vertex scene in ignored logs without touching installed assets. Raw provider audit correctly caught excess skin influences; a normalized copy passes weight/seam/neck checks. Chest seed and rigid Spine2 rebinding pass armor audits (one armature, no bad weights or seam mismatches). Native evidence is under logs/race_build. No script/parse errors in final tested flows; pre-existing engine resource/RID shutdown diagnostics persist.
-
-**Blocker and remaining art.** Hyper3D's saved generation login expired. Account lookups stalled, direct MCP read confirmed expired authentication, and the first device authorization expired without issuing tokens despite browser confirmation. A fresh device flow is awaiting browser completion. The nine new full 3D models, provider rigs, neutral/game-light neck and face review, and animation acceptance remain unfinished. Concepts and tooling are not represented as completed playable assets. The remote checkpoint is still f4316f79 (three incoming commits unmerged); no pull, history rewrite, commit, push or user-save modification.
-
-**Authorization follow-up.** The second device code also expired without tokens;
-no authorization process or paid model job remains active. Resume with a fresh
-CLI device login when the user is ready, then verify via an existing generation
-read before creating new jobs. The remaining production model work is blocked
-by authorization, not represented as complete. Skin cleanup's GLB round trip was
-also checked against source positions with a 10-micrometre tolerance; preserve
-raw provider files for exact comparisons.
-
-
-## 2026-11-01 - Ten playable race/gender models installed
-
-Hyper3D authorization succeeded. Completed nine Gen-2.5-High / 50k-quad model
-jobs and nine humanoid/core rig jobs, with the original supplied Human male
-retained as the tenth choice. Human, Orc, Elf, Dark Elf and Dwarf now each have
-Male and Female scenes enabled in resources/characters/race_models.json. One
-fixed authored build per entry; size/muscle controls remain inactive. Existing
-saves retain their identity, and loading a female Dark Elf now installs her
-actual model rather than the temporary Human fallback.
-
-The nine new exports have approximately 50k vertices each, normalized maximum
-four influences, consistent duplicated-seam weights and no open neck boundary.
-Source PBR/provider rig GLBs remain intact; normalized rigged.glb and generated
-body.res/character.tscn are stored per model. Runtime rigs have the animation
-pack's 55-bone hierarchy fitted to each body's own joint positions. The model
-builder preserves anatomy with uniform scale/feet placement. Provider normal
-maps exaggerated facial/body bumps, so runtime normal strength defaults to zero;
-original maps remain available. The Human female ponytail-tip pale projection
-artifact received an explicit material correction in normalize_skin.py.
-
-Actual delivered PBR atlases are 2048x2048. A 4K request in the prompt did not
-produce 4K files; do not describe the new textures as 4K or the art as flawless.
-The original Human male retains its previous 4K body / 2K head assets. Hair and
-facial detail remain generated art with limited atlas resolution; no facial
-animation or hair simulation was added. Armor tools create modeling seeds and
-fit authored equipment; they do not constitute a completed armor collection.
-
-Verification: all nine asset audits pass. All nine new bodies pass nine actual
-player-skeleton rest/idle/walk/run/weapon/attack/seat pose checks, with maximum
-sampled rest-binding error below 0.000083m. Neutral source renders and Godot
-Forward+ D3D12 front/back/both-profile/face/idle/walk/run renders were inspected.
-Character creation/save/load and ten-entry race/cache tests pass. The selector
-has zero layout failures at 1100x650, 1600x900 and 1920x1080, with all ten live
-3D entries. Rendered camp sit/stand tests pass for the shortest female Dwarf and
-tallest male Orc. Female Dwarf chest-seed fitting and skin audit also pass.
-Native review evidence and job checkpoints are under ignored logs/race_build.
-Existing engine shutdown resource/RID diagnostics remain; no script/parse errors
-were found in these final tested flows. Geometry/bounds tests do not establish
-subjective perfection or acceptance of every animation frame.
-
-Updated character_select's preparation note, test_characters' now-obsolete
-Human-fallback assumptions, and test_camp_seating's optional --model=ID fixture.
-The armor workflow documents the actual API fidelity and authorization state.
-No user saves, incoming commits, shared history, commit or push were changed.
-The remote checkpoint remains f4316f79; three incoming commits stay unmerged.
-
-
-### Broader regression caveat - 2026-11-01
-
-The character-specific checks above pass. The additional legacy regression run
-is not clean: test_progression has 13 evolution/point-conservation/save-point
-failures, reproduced with an isolated copy of the untouched HEAD game_state.gd
-in logs/race_build/baseline. test_combat_effects asserts at line 35 expecting
-12 projectile-landed events, and test_skill_panel reports legacy evolution
-installation failures. The combat assertion left its test loop running; that
-test process was stopped, and the remaining skill test was bounded. These
-failures were not concealed or addressed by changing gameplay rules during the
-race-art task. See *_final.log and progression_baseline.log. Do not claim the
-entire repository suite passes. Character, race catalog, skin/motion, selector
-layout and shortest/tallest seating verification remain passing.
-
-The legacy skill-panel run also stops at tests/test_skill_panel.gd with a null get_theme_stylebox call; it is not a passing UI regression run. The live race selector and character tests above are separate and pass.
-
-## 2026-11-01 - F6 current-animation replacement and F7 weapon calibration
-
-User clarified that F6 captures the animation playing when pressed, including
-when the animation window is already open; selecting a new clip then replaces
-that active visual without requiring a skill/action mapping. F6 now captures
-the active upper-body layer if present, otherwise the base AnimationPlayer, and
-opens or keeps the selection window. Picking a clip plays it immediately on the
-actual character and in the preview. Live replacement is full-body regardless
-of the mapping's upper-body option. Existing per-weapon/action Save Mapping is
-still separate: temporary replacement does not rewrite combat configuration.
-Nonlooping replacements release on completion; loops have Stop Override. Skill
-and locomotion animation requests cannot overwrite an active replacement.
-Death releases the override. Roll presentation yields while its movement timer
-continues. Seated transitions are protected from replacement. No skill damage,
-cooldown, mana, or other gameplay timing is changed by these visual controls.
-The preview uses the installed model's adapted animation libraries.
-
-F7 now opens Weapon Position instead of Actions. Its XYZ metre and XYZ degree
-fields adjust the actual weapon relative to the animated hand immediately.
-Save Grip writes resources/characters/weapon_grips.cfg, keyed by model ID,
-weapon type and visual variant. Re-equipping/reloading/model switching reapplies
-the matching calibration, with authored transforms as the fallback. Reset to
-Model resets live values; Save makes that reset persistent. Empty hands show an
-equip-weapon message. Failed saves report their error without updating cached
-saved data. This is a development authoring panel; exported read-only resources
-cannot be saved. Actions remains accessible from the corner menu. F6/F7 are
-reserved against debug-key reassignment and old debug handlers.
-
-UI reference topic was opened; the existing written UI standard supplied the
-compact rows, dark brown/bronze/ivory frame, helper labels/buttons and hierarchy.
-The new panel reuses the registered floating frame, title drag, viewport clamp
-and saved layout mechanism. It initially opens at the right to leave the player
-visible. No reference artwork was copied. Animation controls retain the existing
-window's style. Files: player.gd, animation_selection.gd, game_hud.gd, main.gd,
-weapon_grips.gd, weapon_position_panel.gd and the focused test. Updated the older
-training-shortcut fixture to use free key P now that F7 is reserved.
-
-Verification: test_weapon_controls passes headless and Forward+ D3D12: capture
-of channel overlay, selection replacement, repeat F6 while open, superseding
-skill/locomotion requests, nonloop release, F7 fields, disk save/reload,
-re-equipping, independent race calibration and return to the original race.
-Native F6/F7 captures were visually inspected in logs/weapon_controls_*.png.
-test_animation_selection passes with 242 imported clips; test_basic_attack
-passes. The legacy training-minion test stops at line 48's skill cooldown
-assertion before its debug-rebinding checks, consistent with the previously
-recorded legacy skill-test problems; its entire run is not claimed passing.
-Existing engine-exit RID/resource diagnostics remain. Final tested controls
-have no script/parse errors. No real calibration file, user saves or UI/settings
-file was written by the tests (grips use an ignored logs fixture). Remote check
-found no new commits beyond f4316f79; incoming work was not pulled or changed.
-
-## 2026-11-01 - Human male rebuilt to match the race set
-
-User rejected the default Human male's synthetic clothing/style mismatch and
-requested a new classic Lineage 2 inspired Human fighter from scratch. Built-in
-ImageGen produced a new original reference: adult clean-shaven athlete, medium
-dark middle-parted hair, square jaw, natural proportions, plain charcoal training
-shorts, bare feet, neutral A-pose and even studio lighting. User's clothed game
-screenshot supplied style inspiration, not an outfit to bake into the body.
-Reference: assets/concepts/characters/races/human_male_front_v2.png, with prompt
-summary in that folder's README. Hyper3D Gen-2.5-High/Quad 50000/de-lighting then
-generated a new PBR mesh and human/core rig. This is a new asset, not a clothing
-visibility patch or a replacement head on the old body. The installed model has
-48,942 vertices, one surface, actual 2048x2048 PBR maps, a continuous head/neck,
-normalized top-four influences and the fitted 55-bone animation hierarchy.
-Provider normal maps remain stored but are disabled in the runtime to match the
-other races' shading. No 4K fidelity or hand-authored facial detail is claimed.
-
-Geometry job 1ab79795-26d3-48ce-bfa2-db4604ab73f7; rig job
-e86afc2f-6420-4186-84ae-db6c9df00386. Both completed once; no paid retries.
-Raw geometry/provider rig, normalized GLB, runtime mesh/scene and non-secret
-provenance.json are under assets/models/characters/races/human_male. Replaced the
-catalog scene, player.gd default, main.tscn default instance and isolated-preview
-fallback together. The animation selection preview also resolves the active
-catalog model. The previous head_revision and experimental morph sources are
-retained for history but are no longer the default. One authored build remains;
-no new body morphs or clothing were added. Old saves keep Human/Male identity
-and now render the new base. Existing weapon calibration identity remains.
-
-Updated source-preservation regression to compare the actual current source and
-uniform height/ground placement, rather than the old head-revision scale/4K
-assumption. Character tests now check the disabled outfit control and intact PBR
-materials on base meshes without separable coverage. Review tools can inspect
-a built Human male before changing catalog readiness.
-
-Verification: Blender skin/vertex/atlas/neck audit passes. Source neutral and
-Godot Forward+ D3D12 front/back/both profiles/face/idle/walk/run were reviewed.
-Actual player nine-pose test passes (803 samples, maximum rest error ~0.000072m).
-Full source anatomy/UV/normal regression passes with zero source-shape error.
-Character creation/save/load, ten-entry catalog, 242-clip animation selection,
-F6/F7 controls and basic attack tests pass with the new default. Three-size
-selector layout passes with all ten entries. Rendered Human male camp sitting
-and standing passes. Native evidence: logs/race_build/rendered/human_male_*.png,
-review/race_0_0_1600x900.png and human_male_*.log. No script/parse errors or handled
-runtime ERROR events in the final tested flows; existing renderer-exit resource
-warnings and the previously documented broad legacy-suite failures remain.
-A running game must be relaunched to load the new default scene. No user saves,
-commit, push, pull or incoming developer work was changed.
-
-## 2026-11-01 - Relaxed travel, separate ready stance and distance-matched pace
-
-User rejected fighting idles being used for ordinary standing and the boxing
-posture in movement. Source inspection confirmed unarmed_idle/run/walk were
-imported from Combat Bare Fists, while sword_idle used IdleCombatS&S (imaginary
-shield guard). Imported a separate 63-clip travel library from the supplied
-Basic Locomotion set, with ordinary idle/walk/directional run/sprint, a faster
-ordinary run, closed right-hand carrying variants and upright long-weapon carry.
-Right-hand rotations are authored from the original animation skeleton: sword
-blade continues the lowered forearm away from the body; long weapons stay
-upright. Neither meshes nor skeleton rests are warped. Original combat clips
-remain available for compatibility and authoring. Source sword breathe was
-reviewed and rejected for peaceful standing because it still has a shield guard.
-One-handed fencing ready supplies sword combat_idle without a raised offhand
-shield pose. The private character preview now uses the ordinary travel set.
-F6 labels/search distinguish Relaxed travel from Combat stance.
-
-animation_profiles.gd separates idle and combat_idle. Player attacks/blocking
-refresh a four-second presentation timer; active channels hold it. Peaceful
-standing is arms-down, and attack readiness expires back to relaxed idle.
-Death/revival clears readiness. This is visual state, not a gameplay combat flag.
-Existing custom mappings are retained. F6 temporary overrides still take priority;
-F7 saved weapon grips are unchanged. Travel direction changes preserve the step
-phase instead of restarting the cycle. Basic attacks and skill damage/timing
-are not changed by these presentation selections.
-
-The user additionally requested approximately 30 percent slower default movement
-and faster/slower animation playback to eliminate pace mismatch. Base speed is
-now 5.3 * .70 = 3.71m/s; existing flat movement bonuses remain additive. Existing
-walk/backpedal/crouch source-based movement caps also receive .70. Dash retains
-its independent skill displacement. Thus the fresh test character with the
-existing +.12 movement bonus travels about 3.83m/s, rather than claiming every
-character must travel at exactly 3.71 regardless of bonuses.
-
-Built source root-motion speed metadata and calibrated each retargeted loop's
-low-foot stance speed on all ten actual race/gender skeletons (18 gaits each).
-travel_strides.json supplies the measured per-model distance per animation
-second. Playback rate uses final horizontal displacement after physics,
-shoreline rollback and bounds clamping divided by that measured stride speed.
-It is not driven by input alone, nor multiplied by a manual profile speed while
-moving. Idle/action/preview speed remains adjustable. Unknown legacy/custom
-clips fall back to source metadata scaled by fitted leg length. Stop against a
-wall stops the running feet. Lowered/raised carrying variants share their source
-leg gait measurements. This matches cycle pace; it does not add terrain foot IK
-or promise zero contact error in every source frame/uneven-ground pose.
-
-Rebuild commands: scripts/editor/build_travel_animation_library.gd, then
-scripts/editor/calibrate_travel_strides.gd, both via Godot --headless --path .
---script res://... . Recalibrate after any body/rig or travel-clip change. Source
-FBX files remain local/ignored; runtime RES/JSON files are the shared outputs.
-README documents sources, runtime behavior and rebuilding. No API generations
-or paid animation requests were made.
-
-Verification: test_relaxed_locomotion passes all ten hands-down/sword-direction
-poses, ready/peace timeout, saved mapping support, gait phase and F6 priority.
-test_locomotion_pace passes real physics speed, measured stride playback and a
-collision-wall stop. Human and female Dwarf both move 3.8301m/s; their measured
-run rates are 1.0691x and 1.7472x respectively. test_race_motion passes 90
-rest/pose checks across ten models, including new travel and sword-ready clips.
-Existing animation selection (305 clips), character save/selector, basic attack,
-F6/F7, Human camp sit/stand, world traversal and world-contract tests pass.
-Native Direct3D12 relaxed/ready/walk/run and sword/greatsword/staff/spear carry
-renders were inspected (logs/travel_review); three character motion reviews are
-in logs/race_build/rendered. The comparison tool now checks clip existence
-before capture; an initial duplicate-library diagnostic was corrected before
-acceptance. Final tested flows have no script/parse or handled runtime errors.
-Existing engine-exit RID/resource diagnostics and previously recorded unrelated
-legacy skill-suite failures remain. Tests use ignored fixtures, not user saves.
-Remote check found no commits after f4316f79; incoming work was not pulled,
-changed, committed or pushed. Restart a running game to load the new library.
-
-## 2026-11-01 - F7 pose freeze and mouse Fast Align
-
-User requested F7 Stop Animation freeze the current pose instead of ending it,
-and click-to-enter mouse alignment with Ctrl-click selecting rotation. Replaced
-the button with Freeze Animation / Resume Animation. player.gd pauses both the
-base AnimationPlayer and manual upper-body overlay, retains time/speed/pose and
-blocks animation replacement while frozen. Resume continues layers that were
-playing. A gameplay channel ending while frozen does not reset the held pose,
-and resuming does not restart that ended channel. New F6 replacement, model
-application, death and revival release the freeze. The freeze is transient
-presentation state, not saved character data or a paused gameplay world.
-
-Weapon Position now has Fast Align. Plain click edits hand-local position:
-mouse horizontal X, vertical Y (up positive), wheel Z. Ctrl at activation selects
-rotation: vertical motion pitches X, horizontal motion yaws Y, wheel rolls Z.
-Translation uses 1mm/pixel and 1cm/wheel notch; rotation uses .25 degree/pixel and
-2 degrees/notch. Numeric fields follow without recursively emitting changes.
-Position stays within existing +/-2m bounds; fast rotation wraps equivalent
-Euler angles. The button is click-to-enter, not hold-to-drag. Click or Enter
-keeps the pass; Esc/right-click cancels to its starting transform. Save Grip is
-still required for persistence. Existing reset, save and per-model/type/variant
-storage remain. Freeze can remain active while inspecting outside F7; Resume
-or a new F6 clip releases it.
-
-game_hud.gd routes active alignment input before GUI/camera/gameplay handlers.
-Mouse movement/wheel cannot rotate the camera, zoom or scroll the panel. Commit/
-cancel releases are consumed to prevent click-through. Closing/switching panels,
-changing weapons/models or HUD teardown releases capture; stale grips are never
-restored onto a replacement model. Mouse mode restores to its prior value. The
-panel uses the existing registered floating frame, bronze/ivory helpers and
-compact rows, sized 600x440; the reference topic was opened and the written UI
-standard supplied the existing visual language. No reference artwork was added.
-Freeze toggles log one UI event; mouse motion is not logged per frame.
-
-Verification: test_fast_align passes headless and native Forward+ D3D12. Checks
-exact frozen clip time and hand pose across updates, resume, upper-body freeze,
-channel-end preservation, translation/wheel axes, Ctrl-click rotation, camera
-isolation, live field updates, commit release, cancel rollback, saved grip reload,
-model replacement and capture cleanup during teardown. Native F7 layout was
-inspected in logs/fast_align_panel.png. Existing test_weapon_controls,
-test_animation_selection (305 clips) and test_locomotion_pace pass. Final tested
-flows have no script/parse errors; existing engine-exit resource diagnostics
-remain. Grip test writes use ignored logs fixtures, not project calibration or
-user saves. Earlier broad legacy-suite caveats remain. Remote check found no
-commits after f4316f79; no incoming work, pull, commit or push was changed.
-
-## 2026-11-01 - Fast Align right-drag and Alt hand rotation
-
-User changed the mouse controls: right button now temporarily rotates the weapon
-while Fast Align remains active; releasing it returns to the prior mode. It no
-longer cancels. Holding Alt directs mouse XY rotation and wheel Z roll to the
-actual right-hand bone, with priority over weapon rotation. Releasing Alt returns
-to weapon editing. Existing Ctrl-click rotation remains available. Escape alone
-cancels the pass; click/Enter keeps it. Input remains isolated from the camera.
-
-Added hand_grip_offset.gd, a SkeletonModifier3D that applies an additive hand-local
-quaternion after animation. The hand mesh, fingers and BoneAttachment weapon
-move together. It does not rewrite clips, bone rests or weapon-local rotation,
-and does not accumulate when animation is frozen. Player exposes transient
-hand_rotation_degrees. weapon_grips.gd persists hand_rotation_degrees alongside
-weapon position/rotation under the same model/type/variant key. Old calibrations
-without that field default to zero. Unequip/reset clears it; re-equip/model
-application loads the matching value. Save Grip saves both targets. Fast Align
-snapshots both hand and weapon so Escape rolls both back; context replacement
-never reapplies the old model's hand adjustment. Added a hand-angle readout and
-updated the existing compact help/status text. No new window or style system.
-Skeleton modifier behavior follows Godot's official SkeletonModifier3D docs:
-https://docs.godotengine.org/en/stable/classes/class_skeletonmodifier3d.html
-
-Verification: extended test_fast_align passes headless and native Forward+ D3D12.
-Checks right-drag/wheel rotation, release-to-translation, Alt hand axes, unchanged
-weapon-local transform, actual attached-weapon world rotation, stable modifier
-output on frozen frames, Alt release, combined cancellation, hand save/reload,
-unequip/re-equip and model isolation. Existing weapon controls, 305-clip animation
-selection and ten-model relaxed-pose tests pass. Native panel/readout reviewed in
-logs/fast_align_panel.png; logs/hand_align_*.log contain evidence. No final script/
-parse errors or handled runtime errors; pre-existing engine-exit resource
-warnings remain. Test calibration writes are isolated in logs. No real user
-saves/calibration or remote code was edited; remote check found no new commits
-beyond f4316f79. No pull, commit or push.
-
-## 2026-11-01 - Forward-diagonal sprint animation routing
-
-User reported lateral/diagonal sprinting lacked the W+A / W+D animation behavior.
-Found sprint selection returned the straight-forward clip before consulting the
-horizontal direction. Added native SprintForwardLeftUnarmed and
-SprintForwardRightUnarmed sources to the travel builder, including lowered
-carry/upright pole variants. Library now contains 69 clips (311 total player
-clips). Added independent sprint_forward_left/right profile actions, directional
-routing and normalized-input-safe sign detection. Direction changes preserve
-sprint phase. Existing movement speeds and normalized diagonal displacement
-remain unchanged.
-
-Rebuilt travel_animations.res/travel_speeds.json and recalibrated 20 gaits per
-race in travel_strides.json. Calibrator now includes sprint_* keys, so new clips
-use measured per-model pace rather than falling back to straight sprint speed.
-No source meshes, user overrides or hand/weapon calibration files were changed.
-
-Verification: relaxed-locomotion tests cover raw and normalized diagonal input,
-available profile actions for every weapon style and sprint phase continuity.
-Actual input/physics tests pass Shift+W+A and Shift+W+D with their distinct clips;
-both travel at 5.7451m/s on the test character, with matched stride playback and
-no extra diagonal speed. Animation selection passes with 311 clips. Native
-Direct3D12 poses were reviewed under logs/travel_review/travel_carry_sprint_*.png.
-Race-motion test includes both new sprint clips (11 checks per model, ten models).
-Evidence: logs/sprint_*.log. Existing engine-exit resource diagnostics and earlier
-legacy-suite caveats remain. No user saves, incoming code, pull/commit/push or
-external generation changed; remote check found no new commits after f4316f79.
-Restart the running game to load the new library.
-
-## 2026-11-01 - Stabilized right-hand running weapon carry
-
-User requested a steady weapon while running, with the right hand drawn backward
-like a hard sprint. Added scripts/running_weapon_carry.gd, a SkeletonModifier3D
-installed on the actual player and armed F6 preview. It uses a reachable rear
-model-space target, an analytical two-bone arm solve and fixed wrist direction.
-The target is based on the running shoulder pose and scaled to each rig's arm
-length. A rest-pose-based target initially exceeded reach on sprinting Orc rigs;
-cycle checks caught this and the final target uses the running pose instead.
-Sword blade trails backward/slightly down; pole styles retain an upward/rear
-carry. Weapon stays attached to the real hand; legs, left arm and source rests
-are unchanged. Attack overlays bypass stabilization, including frozen overlays.
-HandGripOffset runs afterward, preserving saved F7 hand edits. Paused base clips
-use assigned_animation so F7 freeze retains the stabilized carry.
-
-Changed player.gd, animation_selection.gd, new modifier and focused pose test;
-updated CURRENT_WORK, GAME_RULES and animation README. No asset regeneration,
-stride recalibration, speed/stat changes or user calibration writes required.
-
-Verification: test_steady_weapon_run checks 16 phases of twelve gait cycles on
-all ten playable models, testing hand translation/orientation stability, rearward
-placement and continued left-arm motion. Final translation drift is below .003m
-on every cycle (typically sub-micrometre). Native Direct3D12 side poses reviewed
-under logs/steady_review. test_fast_align passes headless and native D3D12;
-test_weapon_controls, test_animation_selection (311 clips), test_basic_attack
-and relaxed-locomotion baseline pass. Existing engine-exit resource diagnostics
-and earlier legacy-suite caveats remain. Evidence: logs/steady_*.log.
-Remote check found no new commits beyond f4316f79; no pull, commit, push, incoming
-work changes, external generation or user save changes. Restart game to load.
-
-## 2026-11-01 - Replace rigid running carry with restrained organic motion
-
-User clarified that the previous fixed hand target was too rigid. Revised
-running_weapon_carry.gd to retain authored shoulder translation (70%), bounded
-arm swing (10%) and gentle torso rotation (30%). Wrist orientation follows the
-same restrained torso turn rather than independent wrist oscillation. Rearward
-carry and two-bone solve remain, but hand position and orientation now move with
-the running body. No synthetic clock or temporal smoothing: clip sampling keeps
-freeze exact and avoids frame-rate-dependent results. F6 preview shares it;
-attack/frozen overlays and downstream F7 calibration remain unchanged.
-
-Updated the pose regression to require nonzero hand/wrist motion, substantially
-less hand swing than the original clip, rear placement and continued left-arm
-motion, plus overlay priority. Ten models × twelve full gait cycles pass with
-zero failures (logs/organic_run_test.log). Human straight run moves about .077m
-versus .461m raw, wrist excursion .093 radians; sprint .087m versus .579m raw.
-Native D3D12 eight-phase poses for four running/sprint clips reviewed under
-logs/organic_review; native test_fast_align passes (organic_fast_align.log).
-No parse/runtime errors in these checks. Existing exit-resource diagnostics
-remain. Updated CURRENT_WORK, GAME_RULES and animation README to describe the
-corrected behavior, superseding the rigid-carry entry above. No source assets,
-speed/stride data, user saves or calibrations changed; no pull/commit/push.
-
-## 2026-11-01 - Simplify Shift sprint to a back attachment and natural arms
-
-User stopped the procedural sheath/draw implementation, then clarified that only
-Shift-sprinting should put the weapon on the back, with a small jiggle. Removed
-running_weapon_carry.gd and test_steady_weapon_run.gd; player and F6 preview no
-longer install rear-hand IK. Replaced the in-progress sprint_weapon_visual.gd
-SkeletonModifier with a plain Node3D back attachment component. It never writes
-bone poses. Also removed the procedural reach/insert/release arm solve and large
-generated scabbard from that interrupted implementation. Ordinary running uses
-original carry/pole motion; sprint/readiness uses corresponding unarmed travel.
-
-Back mount follows the actual shoulder-to-pelvis line, avoiding excessive tilt
-from a single bent spine bone during sprint. Secondary motion is clip-phase
-synchronized: 4mm lateral/depth, 8mm vertical, roughly 1-2 degrees angular sway.
-F7 freeze preserves attachment transform/visibility. All race/weapon variants
-use the same rig-relative placement; saved hand/weapon calibration is untouched.
-
-Transient game_state readiness: Shift-sprint immediately stows the weapon and
-blocks skills/basic attacks. Releasing sprint starts one second of readiness,
-then returns weapon to hand/unlocks combat. Resuming sprint cancels readiness.
-Central skill/basic-attack gates reject before mana/cooldown spending, including
-same-frame input checks; sprint stops active channels. Existing effects continue.
-Death, model and equipment changes reset readiness. Logs emit phase changes only.
-No gameplay rule lives in the visual component.
-
-Verification: tests/test_sprint_weapon.gd passes headless and native D3D12 on ten
-models: back visibility, untouched original arm poses, bounded nonzero jiggle,
-F7 freeze, readiness/re-sprint/reset rules and no resources spent on blocked casts.
-Final headless pass logs/back_mount_verified.log; native pass
-logs/back_mount_native_test.log. Actual locomotion pace/diagonal/blocked-idle
-checks pass (back_mount_pace_final.log), with test platform enlarged for the
-longer sprint duration. F7 Fast Align, F6 weapon controls and animation selection
-pass (back_mount_fast_align/weapon_controls/selection.log). Native rear poses
-reviewed in logs/back_mount_review; back_mount_render_verified.log has no script
-errors. Existing shutdown resource diagnostics remain. Updated CURRENT_WORK,
-GAME_RULES and animation README. No source asset/stride rebuild, user saves,
-calibration changes, external generation, pull, commit or push.
-
-## 2026-11-01 - Learn class skills from the starting NPC dialogue
-
-User reached level 4 and could not learn skills, requesting NPC-based training,
-locked future entries and visible required levels inside the dialogue. Existing
-Fighter logic granted availability automatically by level and had no learning
-transaction/NPC dialogue; HUD refresh signatures omitted level/class/learned
-state, leaving displayed milestones stale after levelling. Added explicit
-class_skill_status/learn_class_skill rules to game_state. is_skill_available
-requires trained Fighter flags plus class/level; the existing learned_skills
-save field persists them. Pre-trainer equipped milestone skills migrate into
-learned flags without granting every eligible skill. Existing Mystic acquisition
-is unchanged because no Mystic trainer milestones have been authored.
-
-Torven's E interaction now opens the shared NPC dialogue on first/repeat visits,
-retaining quest start/restore behavior and access to crafting. All five authored
-Fighter milestones appear directly, with required level and Locked/Available/
-Learned state. Main owns proximity/combat validation and logs successful training
-as a STATE event. UI renders requests and reads state. Training costs no currency
-or enchantment points; repeated learning rejected. K directs the player to Torven
-and permits dragging only trained abilities. Live refresh includes level/class/
-learned skills and trainer range/combat state. Added level-up/context guidance.
-An initial UI range check used the forge's camp-centre radius; native testing
-caught disabled Learn buttons beside Torven, so training now uses the same actual
-NPC range in presentation and the main transaction.
-
-Reviewed the UI reference topic and UI_STANDARD. Borrowed compact inset list
-hierarchy, square icons, bronze rims and ivory/gold text roles through existing
-helpers/shared window. No external art shipped. Native 1100x650 captures inspected
-under logs/trainer_level1.png, trainer_level4.png and trainer_learned.png.
-
-Verification: tests/test_trainer_dialogue.gd passes headless and D3D12: actual E
-interaction, required-level text, under-level rejection, live level-4 refresh,
-real Learn-button callbacks, learned-state feedback, no point spending, duplicate
-rejection, hotbar assignment, new-save reload, legacy-equipped migration, NPC
-range and wrong-class gates. test_fighter_tree updated for explicit training and
-passes; test_characters passes. Evidence: trainer_dialogue_verified.log,
-trainer_native_verified.log, trainer_fighter_verified.log, trainer_characters.log.
-No parse/runtime errors in these flows; existing shutdown resource diagnostics
-and earlier legacy enchantment-suite limitations remain. Fixtures write logs
-only; real user saves untouched. Remote check found no new origin commits after
-f4316f79; no incoming edits, pull, commit or push. Restart game to load changes.
-
-## 2026-11-01 - K displays learned skills only
-
-User requested unlearned skills appear only at the learner NPC. Filtered Fighter
-K cards through the existing learned/available rule; empty K points to Torven.
-Trainer dialogue continues showing every authored milestone with required level
-and Locked/Available/Learned state. No progression or save behavior changed.
-Extended the trainer regression to inspect empty K, learn one skill, verify its
-immediate appearance while other eligible skills stay hidden, then continue the
-NPC/save/load checks. Zero failures in logs/trainer_learned_only.log. Updated
-CURRENT_WORK, GAME_RULES and UI_STANDARD. Existing shared frame/style preserved;
-no user save, asset, remote work, commit or push changed.
-
-## 2026-11-01 - Relax sword idle wrist and grip
-
-User said the sword-holding idle hand looked forced. Native closeups exposed
-that aim_carry_wrist aligned the blade with the forearm, bending the actual
-palm sideways by about 66 degrees before saved hand calibration. Changed only
-peaceful carry_idle and combat sword_ready to align the palm (wrist to middle
-finger base) toward the forearm with 80% correction, preserving a slight natural
-bend. Ready idle now uses closed sword fingers instead of open fencing fingers.
-No shoulder/elbow/leg posing or runtime IK was introduced. Existing saved F7
-weapon transform and hand offsets remain unchanged and apply normally; their
-final visible sword angle remains user-calibrated.
-
-Updated build_travel_animation_library.gd with a shared finger-grip helper and
-an --idle-only bake path. The path restores original wrist keys (or the source
-rest quaternion for untracked constant hands) before sampling, preventing repeated
-bakes from accumulating corrections. Saved travel_animations.res with only the
-two idle poses changed. Gaits, stride calibration and combat timing were not
-rebuilt. Full library builds produce the same idle rule. Added README guidance.
-
-Verification: test_relaxed_locomotion passes ten adapted race/gender poses and
-four combat-ready phases per model, requiring palm/forearm angle under 25 degrees
-before user calibration. Existing idle/locomotion/profile checks pass. Native
-D3D12 hand closeups reviewed with/without saved F7 grip settings under
-logs/idle_hand_review. test_fast_align and test_weapon_controls pass. Final logs:
-natural_idle_final_test.log, natural_idle_weapon_controls.log,
-natural_idle_fast_align.log, natural_idle_grip_render.log. Bake log
-natural_idle_grip_bake.log reports success without script errors. Existing exit
-resource diagnostics remain. Updated CURRENT_WORK and GAME_RULES. No user saves,
-calibration files, source meshes, remote code, external generation, commit or
-push changed. Restart the game to load the resource.
+**Remaining.** Build the app, asset and terrain tools, safe map clearing, draft browser, validation, and gameplay integration. Reconcile edited terrain with analytic gameplay queries, collision, world-map raster, streamed assets, spawn positions and interaction objects before applying a draft. Ensure original-map restoration and preserve local character saves. The machine has 4.7.1 export templates but the project runs 4.7.2; the separate executable still needs a verified build path.

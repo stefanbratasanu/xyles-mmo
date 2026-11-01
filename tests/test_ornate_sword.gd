@@ -9,8 +9,10 @@ func _initialize() -> void:
 func run() -> void:
 	var state: Node = load("res://scripts/game_state.gd").new()
 	root.add_child(state)
-	var old: Dictionary = state.equipment[0].duplicate(true)
-	var sword: Dictionary = old.duplicate(true)
+	var sword: Dictionary = state.equipment[0].duplicate(true)
+	var old: Dictionary = state._make_item("Worn Ironblade", "basic", "weapon", 12, 88.0, "sword")
+	state.equipment.clear()
+	state.equipment.append(old)
 	sword.id = "test_ornate_sword"
 	sword.name = "Ornate Silver Sword"
 	sword.visual_id = "ornate_silver_sword"

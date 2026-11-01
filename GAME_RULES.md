@@ -20,6 +20,7 @@ file is the shorter contract used during implementation.
 - Normal startup loads the last successfully selected character. With no usable last character, choose a save or create one with a name, race and starting class. Available races are Human, Orc, Elf, Dark Elf and Dwarf; each may choose Fighter or Mystic.
 - Race and class are identity only for this prototype. The current model, starting stats, skills and location are shared; race-specific art, classes and balance are future work.
 - Each new character has an independent local save. The existing `saves/journey.json` remains available as the original journey. Saving uses a temporary file before replacement.
+- New characters start with the ornate silver sword equipped and no other items in their inventory or equipment, including no wood or iron crafting stacks. Existing character saves retain their items.
 - Options → Log out saves the active character and returns to selection. Logout is blocked while dead or while dropped equipment remains in the world, because ground loot is not currently persisted.
 
 ## 2. Controls
@@ -52,7 +53,8 @@ file is the shorter contract used during implementation.
 
 - The two campfire logs are solid seats: approach one and press E to sit; moving
   with WASD starts the stand-up animation. The campfire and roadside/gate
-  torches burn at night, fading at dawn and dusk, with quiet positional crackling.
+  torches burn at night, fading at dawn and dusk, with quiet positional crackling
+  heard from the player's position rather than the camera.
 
 - Before a new mob is implemented, ask Alin or Stefan for its spawn time or
   day/night window and the map, zones or biomes where it belongs. Record their
@@ -90,7 +92,8 @@ file is the shorter contract used during implementation.
 - Forest and foothill tree centres keep at least 3.2 m of clearance, including
   across zone boundaries. Canopies can overlap, but trunks must not touch.
 - **A tree trunk is one continuous lofted mesh**, roots included. Do not rebuild
-  a tree by stacking cylinder segments; the seams and kinks are visible.
+  a tree by stacking cylinder segments; the seams and kinks are visible. Do not
+  add separate pointed root spikes around the base.
 - **Foliage is modelled, not painted on a cone.** Crowns and bushes use
   alpha-scissor leaf/needle cards with per-card colour tint (surface 0 is bark,
   surface 1 is foliage). Smooth green blobs are a regression.
@@ -148,21 +151,27 @@ file is the shorter contract used during implementation.
 - **The sky moves with the clock.** Cloud noise is sampled in 3D on the view
   direction and scrolls with time; the sky uses a realtime radiance update. A
   static sky, or a planar cloud projection that tears at the zenith, is a
-  regression.
+  regression. Daytime sky is blue above a narrow misty horizon, and distant
+  world fog continues to conceal streamed scenery boundaries.
 - **Post-processing is a player choice.** Glow is screen-blended with a 1.0 HDR
   threshold, so fire, lanterns, runes, the portal and creature eyes read as light
   without hazing the whole frame. SSAO supplies contact shadow. Both default on
   and must stay switchable under **Settings → Graphics**; the choice persists in
   `saves/settings.cfg` under `[graphics]`. Never make a gameplay signal, damage
   number or UI element depend on either effect.
-- Ambient occlusion strength is selectable at 1×, 2× or 3×, with 1× preserving
-  the original intensity. Its selection persists even while the effect is off.
+- Ambient occlusion strength is selectable at 1×, 2× or 3×. All three levels are
+  stronger than the original setting; selection persists even while it is off.
 - Settings → Graphics provides a persistent frame-rate limit from 20 to 60 FPS,
   applied immediately and defaulting to 60 for older settings. The cap limits
   frame rate; performance and display synchronization may keep it lower.
 - Settings → Graphics provides a persistent temporal anti-aliasing (TAA) toggle,
   on by default. Disabling it can reduce softness in motion but may increase
   vegetation shimmer. The existing MSAA remains enabled.
+- On Map I only, Settings → Graphics can disable forest sun shafts for lower GPU cost. The
+  localized shafts follow the sun's direction, appear after 10:00, begin fading
+  at 16:00 and finish fading by 17:00. They belong in dense woods and must avoid
+  roads, open ground and tree trunks. The setting persists.
+- Clouds fade away at night, leaving the stars visible.
 - The clock panel's visual preview cycles Auto / Day / Night. It changes only
   the rendered atmosphere and fire presentation: the actual clock, saved day
   and time, mob schedules and timers continue normally. Auto restores the
@@ -183,10 +192,12 @@ file is the shorter contract used during implementation.
 - `Tab` and clicking an enemy set a single current target. The target ring is the
   only selection marker.
 - Every enemy has **one** health display: a world-space bar above the enemy.
-  - It must be visible while the enemy is damaged or selected.
+  - It is visible before combat to show the creature's aggro behavior.
   - It must update on damage **and** on healing.
   - The fill must deplete from the left edge and keep a dark background frame.
-  - Colour shifts from green to amber to red as health falls.
+  - Before combat, passive bars are yellow, territorial bars orange, and
+    aggressive bars red. A creature's bar turns red during combat, regardless
+    of its behavior, and returns to its behavior color after combat ends.
   - Do not add a second target panel in the HUD. Duplicate HP displays are a
     regression, not a feature.
 - Damage must produce visible feedback: floating number, brief hit reaction, and
@@ -229,7 +240,16 @@ file is the shorter contract used during implementation.
   living unloaded enemy keeps its health and position until its species window
   ends. The world clock and spawn deadlines are saved with the character and
   pause while the game is closed. Training enemies remain temporary.
-- Enemies aggro inside their detection radius and leash back to their home point.
+- Creatures have three aggro behaviors: **passive** do not initiate aggression
+  from proximity but fight back if attacked;
+  **territorial** attack when the player comes very close (currently 3 m);
+  **aggressive** notice the player at their existing larger detection radius
+  and pursue them. Existing wolves, boars and guardians remain aggressive until
+  a species is explicitly assigned another behavior. Enemies leash back home.
+- New creature definitions must explicitly choose `passive`, `territorial`, or
+  `aggressive` for their aggro behavior; do not infer the choice from species.
+- Damage provokes all three behaviors to retaliate. An unengaged creature's
+  combat color clears eight seconds after it was last damaged.
 - **Every attack commits to a world-space point.** The enemy picks its target at
   the windup start, locks that point, and tests the hit against it. The player
   can walk or dodge out of the point and take no damage. Enemies never track the
@@ -250,6 +270,10 @@ file is the shorter contract used during implementation.
 - Enemies collide with the terrain, the player and each other. They snap to the
   ground, spread out instead of stacking, and sidestep when wedged for half a
   second. Standing inside a wolf or watching it vibrate in place is a regression.
+- Streamed tree trunks are solid to the player and enemies. A boar's charge
+  stops on a trunk and stuns it for two seconds; other solid world obstacles stop
+  the charge without the tree-specific stun. A stunned creature displays
+  rotating yellow stars above its head for the duration of the stun.
 - Enemies regenerate health while not aggroed. The health bar must reflect that
   regeneration.
 - Enemy HP and damage scale with the level band of the zone they spawn in, so a
@@ -340,7 +364,6 @@ Visual language:
 
 Interface update 2026-10-29: permanent Adventure and System Journal are removed. Bottom-right head/gear/arrow access Character Status, Options and all windows. Character stats display existing gameplay values only. Dragging exposes snap boundaries; shortcut grip is on the right.
 
-
 ## Generated 3D asset quality preference
 
 - For future generated 3D assets, request high-fidelity textures where the service supports them and target approximately 20,000–200,000 exported vertices. Check the actual exported vertex count and review texture quality, deformation and in-game performance; service polygon targets may not equal exported vertex counts.
@@ -355,109 +378,55 @@ This supersedes the earlier experimental/default-status notes above. The current
 
 ## Race-first character art - 2026-11-01
 
-The user superseded body customization: use one authored build per race/gender
-while Human, Orc, Elf, Dark Elf and Dwarf are refined, with both Male and Female
-models. Gender is cosmetic identity data and defaults to Male for old saves.
-Race/gender and class do not change current stats, abilities or collision.
-The selector lists all ten combinations; pending models display their own
-concepts and are unavailable for new gameplay creation until a reviewed scene
-exists. Existing journeys remain loadable while art is pending. Prior saved body
-indices remain stored but are inactive in rendering. The current fixed-build
-Human male is the only reviewed race scene at this checkpoint.
-
+The user superseded body customization: use one authored build per race/gender while Human, Orc, Elf, Dark Elf and Dwarf are refined, with both Male and Female models. Gender is cosmetic identity data and defaults to Male for old saves. Race/gender and class do not change current stats, abilities or collision. The selector lists all ten combinations; pending models display their own concepts and are unavailable for new gameplay creation until a reviewed scene exists. Existing journeys remain loadable while art is pending. Prior saved body indices remain stored but are inactive in rendering. The current fixed-build Human male is the only reviewed race scene at this checkpoint.
 
 ### Race art installation - 2026-11-01
 
-All ten race/gender scenes are now installed and reviewed, superseding the
-Human-only checkpoint above. The five races and both genders are playable with
-one fixed build each. Existing cosmetic/stat/collision rules stay as specified.
+All ten race/gender scenes are now installed and reviewed, superseding the Human-only checkpoint above. The five races and both genders are playable with one fixed build each. Existing cosmetic/stat/collision rules stay as specified.
 
 ### Animation and weapon authoring shortcuts - 2026-11-01
 
-F6 captures the active animation, even with its window open; selecting a new
-clip replaces the current character visual independently of skill. Full-body
-replacement is temporary until a nonloop finishes or Stop Override is used.
-Persistent per-skill mappings still use Save Mapping. F7 opens weapon hand-local
-XYZ position/rotation and Save Grip, scoped to race/gender model and weapon
-variant. These are presentation tools, without combat or stat changes. Actions
-remains in the corner menu. F6 and F7 cannot be assigned as debug shortcuts.
+F6 captures the active animation, even with its window open; selecting a new clip replaces the current character visual independently of skill. Full-body replacement is temporary until a nonloop finishes or Stop Override is used. Persistent per-skill mappings still use Save Mapping. F7 opens weapon hand-local XYZ position/rotation and Save Grip, scoped to race/gender model and weapon variant. These are presentation tools, without combat or stat changes. Actions remains in the corner menu. F6 and F7 cannot be assigned as debug shortcuts.
 
 ### Human male base revision - 2026-11-01
 
-The default Human male is the new medium-haired fixed-build race model in plain
-dark training shorts. The previous synthetic starter clothing is no longer part
-of his default base. Gameplay stats, identity, collision and abilities are unchanged.
+The default Human male is the new medium-haired fixed-build race model in plain dark training shorts. The previous synthetic starter clothing is no longer part of his default base. Gameplay stats, identity, collision and abilities are unchanged.
 
 ### Movement pace and idle presentation - 2026-11-01
 
-Base movement is reduced by 30 percent, from 5.3 to 3.71m/s before existing
-bonuses. Walk/backpedal/crouch caps receive the same default scale; dash retains
-its skill-specific displacement. Animation playback follows final travel distance
-and the current race's measured stride, so short-legged races cycle faster.
-Manual preview/action playback speed does not alter automatic travel pace.
+Base movement is reduced by 30 percent, from 5.3 to 3.71m/s before existing bonuses. Walk/backpedal/crouch caps receive the same default scale; dash retains its skill-specific displacement. Animation playback follows final travel distance and the current race's measured stride, so short-legged races cycle faster. Manual preview/action playback speed does not alter automatic travel pace.
 
-Ordinary standing, walking and running are relaxed. Combat idle is a separate
-presentation action held briefly after attacks/blocking (four seconds), extended
-while channeling, and then released to relaxed standing. It changes neither
-combat rules nor targeting. F6 temporary overrides and explicit custom mappings
-still apply. Character preview uses the same ordinary travel sources.
+Ordinary standing, walking and running are relaxed. Combat idle is a separate presentation action held briefly after attacks/blocking (four seconds), extended while channeling, and then released to relaxed standing. It changes neither combat rules nor targeting. F6 temporary overrides and explicit custom mappings still apply. Character preview uses the same ordinary travel sources.
 
 ### Weapon authoring freeze and mouse alignment - 2026-11-01
 
-F7 Freeze Animation pauses the exact base/upper-body pose until Resume or a new
-F6 clip/lifecycle reset. Gameplay timers continue. Fast Align edits position XY
-with mouse motion and Z with wheel; Ctrl-click instead edits rotation. Click or
-Enter keeps the pass, Esc/right-click restores its start transform, and Save Grip
-persists it. These controls change presentation only.
+F7 Freeze Animation pauses the exact base/upper-body pose until Resume or a new F6 clip/lifecycle reset. Gameplay timers continue. Fast Align edits position XY with mouse motion and Z with wheel; Ctrl-click instead edits rotation. Click or Enter keeps the pass, Esc/right-click restores its start transform, and Save Grip persists it. These controls change presentation only.
 
 ### Fast Align hand target - 2026-11-01
 
-While aligning, hold the right mouse button to rotate the weapon. Hold Alt to
-rotate the actual hand instead; wheel edits the selected rotation's Z axis.
-Right-click no longer cancels; Escape cancels the complete pass. Save Grip saves
-hand rotation plus weapon transform per model/type/variant. This remains purely
-presentation calibration, with no gameplay/stat changes.
+While aligning, hold the right mouse button to rotate the weapon. Hold Alt to rotate the actual hand instead; wheel edits the selected rotation's Z axis. Right-click no longer cancels; Escape cancels the complete pass. Save Grip saves hand rotation plus weapon transform per model/type/variant. This remains purely presentation calibration, with no gameplay/stat changes.
 
 ### Forward-diagonal sprint - 2026-11-01
 
-Shift+W+A / Shift+W+D use forward-left/right sprint animations. Directional input
-remains normalized, so diagonal sprint gives no extra movement speed. Playback
-uses the corresponding race-specific stride calibration and preserves gait phase.
+Shift+W+A / Shift+W+D use forward-left/right sprint animations. Directional input remains normalized, so diagonal sprint gives no extra movement speed. Playback uses the corresponding race-specific stride calibration and preserves gait phase.
 
 ### Shift-sprint weapon readiness - 2026-11-01
 
-Only Shift-sprinting puts the equipped weapon on the back. It follows the torso
-with a subtle step-synchronized jiggle; natural source arm motion is preserved.
-Normal running keeps the weapon in hand. No forced shoulder/elbow poses or
-procedural reach animation. Skills and basic attacks cannot start while sprinting;
-starting sprint stops active channels. Existing projectiles/effects continue.
-Leaving sprint starts a one-second readiness delay, then the weapon returns to
-the hand and combat becomes available. Re-entering sprint cancels readiness.
-This transient state is not saved and resets on death/model/equipment changes.
-No changes to movement speeds or stride calibration. F7 freeze also freezes sway.
+Only Shift-sprinting puts the equipped weapon on the back. It follows the torso with a subtle step-synchronized jiggle; natural source arm motion is preserved. Normal running keeps the weapon in hand. No forced shoulder/elbow poses or procedural reach animation. Skills and basic attacks cannot start while sprinting; starting sprint stops active channels. Existing projectiles/effects continue. Leaving sprint starts a one-second readiness delay, then the weapon returns to the hand and combat becomes available. Re-entering sprint cancels readiness. This transient state is not saved and resets on death/model/equipment changes. No changes to movement speeds or stride calibration. F7 freeze also freezes sway.
 
 ### Class skill training at Torven - 2026-11-01
 
-This supersedes automatic Fighter milestone unlocks. Speak to Torven, the camp
-blacksmith/instructor, with E in Emberfall Camp. His dialogue shows all authored
-Fighter skills: Cleave/Bow Attack level 1, Guard level 2, Dash level 3 and Cone
-Attack level 4. Every entry displays its required level. Under-level skills are
-Locked; eligible unlearned skills are Available; trained skills are Learned.
-Learning is free and spends no enchantment skill points. Training requires the
-correct class, required level, NPC interaction range and being out of combat.
-Eligibility alone does not permit casting/equipping: learn first, then assign
-from K. Repeated training has no effect. Existing equipped skills remain usable
-when loading pre-trainer saves; other eligible skills need training. Learned
-flags persist. Mystic training levels are not authored; its existing acquisition
-behavior is unchanged. Torven's dialogue retains access to crafting/quest flow.
+This supersedes automatic Fighter milestone unlocks. Speak to Torven, the camp blacksmith/instructor, with E in Emberfall Camp. His dialogue shows all authored Fighter skills: Cleave/Bow Attack level 1, Guard level 2, Dash level 3 and Cone Attack level 4. Every entry displays its required level. Under-level skills are Locked; eligible unlearned skills are Available; trained skills are Learned. Learning is free and spends no enchantment skill points. Training requires the correct class, required level, NPC interaction range and being out of combat. Eligibility alone does not permit casting/equipping: learn first, then assign from K. Repeated training has no effect. Existing equipped skills remain usable when loading pre-trainer saves; other eligible skills need training. Learned flags persist. Mystic training levels are not authored; its existing acquisition behavior is unchanged. Torven's dialogue retains access to crafting/quest flow.
 
-K shows learned class skills only. Unlearned abilities, whether locked by level
-or eligible for training, appear only at the trainer NPC. Empty K directs the
-player to Torven rather than displaying unlearned milestone cards.
+K shows learned class skills only. Unlearned abilities, whether locked by level or eligible for training, appear only at the trainer NPC. Empty K directs the player to Torven rather than displaying unlearned milestone cards.
 
 ### Sword idle hand presentation - 2026-11-01
 
-Sword standing and combat-ready idle use a relaxed palm-to-forearm alignment and
-closed grip, rather than a wrist bend chosen to force blade direction. This is
-an authored presentation change only; combat rules, attack/movement timing and
-saved F7 calibration remain unchanged.
+Sword standing and combat-ready idle use a relaxed palm-to-forearm alignment and closed grip, rather than a wrist bend chosen to force blade direction. This is an authored presentation change only; combat rules, attack/movement timing and saved F7 calibration remain unchanged.
+
+## 10. Local world-editor drafts
+
+- The separate world editor saves drafts locally. Only an explicit Apply to Game selects a snapshot for the next game start; subsequent draft saves do not update the applied snapshot. The original authored map remains available for restoration.
+- A painted custom zone has a stable ID, name, classification and level range. Within its painted cells it overrides the original region lookup; existing enemy spawn slots in that area use its level band, and first bestiary discoveries use that zone's ID. The existing 50-point lifetime cap and category awards are unchanged.
+- Starter, Enemy and Neutral classifications do not independently relocate player spawns or create mobs. New mob species and their spawn time and map/biome remain subject to the approval and documentation rule above.
+- Clearing a draft removes its terrain, roads, lakes and scenery, not the game's existing gameplay spawn definitions. Applying a draft with missing ground at a required player, NPC or enemy spawn is rejected.

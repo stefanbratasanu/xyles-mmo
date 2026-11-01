@@ -164,6 +164,16 @@ var _ridge_detail: FastNoiseLite
 var _terrain_heights: PackedFloat32Array = PackedFloat32Array()
 var _terrain_colors: PackedColorArray = PackedColorArray()
 var _terrain_grid_size: int = 0
+## Optional editor-authored surface. The original analytic world remains the
+## default; an applied draft supplies the same grid used for its collision.
+var editor_terrain: RefCounted = null
+var editor_removed_trees: Dictionary = {}
+var editor_pick_enabled: bool = false
+var editor_static_edits: Dictionary = {}
+var editor_lakes: Array[Dictionary] = []
+var editor_cleared_base: bool = false
+var editor_zone_cells: Dictionary = {}
+var editor_zones: Dictionary = {}
 var _map_cache: ImageTexture
 var _authored_map: Image
 var _tree_points: Array[Vector2] = []
@@ -207,6 +217,13 @@ var _materials: Dictionary = {}
 var _sun: DirectionalLight3D
 var _environment: Environment
 var _sky_material: ShaderMaterial
+var _shaft_material: ShaderMaterial
+var _shaft_mesh: ArrayMesh
+var _sun_shafts_enabled: bool = true
+var _shafts_visible: bool = true
+var _shaft_slope := Vector2.ZERO
+var _shaft_check_hour: float = -100.0
+var _shaft_refresh_queue: Array[int] = []
 var _portal_material: StandardMaterial3D
 var _portal_ring: MeshInstance3D
 var _flames: Array[Node3D] = []
@@ -340,6 +357,7 @@ func _reseed(value: int) -> void:
 
 func _process(delta: float) -> void:
 	_elapsed += delta
+	_pump_shaft_refresh()
 	var started := Time.get_ticks_usec()
 	_pump_streaming()
 	var completed := Time.get_ticks_usec()
@@ -594,6 +612,8 @@ func _shore_shape(angle: float, phase: float) -> float:
 
 
 func _pond_shore_radius(pond: Dictionary, angle: float) -> float:
+	if bool(pond.get("editor", false)):
+		return float(pond["radius"])
 	return float(pond["radius"]) * _shore_shape(angle, float(pond["phase"]))
 
 
@@ -627,6 +647,9 @@ func _ground_lowest(x: float, z: float, radius: float) -> Vector3:
 ## Height is a pure function of x/z. The render mesh, the collision mesh, every
 ## prop, spawn point and the click-to-move ray all use this one function.
 func height_at(x: float, z: float) -> float:
+	if editor_terrain != null:
+		var edited_height: float = editor_terrain.sample_height(Vector2(x, z))
+		return edited_height if is_finite(edited_height) else 0.0
 	if not _prepared:
 		if _hills == null:
 			_init_noise()
@@ -678,6 +701,8 @@ func height_at(x: float, z: float) -> float:
 ## Height of the rendered/collidable terrain triangles, for ground overlays.
 ## The analytic height field can differ slightly between mesh vertices.
 func surface_height_at(x: float, z: float) -> float:
+	if editor_terrain != null:
+		return height_at(x, z)
 	if _terrain_grid_size < 2 or _terrain_heights.is_empty() or absf(x) > TERRAIN_EXTENT or absf(z) > TERRAIN_EXTENT:
 		return height_at(x, z)
 	var step: float = (TERRAIN_EXTENT * 2.0) / float(TERRAIN_SEGMENTS)
@@ -727,6 +752,11 @@ func zone_at(point: Vector3) -> Dictionary:
 
 
 func zone_at_xz(p: Vector2) -> Dictionary:
+	if not editor_zone_cells.is_empty():
+		var cell := Vector2i(floori(p.x / 4.0), floori(p.y / 4.0))
+		var zone_id: String = editor_zone_cells.get(cell, "")
+		if editor_zones.has(zone_id):
+			return editor_zones[zone_id]
 	var best: Dictionary = zones[0]
 	var best_metric: float = INF
 	for zone: Dictionary in zones:
@@ -735,6 +765,12 @@ func zone_at_xz(p: Vector2) -> Dictionary:
 			best_metric = metric
 			best = zone
 	return best
+
+func display_zones() -> Array[Dictionary]:
+	var result: Array[Dictionary] = zones.duplicate()
+	for zone: Dictionary in editor_zones.values():
+		result.append(zone)
+	return result
 
 
 ## Boundary polygon in world X/Z for the full-screen map.
@@ -756,7 +792,9 @@ func zone_level_text(zone: Dictionary) -> String:
 
 ## Read-only access to the fen pools for the full-screen map.
 func ponds() -> Array[Dictionary]:
-	return _ponds
+	var result: Array[Dictionary] = _ponds.duplicate()
+	result.append_array(editor_lakes)
+	return result
 
 
 ## World-space rectangle shown by the full-screen map. The mountain rim is left
@@ -789,6 +827,7 @@ func _paint_map_image(size: int) -> Image:
 		return null
 	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
 	var bounds := map_bounds()
+	var map_ponds := ponds()
 	var raster_step: float = (TERRAIN_EXTENT * 2.0) / float(count - 1)
 	var light := Vector3(-0.55, 0.72, -0.42).normalized()
 	# Trunk positions become soft density masses, so the painted map shows where
@@ -824,6 +863,9 @@ func _paint_map_image(size: int) -> Image:
 		var gz: float = (z + TERRAIN_EXTENT) / raster_step
 		for px: int in range(size):
 			var x: float = bounds.position.x + (float(px) + 0.5) / float(size) * bounds.size.x
+			if editor_terrain != null and not is_finite(editor_terrain.sample_height(Vector2(x, z))):
+				image.set_pixel(px, py, Color("101819"))
+				continue
 			var gx: float = (x + TERRAIN_EXTENT) / raster_step
 			var base: Color = _sample_color_grid(gx, gz)
 			var h_left: float = _sample_height_grid(gx - 1.0, gz)
@@ -848,7 +890,7 @@ func _paint_map_image(size: int) -> Image:
 			if int(floor(h_here / 4.0)) != int(floor(h_west / 4.0)) \
 					or int(floor(h_here / 4.0)) != int(floor(h_south / 4.0)):
 				base = base.darkened(0.09)
-			for pond: Dictionary in _ponds:
+			for pond: Dictionary in map_ponds:
 				var delta: Vector2 = point - (pond["center"] as Vector2)
 				var distance: float = delta.length()
 				var shore: float = _pond_shore_radius(pond, atan2(delta.y, delta.x))
@@ -1100,14 +1142,20 @@ func _create_atmosphere() -> void:
 	_environment.fog_light_color = Color("8a9c8d")
 	_environment.fog_light_energy = 0.55
 	_environment.fog_density = 0.0032
-	_environment.fog_sky_affect = 0.35
+	# Keep the sky blue above the narrow horizon haze; distant world geometry
+	# still fades into fog to hide the streamed vegetation boundary.
+	_environment.fog_sky_affect = 0.08
 	_environment.fog_aerial_perspective = 0.35
+	# Use localized depth-tested shafts instead of filling the entire view with
+	# volumetric light. The existing distance fog still hides the stream boundary.
+	_environment.volumetric_fog_enabled = false
+	_create_sun_shaft_mesh()
 	_environment.ssao_enabled = ssao_enabled
 	_environment.ssao_radius = 1.5
-	_environment.ssao_intensity = 1.5 * ssao_strength
+	_environment.ssao_intensity = 2.5 * ssao_strength
 	_environment.ssao_power = 1.4
 	_environment.ssao_detail = 0.5
-	_environment.ssao_light_affect = 0.12
+	_environment.ssao_light_affect = 0.35
 	# Glow is the payoff for the emissive fire, lanterns, runes and eyes. Screen
 	# blending only adds light and never darkens or tints the base frame, and the
 	# 1.0 HDR threshold keeps ordinary sunlit stone out of the effect. Levels 3-5
@@ -1151,15 +1199,19 @@ func _create_atmosphere() -> void:
 ## Applies the Graphics options from Settings without a world rebuild. Both
 ## effects are per-scene Environment flags, so toggling them is immediate and
 ## costs nothing until the next frame.
-func apply_graphics_settings(use_glow: bool, use_ssao: bool, ao_strength: int = 1) -> void:
+func apply_graphics_settings(use_glow: bool, use_ssao: bool, ao_strength: int = 1, sun_shafts: bool = true) -> void:
 	glow_enabled = use_glow
 	ssao_enabled = use_ssao
 	ssao_strength = clampi(ao_strength, 1, 3)
 	if _environment == null:
 		return
 	_environment.glow_enabled = glow_enabled
+	_sun_shafts_enabled = sun_shafts
+	if _shaft_material != null:
+		_shaft_material.set_shader_parameter("enabled", sun_shafts)
+		_update_shaft_visibility(sun_shafts and float(_shaft_material.get_shader_parameter("daylight")) > 0.01)
 	_environment.ssao_enabled = ssao_enabled
-	_environment.ssao_intensity = 1.5 * ssao_strength
+	_environment.ssao_intensity = 2.5 * ssao_strength
 
 
 func _apply_time_of_day() -> void:
@@ -1174,14 +1226,26 @@ func _apply_time_of_day() -> void:
 	var arc_t: float = solar_t if is_day else fposmod(visual_hour - 18.0, 24.0) / 12.0
 	var arc_height: float = maxf(sin(arc_t * PI), 0.02)
 	_sun.rotation_degrees = Vector3(-(4.0 + arc_height * 58.0), lerpf(-104.0, 104.0, arc_t), 0.0)
+	if _shaft_material != null:
+		var sun_up: Vector3 = _sun.basis.z.normalized()
+		var divisor: float = maxf(absf(sun_up.y), 0.35)
+		_shaft_slope = Vector2(sun_up.x, sun_up.z) / divisor
+		var shaft_light: float = smoothstep(10.0, 11.0, visual_hour) * (1.0 - smoothstep(16.0, 17.0, visual_hour))
+		_shaft_material.set_shader_parameter("sun_slope", _shaft_slope)
+		_shaft_material.set_shader_parameter("daylight", shaft_light)
+		_update_shaft_visibility(_sun_shafts_enabled and shaft_light > 0.01)
+		if shaft_light > 0.0 and absf(visual_hour - _shaft_check_hour) >= 0.04 and _shaft_refresh_queue.is_empty():
+			var time_jump: bool = absf(visual_hour - _shaft_check_hour) > 0.25
+			_shaft_check_hour = visual_hour
+			_refresh_shaft_clearance(time_jump)
 	if is_day:
 		_sun.light_color = Color("ffb477").lerp(Color("fff4de"), clampf((arc_height - 0.08) / 0.65, 0.0, 1.0))
 		_sun.light_energy = 0.10 + 1.55 * daylight + 0.30 * dusk
 	else:
 		_sun.light_color = Color("a9c2ee")
 		_sun.light_energy = 0.12 + 0.24 * arc_height
-	var day_top := Color("3c6f98")
-	var day_horizon := Color("c3c9ac")
+	var day_top := Color("367fbd")
+	var day_horizon := Color("9bc8e2")
 	var night_top := Color("0b1526")
 	var night_horizon := Color("243a4d")
 	var dusk_top := Color("3b4a5c")
@@ -1766,7 +1830,7 @@ func _in_pond(p: Vector2, padding: float) -> bool:
 func water_depth_at(x: float, z: float) -> float:
 	var point := Vector2(x, z)
 	var deepest: float = 0.0
-	for pond: Dictionary in _ponds:
+	for pond: Dictionary in ponds():
 		var delta: Vector2 = point - pond["center"]
 		var distance: float = delta.length()
 		if distance > float(pond["radius"]) * 2.0:
@@ -2193,6 +2257,25 @@ func _activate_static_cell(cell: Vector2i, scene: PackedScene) -> void:
 		return
 	var node := scene.instantiate()
 	add_child(node)
+	for candidate: Node in node.find_children("*", "MeshInstance3D", true, false):
+		var boulder := candidate as MeshInstance3D
+		# Baked scenes auto-rename repeated nodes, but retain the GLB mesh name.
+		if boulder.mesh != null and (str(boulder.name).begins_with("Boulder") or boulder.mesh.resource_name.begins_with("rock_")):
+			_settle_boulder(boulder)
+	for edit: Dictionary in editor_static_edits.get(cell, []):
+		var target := node.get_node_or_null(NodePath(str(edit.get("path", "")))) as Node3D
+		if target == null:
+			continue
+		if bool(edit.get("removed", false)):
+			target.get_parent().remove_child(target)
+			target.queue_free()
+		else:
+			var p: Array = edit["position"]
+			var r: Array = edit["rotation"]
+			var s: Array = edit["scale"]
+			target.position = Vector3(float(p[0]), float(p[1]), float(p[2]))
+			target.rotation = Vector3(float(r[0]), float(r[1]), float(r[2]))
+			target.scale = Vector3(float(s[0]), float(s[1]), float(s[2]))
 	_static_active[cell] = node
 	_refresh_baked_dynamic_nodes()
 	_apply_time_of_day()
@@ -2345,12 +2428,122 @@ func _update_baked_vegetation(center: Vector2i, initial: bool) -> void:
 		elif not _vegetation_pending.has(cell):
 			_vegetation_pending[cell] = path
 
+func _update_shaft_visibility(visible_now: bool) -> void:
+	if visible_now == _shafts_visible:
+		return
+	_shafts_visible = visible_now
+	for cell in _streamed_visual_nodes:
+		for node: Node in _streamed_visual_nodes[cell]:
+			if node is MultiMeshInstance3D and str(node.name).begins_with("SunShafts_"):
+				(node as MultiMeshInstance3D).visible = visible_now
+
+
+## Validate the whole projected beam, not just its foot: at low sun angles a
+## ray can otherwise cross a trunk or road several metres from its origin.
+func _shaft_path_clear(origin: Vector2, slope: Vector2, height_value: float, width: float) -> bool:
+	var end := origin + slope * height_value
+	var segment := end - origin
+	var margin: float = width * 0.5 + 1.15
+	var min_x := floori((minf(origin.x, end.x) - margin) / TREE_TRUNK_CLEARANCE)
+	var max_x := floori((maxf(origin.x, end.x) + margin) / TREE_TRUNK_CLEARANCE)
+	var min_z := floori((minf(origin.y, end.y) - margin) / TREE_TRUNK_CLEARANCE)
+	var max_z := floori((maxf(origin.y, end.y) + margin) / TREE_TRUNK_CLEARANCE)
+	var nearby := 0
+	# Density test uses the existing authored trunk index across cell borders.
+	var base_cell := Vector2i(floori(origin.x / TREE_TRUNK_CLEARANCE), floori(origin.y / TREE_TRUNK_CLEARANCE))
+	for x in range(base_cell.x - 3, base_cell.x + 4):
+		for z in range(base_cell.y - 3, base_cell.y + 4):
+			for tree: Vector2 in _tree_spacing_cells.get(Vector2i(x, z), []):
+				if tree.distance_squared_to(origin) <= 81.0:
+					nearby += 1
+	if nearby < 4:
+		return false
+	for x in range(min_x, max_x + 1):
+		for z in range(min_z, max_z + 1):
+			for tree: Vector2 in _tree_spacing_cells.get(Vector2i(x, z), []):
+				var t := clampf((tree - origin).dot(segment) / maxf(segment.length_squared(), 0.0001), 0.0, 1.0)
+				if tree.distance_squared_to(origin + segment * t) < margin * margin:
+					return false
+	var steps := maxi(1, ceili(segment.length() / 2.0))
+	for i in range(steps + 1):
+		var point := origin + segment * (float(i) / steps)
+		var road_too_close: bool = _near_road(point.x, point.y, 3) and _road_distance(point) < ROAD_WIDTH * 0.5 + margin + 1.0
+		if road_too_close or _near_site(point, margin + 1.0) or _in_pond(point, margin):
+			return false
+	return true
+
+
+func _refresh_shaft_clearance(hide_until_checked: bool = false) -> void:
+	_shaft_refresh_queue.clear()
+	for cell in _streamed_visual_nodes:
+		for node: Node in _streamed_visual_nodes[cell]:
+			if node is MultiMeshInstance3D and node.has_meta("shaft_data"):
+				var shaft := node as MultiMeshInstance3D
+				if hide_until_checked:
+					shaft.visible = false
+				_shaft_refresh_queue.append(shaft.get_instance_id())
+
+
+func _pump_shaft_refresh() -> void:
+	# Avoid a full-forest revalidation spike during normal time progression.
+	if _shaft_refresh_queue.is_empty():
+		return
+	var node := instance_from_id(_shaft_refresh_queue.pop_front()) as MultiMeshInstance3D
+	if is_instance_valid(node) and node.is_inside_tree():
+		_refresh_shaft_node(node)
+		node.visible = _shafts_visible
+
+
+func _refresh_shaft_node(node: MultiMeshInstance3D) -> void:
+	var candidates: Array = node.get_meta("shaft_data", [])
+	for index in candidates.size():
+		var entry: Dictionary = candidates[index]
+		var visible_ray := _shaft_path_clear(entry.position, _shaft_slope, entry.height, entry.width)
+		node.multimesh.set_instance_custom_data(index, Color(entry.width / 4.0, entry.height / 12.0, entry.strength if visible_ray else 0.0, 1.0))
+
+
+func _create_sun_shaft_mesh() -> void:
+	_shaft_material = ShaderMaterial.new()
+	_shaft_material.shader = load("res://shaders/forest_sun_shafts.gdshader")
+	_shaft_material.set_shader_parameter("enabled", _sun_shafts_enabled)
+	var vertices := PackedVector3Array([
+		Vector3(-0.5, 0, 0), Vector3(0.5, 0, 0), Vector3(0.5, 1, 0), Vector3(-0.5, 1, 0),
+		Vector3(0, 0, -0.5), Vector3(0, 0, 0.5), Vector3(0, 1, 0.5), Vector3(0, 1, -0.5)])
+	var uv := PackedVector2Array([Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1),
+		Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_TEX_UV] = uv
+	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7])
+	_shaft_mesh = ArrayMesh.new()
+	_shaft_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_shaft_mesh.surface_set_material(0, _shaft_material)
+
+
 func _activate_vegetation_tile(cell: Vector2i, tile: Resource) -> void:
 	if tile == null:
 		push_error("Invalid baked vegetation cell: %s" % cell)
 		return
 	var nodes: Array[Node] = []
+	var ray_positions: Array[Vector3] = []
 	for group: Dictionary in tile.groups:
+		var visible_entries: Array = group["entries"]
+		var visible_colors: Array = group["colors"]
+		var original_indices: Array[int] = []
+		var is_tree: bool = str(group["name"]).begins_with("Trees_") or str(group["name"]) == "FoothillPines"
+		var removal_group := "%d,%d:%s" % [cell.x, cell.y, str(group["name"])]
+		var removed_indices: Dictionary = editor_removed_trees.get(removal_group, {})
+		if not removed_indices.is_empty() or (is_tree and editor_pick_enabled):
+			visible_entries = []
+			visible_colors = []
+			for original_index in group["entries"].size():
+				if removed_indices.has(original_index):
+					continue
+				visible_entries.append(group["entries"][original_index])
+				original_indices.append(original_index)
+				if not group["colors"].is_empty():
+					visible_colors.append(group["colors"][original_index])
 		var mesh_path: String = group["mesh_path"]
 		if not _vegetation_meshes.has(mesh_path):
 			_vegetation_meshes[mesh_path] = load(mesh_path)
@@ -2360,19 +2553,72 @@ func _activate_vegetation_tile(cell: Vector2i, tile: Resource) -> void:
 			continue
 		var multimesh := MultiMesh.new()
 		multimesh.transform_format = MultiMesh.TRANSFORM_3D
-		multimesh.use_colors = not group["colors"].is_empty()
+		multimesh.use_colors = not visible_colors.is_empty()
 		multimesh.mesh = mesh
-		multimesh.instance_count = group["entries"].size()
+		multimesh.instance_count = visible_entries.size()
 		for index in range(multimesh.instance_count):
-			multimesh.set_instance_transform(index, group["entries"][index])
+			multimesh.set_instance_transform(index, visible_entries[index])
 			if multimesh.use_colors:
-				multimesh.set_instance_color(index, group["colors"][index])
+				multimesh.set_instance_color(index, visible_colors[index])
 		var node := MultiMeshInstance3D.new()
 		node.name = "%s_%d_%d" % [group["name"], cell.x, cell.y]
 		node.multimesh = multimesh
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if group["shadows"] else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(node)
 		nodes.append(node)
+		if is_tree:
+			var tree_entries: Array = visible_entries
+			var step: int = maxi(1, int(ceil(float(tree_entries.size()) / 12.0)))
+			for index in range(0, tree_entries.size(), step):
+				var origin: Vector3 = (tree_entries[index] as Transform3D).origin
+				var angle: float = float(posmod(cell.x * 41 + cell.y * 17 + index * 29, 360)) * PI / 180.0
+				origin += Vector3(cos(angle) * 2.0, 0.0, sin(angle) * 2.0)
+				origin.y = height_at(origin.x, origin.z) + 0.12
+				ray_positions.append(origin)
+			var trunk_body := StaticBody3D.new()
+			trunk_body.name = "TreeTrunks"
+			# Separate layer keeps the orbit camera from snapping into the player
+			# in a dense forest while characters still collide with the trunks.
+			trunk_body.collision_layer = 8
+			trunk_body.add_to_group("tree_trunks")
+			if editor_pick_enabled:
+				trunk_body.set_meta("editor_cell", cell)
+				trunk_body.set_meta("editor_group", str(group["name"]))
+			var shape := CylinderShape3D.new()
+			shape.radius = 0.43
+			shape.height = 3.0
+			for index in tree_entries.size():
+				var tree_transform: Transform3D = tree_entries[index]
+				var collision := CollisionShape3D.new()
+				collision.shape = shape
+				if editor_pick_enabled:
+					collision.set_meta("editor_index", original_indices[index])
+				collision.transform = tree_transform * Transform3D(Basis.IDENTITY, Vector3(0.0, 1.4, 0.0))
+				trunk_body.add_child(collision)
+			node.add_child(trunk_body)
+	if not ray_positions.is_empty() and _shaft_mesh != null:
+		var rays := MultiMesh.new()
+		rays.transform_format = MultiMesh.TRANSFORM_3D
+		rays.use_custom_data = true
+		rays.mesh = _shaft_mesh
+		rays.instance_count = ray_positions.size()
+		var shaft_data: Array[Dictionary] = []
+		for index in ray_positions.size():
+			rays.set_instance_transform(index, Transform3D(Basis.IDENTITY, ray_positions[index]))
+			var variation: int = posmod(cell.x * 23 + cell.y * 47 + index * 19, 7)
+			shaft_data.append({"position": Vector2(ray_positions[index].x, ray_positions[index].z), "width": 1.2 + variation * 0.18, "height": 7.8 + variation * 0.6, "strength": 0.40 + variation * 0.10})
+		var ray_node := MultiMeshInstance3D.new()
+		ray_node.name = "SunShafts_%d_%d" % [cell.x, cell.y]
+		ray_node.multimesh = rays
+		ray_node.set_meta("shaft_data", shaft_data)
+		_refresh_shaft_node(ray_node)
+		ray_node.visible = _shafts_visible
+		ray_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ray_node.extra_cull_margin = 24.0
+		ray_node.visibility_range_end = 75.0
+		ray_node.visibility_range_end_margin = 12.0
+		add_child(ray_node)
+		nodes.append(ray_node)
 	_streamed_visual_nodes[cell] = nodes
 
 
@@ -2827,7 +3073,20 @@ func _rock(at: Vector3, size: Vector3, material_key: String) -> MeshInstance3D:
 	instance.scale = Vector3(size.x * 1.15, size.x * _rng.randf_range(0.75, 1.15), size.z * 1.05)
 	instance.rotation = Vector3(0.0, _rng.randf_range(0.0, TAU), 0.0)
 	add_child(instance)
+	_settle_boulder(instance)
 	return instance
+
+
+func _settle_boulder(boulder: MeshInstance3D) -> void:
+	if boulder.mesh == null:
+		return
+	var bounds := boulder.mesh.get_aabb()
+	var vertical_scale := boulder.global_basis.get_scale().y
+	var bottom: float = boulder.global_position.y + bounds.position.y * vertical_scale
+	var sink: float = clampf(bounds.size.y * vertical_scale * 0.14, 0.04, 0.30)
+	var target: float = height_at(boulder.global_position.x, boulder.global_position.z) - sink
+	if bottom > target:
+		boulder.global_position.y -= bottom - target
 
 
 ## Loose stones are the small stuff that makes a meadow floor read as ground

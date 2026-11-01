@@ -725,11 +725,11 @@ func _test_sky() -> void:
 		"re-enabling graphics effects did not reach the environment")
 	for strength in range(1, 4):
 		game.set_ssao_strength(strength)
-		assert(is_equal_approx(environment.ssao_intensity, 1.5 * strength), "AO strength must update immediately")
+		assert(is_equal_approx(environment.ssao_intensity, 2.5 * strength), "AO strength must update immediately")
 	game.set_ssao_enabled(false)
 	game.set_ssao_strength(3)
 	game.set_ssao_enabled(true)
-	assert(is_equal_approx(environment.ssao_intensity, 4.5), "AO strength must survive toggling")
+	assert(is_equal_approx(environment.ssao_intensity, 7.5), "AO strength must survive toggling")
 	var settings := ConfigFile.new()
 	game._load_graphics_settings(settings)
 	assert(game.ssao_strength == 1, "old settings should retain the original strength")
