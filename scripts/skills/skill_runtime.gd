@@ -71,7 +71,14 @@ func _physics_process(delta: float) -> void:
 		if scheduled[i].at <= clock:
 			var job: Dictionary = scheduled.pop_at(i)
 			if not game.is_dead:
-				if job.has("chain_target"):
+				if job.has("strike_target"):
+					var victim: Node3D = job.strike_target.get_ref()
+					if is_instance_valid(victim) and not victim.dead and game.player.global_position.distance_to(victim.global_position) <= float(job.context.compiled.range):
+						if job.context.skill == "heavy_strike": game.combat_effects.heavy_strike_impact(victim.global_position + Vector3.UP * .6, game.player.visual.rotation.y)
+						else: game.combat_effects.steel_strike_impact(victim.global_position + Vector3.UP * .8, game.player.visual.rotation.y)
+						hit(job.context, victim)
+					_finish(job.context)
+				elif job.has("chain_target"):
 					if is_instance_valid(job.chain_target) and not job.chain_target.dead: _launch(job.context,job.origin,job.chain_target,job.hop,job.scale,job.pierce,true)
 					else: emit_event("ON_CHAIN_END",job.context,null,{"position":job.origin,"reason":"target_lost"})
 				else:
@@ -113,6 +120,12 @@ func cast_slot(slot: int) -> bool:
 		game._fail_notice("Finish sprinting and drawing your weapon before using skills.")
 		return false
 	if not game.state.is_skill_available(id): game._fail_notice("This class skill is not unlocked."); return false
+	if id in ["steel_strike", "heavy_strike"]:
+		if game.state.weapon_context() != "sword": game._fail_notice("Equip a sword to use %s." % game.state.skills[id].name); return false
+		var strike_range: float = float(game.state.compiled_skill(id).range)
+		if not is_instance_valid(game.target) or game.target.dead: game.target = game._nearest_enemy(strike_range)
+		if not is_instance_valid(game.target) or game.target.global_position.distance_to(game.player.global_position) > strike_range:
+			game._fail_notice("No enemy in %s range." % game.state.skills[id].name); return false
 	if id=="fighter_bow" and game.state.weapon_context()!="bow": game._fail_notice("Equip a bow to use Bow Attack."); return false
 	if not channel_id.is_empty():
 		if id == channel_id:
@@ -154,7 +167,7 @@ func cast_slot(slot: int) -> bool:
 	_deliver(context)
 	if not compiled.tags.has("channel"):
 		# Dash finish is emitted at actual arrival, not at button press.
-		if compiled.type != "dash": _finish(context)
+		if compiled.type != "dash" and id not in ["steel_strike", "heavy_strike"]: _finish(context)
 		if int(compiled.echo) > 0 and float(compiled.echo_scale)>0 and scheduled.size() < 32:
 			scheduled.append({"at": clock + float(compiled.echo_delay), "context": context, "scale": float(compiled.echo_scale),"echo":true})
 	return true
@@ -171,6 +184,9 @@ func stop_channel() -> void:
 
 func preview_power(id: String, compiled: Dictionary = {}) -> float:
 	if compiled.is_empty(): compiled=game.state.compiled_skill(id)
+	if id in ["steel_strike", "heavy_strike"]:
+		var attack: Vector2 = game.state.get_attack_damage_range()
+		return (attack.x + attack.y) * .5 * float(compiled.power) * float(compiled.power_scale) * (1.0 + own_stat("damage", id))
 	var equipment: Dictionary = game.state.get_equipment_modifiers()
 	var role: String = compiled.role
 	var power := float(compiled.power) * float(compiled.power_scale)
@@ -184,7 +200,9 @@ func preview_power(id: String, compiled: Dictionary = {}) -> float:
 func _context(id: String) -> Dictionary:
 	serial += 1
 	var compiled: Dictionary = game.state.compiled_skill(id).duplicate(true)
-	return {"id": serial, "skill": id, "compiled": compiled, "power": preview_power(id,compiled), "component":"base", "secondary":false,"power_buff":1+own_stat("damage",id), "visited": [], "used": {}, "events": 0, "recovery": 0.0, "budget":{"events":0,"recovery":0.0}, "last": game.player.global_position, "hits": 0}
+	var power := preview_power(id, compiled)
+	if id in ["steel_strike", "heavy_strike"]: power = game.state.roll_attack_damage(rng) * float(compiled.power) * float(compiled.power_scale) * (1.0 + own_stat("damage", id))
+	return {"id": serial, "skill": id, "compiled": compiled, "power": power, "component":"base", "secondary":false,"power_buff":1+own_stat("damage",id), "visited": [], "used": {}, "events": 0, "recovery": 0.0, "budget":{"events":0,"recovery":0.0}, "last": game.player.global_position, "hits": 0}
 
 func _finish(context: Dictionary) -> void:
 	for m: Dictionary in context.compiled.handlers:
@@ -206,6 +224,13 @@ func _deliver(context: Dictionary, scale_value: float = 1) -> void:
 	var c: Dictionary = context.compiled
 	var origin: Vector3 = game.player.global_position
 	var facing: Vector3 = Vector3.FORWARD.rotated(Vector3.UP, channel_yaw if c.tags.has("channel") else game.player.visual.rotation.y)
+	if context.skill in ["steel_strike", "heavy_strike"]:
+		game.player.face_point(game.target.global_position)
+		game.player.attack_animation(context.skill)
+		var strike_speed := maxf(.1, float(game.player.animation_entry(context.skill).speed))
+		var hit_frame := .58 if context.skill == "heavy_strike" else .52
+		scheduled.append({"at": clock + hit_frame / strike_speed, "context": context, "strike_target": weakref(game.target)})
+		return
 	match str(c.type):
 		"cast_projectile", "cast_projectile_area", "melee_projectile", "channel_projectiles":
 			var targets := nearby(origin, float(c.range))

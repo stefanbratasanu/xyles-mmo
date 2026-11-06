@@ -37,6 +37,8 @@ func sprint_blocks_combat() -> bool:
 	return sprint_active or sprint_weapon_phase != "drawn"
 
 const MAX_LIFETIME_SKILL_POINTS := 50
+const BASE_ATTACK_MIN := 1
+const BASE_ATTACK_MAX := 3
 const MAX_SKILL_EVOLUTIONS := 10
 const CATEGORY_POINTS := {"normal": 2, "quest": 5, "boss": 3}
 const MODIFIER_CATALOG_PATH := "res://resources/modifiers/modifier_catalog.tres"
@@ -61,6 +63,8 @@ var skill_catalog = preload("res://resources/skills/skill_catalog.tres")
 var skill_offers: Dictionary = {}
 var skill_seed: int = 0
 var loadout: Array = []
+var developer_mode := false
+var developer_saved_loadout: Array = []
 var learned_skills: Array = []
 var compiled_skills: Dictionary = {}
 var modifier_catalog: ModifierCatalog = preload("res://resources/modifiers/modifier_catalog.tres")
@@ -98,8 +102,10 @@ func _init() -> void:
 	changed.connect(func(): compiled_skills.clear())
 	_define_skills()
 	_define_quests()
-	var starting_sword := _make_item("Ornate Silver Sword", "basic", "weapon", 12, 100.0, "sword")
+	var starting_sword := _make_item("Ornate Silver Sword", "common", "weapon", 12, 100.0, "sword")
 	starting_sword["visual_id"] = "ornate_silver_sword"
+	starting_sword["damage_min"] = 5
+	starting_sword["damage_max"] = 9
 	equipment = [starting_sword]
 	logs.append("You have reached the Ashen Reach. Speak with the blacksmith [E].")
 
@@ -117,9 +123,11 @@ func _define_skills() -> void:
 	skills.clear()
 	for id: String in skill_catalog.data.skills:
 		var definition: Dictionary = skill_catalog.data.skills[id]
-		skills[id] = {"name": definition.name, "description": str(definition.type).replace("_", " ").capitalize(), "ranks": [0, 0, 0], "investments": 0, "history": [], "evolutions": []}
+		skills[id] = {"name": definition.name, "description": str(definition.get("description", str(definition.type).replace("_", " ").capitalize())), "ranks": [0, 0, 0], "investments": 0, "history": [], "evolutions": []}
 	loadout = ["","","","","","","","","",""]
 	learned_skills = skill_catalog.data.default_loadout.duplicate()
+	for strike: String in ["steel_strike", "heavy_strike"]:
+		if skills.has(strike) and not learned_skills.has(strike): learned_skills.append(strike)
 	compiled_skills.clear()
 
 
@@ -384,6 +392,8 @@ func equip_skill(id: String, slot: int) -> bool:
 
 func is_skill_available(id: String) -> bool:
 	if id.begins_with("action:"): return id.trim_prefix("action:") in ACTION_IDS
+	if developer_mode and skills.has(id): return true
+	if id in ["steel_strike", "heavy_strike"]: return learned_skills.has(id)
 	var milestone: Dictionary=FighterTree.definition(id)
 	if not milestone.is_empty(): return character_class == "Fighter" and level >= int(milestone.level) and learned_skills.has(id)
 	return learned_skills.has(id) and character_class != "Fighter"
@@ -402,6 +412,16 @@ func learn_class_skill(id: String) -> bool:
 
 func assign_hotbar(id: String, slot: int) -> bool:
 	return equip_skill(id,slot)
+
+func set_developer_mode(enabled: bool) -> void:
+	if developer_mode == enabled: return
+	if enabled:
+		developer_saved_loadout = loadout.duplicate()
+	else:
+		loadout = developer_saved_loadout.duplicate()
+		developer_saved_loadout.clear()
+	developer_mode = enabled
+	changed.emit()
 
 func discover_skill() -> String:
 	var weights: Dictionary = {}
@@ -608,6 +628,29 @@ func get_equipment_power() -> float:
 		power += float(item["power"]) * (0.25 if float(item["durability"]) <= 0.0 else 1.0)
 	return power
 
+func get_weapon_damage_range() -> Vector2:
+	for item: Dictionary in equipment:
+		if item.get("slot", "") != "weapon": continue
+		var fallback_max := maxf(1.0, float(item.get("power", 1)))
+		var minimum := maxf(0.0, float(item.get("damage_min", roundi(fallback_max * .6))))
+		var maximum := maxf(minimum, float(item.get("damage_max", fallback_max)))
+		var durability_scale := .25 if float(item.get("durability", 100.0)) <= 0.0 else 1.0
+		return Vector2(minimum, maximum) * durability_scale
+	return Vector2.ZERO
+
+func get_attack_damage_range() -> Vector2:
+	var mods := get_equipment_modifiers()
+	return (Vector2(BASE_ATTACK_MIN, BASE_ATTACK_MAX) + get_weapon_damage_range()) * float(mods.attack_multiplier) * float(mods.melee_multiplier)
+
+func format_damage_range(value: Vector2) -> String:
+	return "%s–%s" % [str(snappedf(value.x, .01)).trim_suffix(".0"), str(snappedf(value.y, .01)).trim_suffix(".0")]
+
+func roll_attack_damage(random: RandomNumberGenerator) -> float:
+	var weapon := get_weapon_damage_range()
+	var mods := get_equipment_modifiers()
+	var weapon_roll := random.randi_range(roundi(weapon.x * 100.0), roundi(weapon.y * 100.0)) / 100.0 if weapon.x != weapon.y else weapon.x
+	return (float(random.randi_range(BASE_ATTACK_MIN, BASE_ATTACK_MAX)) + weapon_roll) * float(mods.attack_multiplier) * float(mods.melee_multiplier)
+
 
 func get_equipment_modifiers() -> Dictionary:
 	# Flat vitality/mana values supplement base maxima; all combat fields are
@@ -721,7 +764,7 @@ func save_game(path: String = SAVE_PATH) -> bool:
 		"mana": mana, "max_mana": max_mana, "skill_points": skill_points,
 		"earned_skill_points": earned_skill_points, "skill_ranks": ranks, "skill_histories": histories,
 		"bestiary": bestiary, "equipment": equipment, "inventory": inventory,
-		"evolutions": _evolution_save(), "skill_offers": skill_offers, "skill_seed": skill_seed, "loadout": loadout, "learned_skills": learned_skills,
+		"evolutions": _evolution_save(), "skill_offers": skill_offers, "skill_seed": skill_seed, "loadout": developer_saved_loadout if developer_mode else loadout, "learned_skills": learned_skills,
 		"equipment_schema_version": equipment_schema_version,
 		"quests": quests, "current_region": current_region, "world_session": world_session}, "", true, true))
 	file.flush()
@@ -879,7 +922,7 @@ func _validated_saved_item(value: Variant) -> Dictionary:
 		return {}
 	var modifiers: Array[String] = []
 	for modifier: Variant in saved_modifiers:
-		if modifier is String and modifiers.size() < modifier_catalog.get_modifier_count(tier):
+		if modifier is String and modifiers.size() < (16 if tier == "common" else modifier_catalog.get_modifier_count(tier)):
 			var definition := modifier_catalog.get_modifier(modifier)
 			modifiers.append(String(definition.id) if definition != null else modifier)
 	var durability := clampf(float(value.get("durability", 100.0)), 0.0, 100.0)
@@ -893,6 +936,12 @@ func _validated_saved_item(value: Variant) -> Dictionary:
 		result.icon=WEAPON_DEFINITIONS[result.weapon_type].icon
 		if result.weapon_type == "sword" and str(value.get("visual_id", "")) == "ornate_silver_sword":
 			result.visual_id = "ornate_silver_sword"
+			result.tier = "common"
+			result.damage_min = 5
+			result.damage_max = 9
+		elif value.has("damage_min") and value.has("damage_max"):
+			result.damage_min = clampf(float(value.damage_min), 0.0, 10000.0)
+			result.damage_max = maxf(float(result.damage_min), clampf(float(value.damage_max), 0.0, 10000.0))
 	return result
 
 

@@ -6,8 +6,16 @@ var labels: Array[Label3D] = []
 var orb_mesh: SphereMesh
 var orb_material: StandardMaterial3D
 const EMBER_BOLT_PATH := "res://assets/effects/ember_bolt/EmberBolt.efkefc"
+const STEEL_STRIKE_PATH := "res://assets/effects/steel_strike/SteelStrike.efkefc"
+const HEAVY_STRIKE_PATH := "res://assets/effects/heavy_strike/HeavyStrike.efkefc"
 var ember_bolt_effect: Resource
 var ember_bolt_checked := false
+var steel_strike_effect: Resource
+var steel_strike_checked := false
+var steel_emitters: Array[Node3D] = []
+var heavy_strike_effect: Resource
+var heavy_strike_checked := false
+var heavy_emitters: Array[Node3D] = []
 
 func prepare(at: Vector3) -> void:
 	var ring_mesh := TorusMesh.new()
@@ -98,6 +106,62 @@ func _get_ember_bolt_effect() -> Resource:
 		if _effekseer_available() and ResourceLoader.exists(EMBER_BOLT_PATH):
 			ember_bolt_effect = load(EMBER_BOLT_PATH)
 	return ember_bolt_effect
+
+func steel_strike_impact(at: Vector3, facing: float) -> void:
+	if not steel_strike_checked:
+		steel_strike_checked = true
+		if _effekseer_available() and ResourceLoader.exists(STEEL_STRIKE_PATH): steel_strike_effect = load(STEEL_STRIKE_PATH)
+	if steel_strike_effect == null:
+		burst(at - Vector3.UP * .09, Color("e7d6ab"), .35, .18)
+		return
+	var emitter: Node3D
+	for candidate in steel_emitters:
+		if not candidate.get_meta("busy", false): emitter = candidate; break
+	if emitter == null:
+		emitter = ClassDB.instantiate("EffekseerEmitter3D") as Node3D
+		if emitter == null: return
+		emitter.set("effect", steel_strike_effect)
+		emitter.set("autoplay", false)
+		emitter.name = "SteelStrikeImpact"
+		add_child(emitter)
+		steel_emitters.append(emitter)
+	emitter.set_meta("busy", true)
+	emitter.position = at
+	emitter.rotation = Vector3(0, facing, 0)
+	emitter.scale = Vector3.ONE * 1.15
+	emitter.call("play")
+	get_tree().create_timer(.65).timeout.connect(func():
+		if is_instance_valid(emitter):
+			emitter.call("stop")
+			emitter.set_meta("busy", false))
+
+func heavy_strike_impact(at: Vector3, facing: float) -> void:
+	if not heavy_strike_checked:
+		heavy_strike_checked = true
+		if _effekseer_available() and ResourceLoader.exists(HEAVY_STRIKE_PATH): heavy_strike_effect = load(HEAVY_STRIKE_PATH)
+	if heavy_strike_effect == null:
+		burst(at - Vector3.UP * .2, Color("ffc66f"), .6, .25)
+		return
+	var emitter: Node3D
+	for candidate in heavy_emitters:
+		if not candidate.get_meta("busy", false): emitter = candidate; break
+	if emitter == null:
+		emitter = ClassDB.instantiate("EffekseerEmitter3D") as Node3D
+		if emitter == null: return
+		emitter.set("effect", heavy_strike_effect)
+		emitter.set("autoplay", false)
+		emitter.name = "HeavyStrikeImpact"
+		add_child(emitter)
+		heavy_emitters.append(emitter)
+	emitter.set_meta("busy", true)
+	emitter.position = at
+	emitter.rotation = Vector3(0, facing, PI * .5)
+	emitter.scale = Vector3.ONE * 1.6
+	emitter.call("play")
+	get_tree().create_timer(.9).timeout.connect(func():
+		if is_instance_valid(emitter):
+			emitter.call("stop")
+			emitter.set_meta("busy", false))
 
 func _new_orb() -> MeshInstance3D:
 	var orb := MeshInstance3D.new()

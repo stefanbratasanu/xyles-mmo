@@ -12,8 +12,10 @@ void vertex() {
 	float width = INSTANCE_CUSTOM.r * 4.0;
 	float height = INSTANCE_CUSTOM.g * 12.0;
 	VERTEX.xz *= width;
-	VERTEX.xz += sun_slope * VERTEX.y * height;
-	VERTEX.y *= height;
+	// The instance origin is the actual branch/canopy point. Pivot the beam
+	// around its top as the sun moves, rather than drifting away from the tree.
+	VERTEX.xz += sun_slope * (VERTEX.y - 1.0) * height;
+	VERTEX.y = (VERTEX.y - 1.0) * height;
 	ray_strength = INSTANCE_CUSTOM.b;
 }
 

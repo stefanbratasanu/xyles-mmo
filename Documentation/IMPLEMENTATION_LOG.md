@@ -491,6 +491,7 @@ MultiMesh transforms. Map II is still unbuilt.
 
 **Status.** Awaiting the user's decision. This report did not modify any game code.
 
+
 ## 2026-10-28 - Read-only installed enchantment inspection
 
 **Intent.** Clicking an installed enchantment should show that enchantment rather than immediately presenting the retained alternatives, as reported in the two screenshots.
@@ -1507,3 +1508,230 @@ Verified: Direct3D 12 captures of corner menu, character sheet, Options and drag
 **Verification.** Ran `tests/test_world_editor_drafts.gd` and `tests/test_world_editor_terrain.gd` headlessly; both passed, covering independent published copies, backup recovery, invalid draft IDs, grid import, clear, sculpt, sampling, JSON round-trip and mesh/collision generation. The rendered preview test loaded the map, simulated camera movement, saved a screenshot that was inspected, and printed its pass message; the engine emitted resource/renderer cleanup errors at shutdown. Ran the existing headless `tests/test_world.gd` before changes; it printed its pass message and then emitted renderer/resource leak diagnostics at shutdown. No editor executable, interactive asset or terrain editing, or in-game draft application has been implemented or verified.
 
 **Remaining.** Build the app, asset and terrain tools, safe map clearing, draft browser, validation, and gameplay integration. Reconcile edited terrain with analytic gameplay queries, collision, world-map raster, streamed assets, spawn positions and interaction objects before applying a draft. Ensure original-map restoration and preserve local character saves. The machine has 4.7.1 export templates but the project runs 4.7.2; the separate executable still needs a verified build path.
+
+## 2026-11-06 11:32 - Remote changes from another machine (automatic)
+
+**Source.** `origin/main` moved from `8cbf1f8f` to `3a910b73`. Local HEAD is `3a910b73`.
+
+**Commits not authored on this PC** (local identity: `xylesmargera@gmail.com`):
+
+- `3a910b73` 2026-11-01T22:12:05+02:00 **Stefan Bratasanu** - Merge branch 'main' of https://github.com/stefanbratasanu/xyles-mmo (78 files, +4519/-923) [already in local HEAD]
+- `bb0f6ff9` 2026-11-01T22:11:03+02:00 **Stefan Bratasanu** - go (500 files, +287211/-93) [already in local HEAD]
+- `f4316f79` 2026-10-30T17:27:46+02:00 **XyLeS** - Wolrd (54 files, +3762/-23) [already in local HEAD]
+- `c1a85845` 2026-10-29T23:39:29+02:00 **XyLeS** - Merge branch 'main' of https://github.com/stefanbratasanu/xyles-mmo (517 files, +203/-65372) [already in local HEAD]
+- `945aa434` 2026-10-29T23:26:47+02:00 **XyLeS** - Update 8 (32 files, +851/-56) [already in local HEAD]
+- `df45631d` 2026-10-29T21:02:23+02:00 **Stefan Bratasanu** - lfs update (7 files, +174/-2) [already in local HEAD]
+- `5580b0ab` 2026-10-29T20:46:02+02:00 **Stefan Bratasanu** - Track game assets with Git LFS (512 files, +29/-65370) [already in local HEAD]
+- `2115754f` 2026-10-29T20:43:37+02:00 **Stefan Bratasanu** - mine (45 files, +1287/-140) [already in local HEAD]
+- `6afc50ac` 2026-10-29T19:13:11+02:00 **XyLeS** - Update 7 (13 files, +225/-7) [already in local HEAD]
+- `8a5c1f4b` 2026-10-29T18:19:15+02:00 **XyLeS** - Update 6 (105 files, +672/-17) [already in local HEAD]
+- `70494c66` 2026-10-29T17:10:55+02:00 **XyLeS** - Bat (7 files, +282/-0) [already in local HEAD]
+
+**New commits authored on this PC:** 1 (not reported as external).
+
+**Files touched by the external commits:**
+
+- `.gitattributes`
+- `assets/animations/player_runtime/action_animations.tres`
+- `assets/animations/player_runtime/character_texture.res`
+- `assets/animations/player_runtime/greatsword_texture.res`
+- `assets/animations/player_runtime/protof_animations.tres`
+- `assets/animations/player_runtime/README.md`
+- `assets/animations/player_runtime/shield_texture.res`
+- `assets/animations/player_runtime/staff_texture.res`
+- `assets/animations/player_runtime/sword_texture.res`
+- `assets/animations/player_runtime/travel_animations.res`
+- `assets/animations/player_runtime/travel_speeds.json`
+- `assets/animations/player_runtime/travel_strides.json`
+- `assets/audio/campfire_crackle.wav`
+- `assets/audio/enemies/ATTRIBUTION.md`
+- `assets/audio/enemies/boar_aggro.wav`
+- `assets/audio/enemies/boar_attack.wav`
+- `assets/audio/enemies/boar_death.wav`
+- `assets/audio/enemies/sources/.gdignore`
+- `assets/audio/enemies/sources/GPL-2.0.txt`
+- `assets/audio/enemies/sources/wesnoth_wolf_die_1.ogg`
+- `assets/audio/enemies/wolf_aggro.wav`
+- `assets/audio/enemies/wolf_attack.wav`
+- `assets/audio/enemies/wolf_death.wav`
+- `assets/audio/player/ATTRIBUTION.md`
+- `assets/audio/player/sword_slash_user.wav`
+- `assets/audio/torch_crackle.wav`
+- `assets/concepts/characters/races/dark_elf_female_front_v1.png`
+- `assets/concepts/characters/races/dark_elf_front_v1.png`
+- `assets/concepts/characters/races/dwarf_female_front_v1.png`
+- `assets/concepts/characters/races/dwarf_front_v1.png`
+- `assets/concepts/characters/races/elf_female_front_v1.png`
+- `assets/concepts/characters/races/elf_front_v1.png`
+- `assets/concepts/characters/races/human_female_front_v1.png`
+- `assets/concepts/characters/races/human_male_front_v2.png`
+- `assets/concepts/characters/races/orc_female_front_v1.png`
+- `assets/concepts/characters/races/orc_front_v1.png`
+- `assets/concepts/characters/races/README.md`
+- `assets/effects/ember_bolt/Texture/FlameRadiation.png`
+- `assets/models/characters/human_fighter/anatomy_rig/body.res`
+- `assets/models/characters/human_fighter/anatomy_rig/character.tscn`
+- `assets/models/characters/human_fighter/anatomy_rig/README.md`
+- `assets/models/characters/human_fighter/base_basic_pbr.glb`
+- `assets/models/characters/human_fighter/base_basic_pbr_texture_diffuse.png`
+- `assets/models/characters/human_fighter/base_basic_pbr_texture_metallic-texture_roughness.png`
+- `assets/models/characters/human_fighter/base_basic_pbr_texture_normal.png`
+- `assets/models/characters/human_fighter/base_basic_shaded.glb`
+- `assets/models/characters/human_fighter/base_basic_shaded_shaded.png`
+- `assets/models/characters/human_fighter/fighter_refined.glb`
+- `assets/models/characters/human_fighter/fighter_refined_texture_diffuse.png`
+- `assets/models/characters/human_fighter/fighter_refined_texture_metallic-texture_roughness.png`
+- `assets/models/characters/human_fighter/fighter_refined_texture_normal.png`
+- `assets/models/characters/human_fighter/fighter_rigged.glb`
+- `assets/models/characters/human_fighter/fighter_rigged_texture_diffuse.png`
+- `assets/models/characters/human_fighter/fighter_rigged_texture_metallic-texture_roughness.png`
+- `assets/models/characters/human_fighter/fighter_rigged_texture_normal.png`
+- `assets/models/characters/human_fighter/head_revision/body.res`
+- `assets/models/characters/human_fighter/head_revision/character.tscn`
+- `assets/models/characters/human_fighter/head_revision/head_source.glb`
+- `assets/models/characters/human_fighter/head_revision/head_source_texture_diffuse.png`
+- `assets/models/characters/human_fighter/head_revision/head_source_texture_metallic-texture_roughness.png`
+- ... and 812 more source file(s)
+- Generated Godot metadata: 252 `.uid`/`.import` file(s) (regenerate with a headless import)
+
+**Flags.**
+
+- Executable/script added or changed: `assets/models/characters/Test_This_human_fighter_its_rigged_propperly.zip`. Do not run it until reviewed.
+- Executable/script added or changed: `PLAY XYLES.bat`. Do not run it until reviewed.
+- Core file changed: `scenes/main.tscn`. Re-run the game and the tests before trusting it.
+- Executable/script added or changed: `scripts/dev/launch_xyles.ps1`. Do not run it until reviewed.
+- Core file changed: `scripts/enemy.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/game_hud.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/game_state.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/main.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/player.gd`. Re-run the game and the tests before trusting it.
+- Core file changed: `scripts/world_builder.gd`. Re-run the game and the tests before trusting it.
+- Executable/script added or changed: `WORLD EDITOR PREVIEW.bat`. Do not run it until reviewed.
+- Executable/script added or changed: `XYLES WORLD EDITOR.exe`. Do not run it until reviewed.
+- Debug leftovers on 1 added line(s).
+- Hard failure calls on 254 added line(s).
+
+**Proposed actions (not applied).**
+
+- **Re-verify:** launch the game, run the tests, and re-read the changed core files against `GAME_RULES.md`.
+- **Ask first:** review the addon/executable diff with the user before it is allowed to run.
+- **Modify:** remove or gate debug leftovers after the user agrees.
+- Nothing was changed automatically. Confirm each action with the user before editing or reverting.
+
+**Status.** Awaiting the user's decision. This report did not modify any game code.
+
+## 2026-11-06 - Automatic grip, grounded feet and developer skill palette
+
+**Intent.** Align weapons across different character proportions, improve foot
+contact on uneven ground, and offer an in-game way to test all current skills.
+
+**Changes.** `weapon_anchor.gd` derives the hand frame from the model's fitted
+finger roots and matches it to a per-weapon contact frame or authored GripAnchor.
+Exact saved F7 overrides are preserved. `foot_grounding.gd` samples the actual
+skinned sole and solves each leg after animation against terrain and original
+camp/road overlay heights; corrections are bounded and disabled for nonlocomotion
+poses. Player collision and the actual animation assets are not rewritten.
+Left-edge DEV/SKILL controls open a nonmodal scrollable skill palette. Test
+assignments bypass training restrictions only during developer mode, while the
+original loadout is restored on exit and serialized instead of the test loadout.
+UI uses compact square icons, dark inset surfaces and bronze edges from the
+written standard and the Lineage reference; no external artwork was copied.
+
+**Verification and limits.** `test_grip_and_ground.gd` checks ten rigs, six weapon
+variants, authored marker position/orientation, ten idle sole contacts, an actual
+uneven streamed-terrain crossing and the leg solver. `test_developer_mode.gd`
+checks all-skills listing, drag/drop, testing locked skills, normal save isolation
+and loadout restore. World, traversal, camp seating, ornate sword, F7 controls,
+sprint weapon, trainer, action hotbar and animation selection tests pass.
+Direct3D captures in ignored `logs/contact_review.png` and `developer_review.png`
+were inspected. The complete 60-combination art/motion review was not performed;
+off-hand gripping and steep terrain/large steps require separate work. Markers
+must be authored for future unusual weapons; a skeleton alone cannot identify
+an arbitrary handle. Existing exit renderer/resource diagnostics remain.
+
+## 2026-11-06 - Mesh contact, tree-anchored rays and grading previews
+
+**Intent and changes.** Address remaining floating and the starter sword's
+incorrect hand contact; anchor forest beams to trees; provide reversible color
+grading options. The Human hand's skinned geometry and ornate sword grip were
+measured: the old ornate contact was near the pommel, not the center of the
+handle. PalmGripAnchor is now computed from the model's hand-weighted surface
+near the finger roots; the handle marker uses its measured center. Exact saved
+F7 overrides remain. Foot targets now use a 1 mm clearance and interpolate actual
+visible road/camp triangles using a cached spatial index, with two overlay queries
+per frame and terrain sampled across the soles. Collision is unchanged.
+
+Living-tree beams select actual branch vertices from broadleaf meshes, or canopy
+vertices for pines with no separate branch geometry. They pivot in the shader
+around the selected anchor as the sun moves. Existing daylight, density, road,
+trunk and toggle checks remain. DEV → COLOR offers Original and five temporary
+3D-LUT Environment grades; UI is not tinted and disabling DEV restores Original.
+Compact panel follows the written bronze/ivory UI standard; the reference topic
+was reviewed and no external artwork was copied. Design references and future
+authoring requirements are in Documentation/VISUAL_DEVELOPMENT.md.
+
+**Verification and limits.** Ground triangle interpolation and editor mesh
+replacement tests, ten-model/six-variant anchor checks, actual streamed traversal,
+forest geometry and time-window checks, developer palette, F7, world and edited
+terrain tests pass. Rendered Direct3D front/back hand, footing, forest and color
+previews were inspected under logs/. Full visual motion review of every model,
+weapon and skill was not performed; hand animation still determines finger and
+off-hand pose. A simple headless idle microcheck measured ~0.51 ms per grounding
+call after caching; it is not a whole-frame benchmark. Existing engine exit
+renderer/resource diagnostics remain. No user saves were edited.
+
+## 2026-11-06 - Steel Strike and combined character inventory
+
+**Intent and changes.** Add an identifiable sword strike and meaningful attack
+ranges. Basic attacks and Steel Strike share a base 1–3 plus weapon damage roll;
+the common ornate starter sword is 5–9. Existing ornate swords migrate on load,
+preserving saved modifiers. Steel Strike is learned for both classes, deals
+120% of the rolled attack before ordinary defenses and critical hits, and has a
+single-target range of 2.8 m, 4 mana cost and 1.4 second cooldown. A dedicated
+existing authored sword-attack clip drives the action; impact and damage are
+timed to its swing and a target leaving range can evade the hit. The editable
+Effekseer effect adapts the CC0 Sword1 sample (attribution in its README). The
+skill appears in the normal learned-skills interface and DEV's drag palette;
+DEV loadout changes continue to be temporary. Existing unrelated skills retain
+their earlier damage model.
+
+I and the character button now open one panel with stats, equipment and bag;
+weapon and skill damage ranges are visible. The bronze/ivory UI standard and
+reference topic were reviewed; no external UI artwork was copied.
+
+**Verification and limits.** Focused tests pass for damage, resources, cooldown,
+range, animation, impact, DEV drag, K visibility and repeated legacy-save
+migration. Basic attack, Fighter tree, hotbar, developer mode, inventory hover,
+character, trainer and animation selection tests pass. Direct3D captures of the
+effect and combined panel at both supported window sizes were reviewed. The old
+skill-catalog test still expects disabled legacy enchantments and did not pass;
+existing resource/renderer shutdown diagnostics remain. No user save was edited.
+
+## 2026-11-06 - Heavy Strike and automatic attacks
+
+**Intent and changes.** Add a heavier sword strike, distinct artwork for both
+strikes, and repeated mana-free attacks. Heavy Strike uses the shared attack roll
+at 200%, costs 10 mana, has a 5 second cooldown and 2.8 m single-target range.
+It is learned for both classes and appears in K and DEV → SKILL. Hit and the new
+Effekseer impact are timed to the downward swing; leaving range avoids the hit.
+The dedicated pose combines AttackA2HandMelee with a new fitted two-arm IK
+wind-up and downward cut. The separately editable Effekseer project adapts the
+CC0 Sword1 sample and changes lifetimes and sparks; see its README.
+
+Short right-click on an enemy engages repeat basic attacks. Right-drag retains
+camera orbit. Manual attacks, damaging skills and incoming damage can also
+engage auto-attack; it respects range, cooldown, other animations, sprint,
+sitting, channels and modal UI, and never spends mana or moves the character.
+The I panel keeps character attack stats but removes skill-specific damage.
+The UI reference topic timed out, so the written UI standard and existing
+bronze/dark skill-card language were followed. Distinct icons were generated
+with the built-in image tool and added to the project.
+
+**Verification and limits.** Focused tests cover damage, mana, cooldown, target
+range/escape, DEV assignment, real screen-ray right click versus drag, no-mana
+repeated attacks, animation blocking and resumption. Steel Strike, basic attack,
+DEV, Fighter tree, hotbar, animation selection and sprint tests pass. Direct3D
+captures of the Human overhead animation, effect and skill/inventory UI were
+reviewed. All ten rigs were geometrically checked for raised hands; the other
+nine rigs and finger contact were not individually art-reviewed in motion.
+Existing renderer/resource shutdown diagnostics remain; no user save was edited.

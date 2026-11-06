@@ -9,6 +9,7 @@ class_name ModifierCatalog
 @export var staff_enchantments: ModifierPool
 ## Legendary starts at five modifiers, matching the documented 5+ minimum.
 @export var rarity_modifier_counts: Dictionary = {
+	"common": 0,
 	"basic": 2,
 	"rare": 3,
 	"epic": 4,

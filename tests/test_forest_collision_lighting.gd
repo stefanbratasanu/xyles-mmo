@@ -84,10 +84,13 @@ func run() -> void:
 	for shaft: MultiMeshInstance3D in shafts:
 		var data: Array = shaft.get_meta("shaft_data")
 		for index in shaft.multimesh.instance_count:
-			if game.world._shaft_path_clear(data[index].position, game.world._shaft_slope, data[index].height, data[index].width):
+			if game.world._shaft_path_clear(data[index].position, game.world._shaft_slope, data[index].height, data[index].width, data[index].tree):
 				visible_rays += 1
 				var item: Dictionary = data[index]
-				check(game.world._shaft_path_clear(item.position, game.world._shaft_slope, item.height, item.width), "Displayed shaft clears trunks, roads and open areas")
+				check(item.anchor.distance_to(item.tree_transform * item.branch_vertex) < .001, "Shaft anchor follows its tree transform")
+				check(game.world._shaft_branch_vertices(load(item.mesh_path), item.mesh_path).has(item.branch_vertex), "Anchor uses an actual branch or pine canopy vertex")
+				check(game.world._shaft_path_clear(item.position, game.world._shaft_slope, item.height, item.width, item.tree), "Displayed shaft clears trunks, roads and open areas")
+				check(Vector2(item.anchor.x, item.anchor.z).distance_to(item.position + game.world._shaft_slope * item.height) < .001, "Shaft path ends at its selected tree geometry")
 	print("FOREST RAYS: ", visible_rays, " visible in ", shafts.size(), " batches")
 	check(visible_rays > 0, "At least one clear forest shaft is visible at noon")
 	var day_sky: Color = game.world._sky_material.get_shader_parameter("top_color")

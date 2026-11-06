@@ -27,6 +27,10 @@ var camera_arm: SpringArm3D
 var audio: Node
 var combat_effects: Node3D
 var target: CharacterBody3D
+var auto_attack_enabled := false
+var right_click_target: WeakRef
+var right_drag_distance := 0.0
+var right_mouse_down := false
 var enemies: Array[CharacterBody3D] = []
 ## Alternate wolves and boars along the normal spawn list so Map I always has
 ## both species without relying on random rolls.
@@ -321,6 +325,8 @@ func _process(delta: float) -> void:
 		world.advance_time(delta)
 	if hud != null and hud.blocks_gameplay() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		right_mouse_down = false
+		right_click_target = null
 	for index in range(10):
 		cooldowns[index] = float(skill_runtime.skill_cooldowns.get(state.loadout[index], 0))
 	block_time = maxf(0, block_time - delta)
@@ -335,6 +341,7 @@ func _process(delta: float) -> void:
 		if support_time > 0:
 			state.mana = minf(state.max_mana + float(mods["max_mana"]), state.mana + delta * 1.6)
 		_process_pending_skill()
+		_process_auto_attack()
 	_update_camera(delta)
 	world.update_streamed_visuals(player.global_position)
 	world.update_terrain_chunks(player.global_position)
@@ -362,14 +369,27 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if event.pressed and not hud.blocks_gameplay() else Input.MOUSE_MODE_VISIBLE
+			if event.pressed and not hud.blocks_gameplay() and not is_dead:
+				right_mouse_down = true
+				right_drag_distance = 0.0
+				var clicked := _enemy_at_screen(event.position)
+				right_click_target = weakref(clicked) if is_instance_valid(clicked) else null
+				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			else:
+				right_mouse_down = false
+				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+				var clicked: Object = right_click_target.get_ref() if right_click_target != null else null
+				if right_drag_distance < 8.0 and is_instance_valid(clicked) and not clicked.dead and not hud.blocks_gameplay() and not is_dead:
+					_engage_auto_attack(clicked)
+				right_click_target = null
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP and not hud.blocks_gameplay():
 			camera_distance = maxf(4.0, camera_distance - 1.5)
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN and not hud.blocks_gameplay():
 			camera_distance = minf(32.0, camera_distance + 1.5)
 		elif event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not hud.blocks_gameplay() and not is_dead:
 			_world_click(event.position)
-	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	elif event is InputEventMouseMotion and right_mouse_down:
+		right_drag_distance += event.screen_relative.length()
 		camera_yaw = wrapf(camera_yaw - event.screen_relative.x * camera_sensitivity, -PI, PI)
 		var vertical_delta: float = event.screen_relative.y
 		if not camera_reverse_vertical:
@@ -613,6 +633,7 @@ func _world_click(screen_position: Vector2) -> void:
 		return
 	var collider: Object = result["collider"]
 	if collider.has_method("take_damage") and not collider.dead:
+		auto_attack_enabled = false
 		target = collider as CharacterBody3D
 		pending_skill = -1
 	elif click_to_move:
@@ -620,6 +641,41 @@ func _world_click(screen_position: Vector2) -> void:
 		player.moving_to_click = true
 		pending_skill = -1
 		_mark_destination(result["position"])
+
+func _enemy_at_screen(screen_position: Vector2) -> CharacterBody3D:
+	var origin := camera.project_ray_origin(screen_position)
+	var direction := camera.project_ray_normal(screen_position)
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * 200.0, 5)
+	var result := get_world_3d().direct_space_state.intersect_ray(query)
+	var collider: Object = result.get("collider")
+	if is_instance_valid(collider) and collider.has_method("take_damage") and not collider.dead: return collider as CharacterBody3D
+	return null
+
+func _engage_auto_attack(enemy: CharacterBody3D) -> void:
+	if not is_instance_valid(enemy) or enemy.dead: return
+	target = enemy
+	auto_attack_enabled = true
+	pending_skill = -1
+	game_log.combat("auto_attack_engaged", {"target": str(enemy.display_name)})
+
+func _process_auto_attack() -> void:
+	if not auto_attack_enabled or is_dead or hud.blocks_gameplay() or ui_text_input: return
+	if not is_instance_valid(target) or target.dead:
+		target = null
+		var closest := 3.2
+		for enemy: CharacterBody3D in enemies:
+			if not is_instance_valid(enemy) or enemy.dead or not (enemy.aggro or enemy.combat_time > 0): continue
+			var distance := player.global_position.distance_to(enemy.global_position)
+			if distance < closest: target = enemy; closest = distance
+		if target == null:
+			auto_attack_enabled = false
+			return
+	if player.sitting or player.seat_returning or player.action_active or player.rolling: return
+	if player.upper_body_player != null and player.upper_body_player.is_playing(): return
+	if not skill_runtime.channel_id.is_empty() or state.sprint_blocks_combat() or player.wants_to_sprint(): return
+	if float(skill_runtime.skill_cooldowns.get("basic_attack", 0)) > 0: return
+	if player.global_position.distance_to(target.global_position) > 3.2: return
+	basic_attack()
 
 func _nearest_enemy(max_range: float = 22.0) -> CharacterBody3D:
 	var nearest: CharacterBody3D = null
@@ -649,6 +705,7 @@ func _cycle_target() -> void:
 func use_skill(index: int) -> void:
 	if skill_runtime != null:
 		if skill_runtime.cast_slot(index):
+			if is_instance_valid(target) and not target.dead and state.compiled_skill(state.loadout[index]).tags.has("damage"): auto_attack_enabled = true
 			game_log.combat("skill_used", {"skill": str(state.loadout[index]), "mana_after": snappedf(float(state.mana), 0.1), "player_hp": snappedf(float(state.hp), 0.1)})
 		hud.refresh()
 
@@ -665,12 +722,13 @@ func basic_attack() -> void:
 	if not is_instance_valid(target) or player.global_position.distance_to(target.global_position) > 3.2:
 		_fail_notice("No enemy in basic attack range.")
 		return
+	auto_attack_enabled = true
 	skill_runtime.stop_channel()
 	skill_runtime.skill_cooldowns["basic_attack"] = 0.8
 	var context: Dictionary = skill_runtime._context("melee")
 	context.skill = "basic_attack"
 	context.compiled = state.skill_catalog.compile("melee", [])
-	context.power = skill_runtime.preview_power("basic_attack", context.compiled)
+	context.power = state.roll_attack_damage(skill_runtime.rng) * (1.0 + skill_runtime.own_stat("damage", "basic_attack"))
 	player.face_point(target.global_position)
 	player.attack_animation("melee_cone")
 	skill_runtime.hit(context,target)
@@ -702,6 +760,7 @@ func damage_player(amount: float, source: Node3D = null, delivery: String = "mel
 	floating_text(player.global_position + Vector3.UP * 1.8, "-%d" % roundi(taken), Color("e38e80"))
 	if not is_instance_valid(target) and is_instance_valid(source):
 		target = source as CharacterBody3D
+	if is_instance_valid(source) and source == target: auto_attack_enabled = true
 	if state.hp <= 0:
 		_player_died()
 
@@ -740,6 +799,7 @@ func set_visual_time_preview(mode: String) -> void:
 
 func _player_died() -> void:
 	is_dead = true
+	auto_attack_enabled = false
 	skill_runtime._react("ON_DEATH", null)
 	skill_runtime.clear_combat()
 	block_time = 0

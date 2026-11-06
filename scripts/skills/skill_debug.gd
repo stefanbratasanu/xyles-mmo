@@ -15,7 +15,11 @@ static func report(game: Node, id: String) -> String:
 		"[b]BASE DELIVERY[/b]"
 	]
 	if c.tags.has("damage"):
-		lines.append("Direct hit: %.2f damage per target%s" % [power," per channel emission" if c.tags.has("channel") else ""])
+		if id in ["steel_strike", "heavy_strike"]:
+			var attack: Vector2 = state.get_attack_damage_range() * float(c.power) * float(c.power_scale) * (1.0 + runtime.own_stat("damage", id))
+			lines.append("Direct hit: %.2f–%.2f before enemy defenses" % [attack.x, attack.y])
+		else:
+			lines.append("Direct hit: %.2f damage per target%s" % [power," per channel emission" if c.tags.has("channel") else ""])
 		if c.tags.has("channel"): lines.append("Interval %.2fs · %.2f base damage/s while hitting continuously" % [float(c.interval),power/maxf(.05,float(c.interval))])
 	elif c.tags.has("heal"): lines.append("Healing: %.2f vitality before overheal · 0 direct damage" % power)
 	elif c.type=="dash": lines.append("Dash distance %.2fm · 0 native damage" % (float(c.range)*float(c.power_scale)*(1+runtime.own_stat("damage",id))))

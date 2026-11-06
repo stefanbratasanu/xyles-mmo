@@ -216,6 +216,9 @@ var _road_cells: Dictionary = {}
 var _materials: Dictionary = {}
 var _sun: DirectionalLight3D
 var _environment: Environment
+var color_grading = preload("res://scripts/color_grading.gd").new()
+var color_grade := "neutral"
+var ground_overlays = preload("res://scripts/ground_overlay_sampler.gd").new()
 var _sky_material: ShaderMaterial
 var _shaft_material: ShaderMaterial
 var _shaft_mesh: ArrayMesh
@@ -224,6 +227,7 @@ var _shafts_visible: bool = true
 var _shaft_slope := Vector2.ZERO
 var _shaft_check_hour: float = -100.0
 var _shaft_refresh_queue: Array[int] = []
+var _shaft_branch_cache: Dictionary = {}
 var _portal_material: StandardMaterial3D
 var _portal_ring: MeshInstance3D
 var _flames: Array[Node3D] = []
@@ -719,6 +723,9 @@ func surface_height_at(x: float, z: float) -> float:
 	if u + v <= 1.0: return h00 + u * (h10 - h00) + v * (h01 - h00)
 	return h10 * (1.0 - v) + h11 * (u + v - 1.0) + h01 * (1.0 - u)
 
+func foot_ground_height(x: float, z: float) -> float:
+	return ground_overlays.height_at(self, x, z, surface_height_at(x, z))
+
 
 func _raw_height(x: float, z: float) -> float:
 	var p := Vector2(x, z)
@@ -1212,6 +1219,11 @@ func apply_graphics_settings(use_glow: bool, use_ssao: bool, ao_strength: int = 
 		_update_shaft_visibility(sun_shafts and float(_shaft_material.get_shader_parameter("daylight")) > 0.01)
 	_environment.ssao_enabled = ssao_enabled
 	_environment.ssao_intensity = 2.5 * ssao_strength
+
+func set_color_grade(id: String) -> bool:
+	if not color_grading.apply(_environment, id): return false
+	color_grade = id
+	return true
 
 
 func _apply_time_of_day() -> void:
@@ -2440,7 +2452,7 @@ func _update_shaft_visibility(visible_now: bool) -> void:
 
 ## Validate the whole projected beam, not just its foot: at low sun angles a
 ## ray can otherwise cross a trunk or road several metres from its origin.
-func _shaft_path_clear(origin: Vector2, slope: Vector2, height_value: float, width: float) -> bool:
+func _shaft_path_clear(origin: Vector2, slope: Vector2, height_value: float, width: float, source_tree: Vector2 = Vector2(INF, INF)) -> bool:
 	var end := origin + slope * height_value
 	var segment := end - origin
 	var margin: float = width * 0.5 + 1.15
@@ -2462,6 +2474,9 @@ func _shaft_path_clear(origin: Vector2, slope: Vector2, height_value: float, wid
 		for z in range(min_z, max_z + 1):
 			for tree: Vector2 in _tree_spacing_cells.get(Vector2i(x, z), []):
 				var t := clampf((tree - origin).dot(segment) / maxf(segment.length_squared(), 0.0001), 0.0, 1.0)
+				# The selected branch belongs to its own tree. Allow the upper end
+				# in its canopy, but still reject crossing that trunk below it.
+				if tree.distance_squared_to(source_tree) < .01 and t > .8: continue
 				if tree.distance_squared_to(origin + segment * t) < margin * margin:
 					return false
 	var steps := maxi(1, ceili(segment.length() / 2.0))
@@ -2498,8 +2513,32 @@ func _refresh_shaft_node(node: MultiMeshInstance3D) -> void:
 	var candidates: Array = node.get_meta("shaft_data", [])
 	for index in candidates.size():
 		var entry: Dictionary = candidates[index]
-		var visible_ray := _shaft_path_clear(entry.position, _shaft_slope, entry.height, entry.width)
+		var anchor: Vector3 = entry.anchor
+		var height: float = minf(8.0, maxf(0.0, anchor.y - surface_height_at(anchor.x, anchor.z) - .08))
+		for pass_index in range(2):
+			var base_xz := Vector2(anchor.x, anchor.z) - _shaft_slope * height
+			height = minf(height, maxf(0.0, anchor.y - surface_height_at(base_xz.x, base_xz.y) - .08))
+		entry.height = height
+		entry.position = Vector2(anchor.x, anchor.z) - _shaft_slope * height
+		var visible_ray := height > 2.0 and _shaft_path_clear(entry.position, _shaft_slope, height, entry.width, entry.tree)
 		node.multimesh.set_instance_custom_data(index, Color(entry.width / 4.0, entry.height / 12.0, entry.strength if visible_ray else 0.0, 1.0))
+
+func _shaft_branch_vertices(mesh: Mesh, key: String) -> Array:
+	if _shaft_branch_cache.has(key): return _shaft_branch_cache[key]
+	var result: Array[Vector3] = []
+	if mesh == null or mesh.get_surface_count() == 0: return result
+	# Broadleaf bark contains actual branches. Pine has no branch geometry on
+	# its bark surface, so use points in the needle canopy instead.
+	var surface := 1 if "pine" in key.to_lower() and mesh.get_surface_count() > 1 else 0
+	var arrays := mesh.surface_get_arrays(surface)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var bounds := mesh.get_aabb()
+	for v: Vector3 in vertices:
+		var radius := Vector2(v.x, v.z).length()
+		if v.y > bounds.position.y + bounds.size.y * .40 and v.y < bounds.position.y + bounds.size.y * .82 and radius > 1.1:
+			result.append(v)
+	_shaft_branch_cache[key] = result
+	return result
 
 
 func _create_sun_shaft_mesh() -> void:
@@ -2526,7 +2565,7 @@ func _activate_vegetation_tile(cell: Vector2i, tile: Resource) -> void:
 		push_error("Invalid baked vegetation cell: %s" % cell)
 		return
 	var nodes: Array[Node] = []
-	var ray_positions: Array[Vector3] = []
+	var ray_positions: Array[Dictionary] = []
 	for group: Dictionary in tile.groups:
 		var visible_entries: Array = group["entries"]
 		var visible_colors: Array = group["colors"]
@@ -2568,13 +2607,14 @@ func _activate_vegetation_tile(cell: Vector2i, tile: Resource) -> void:
 		nodes.append(node)
 		if is_tree:
 			var tree_entries: Array = visible_entries
-			var step: int = maxi(1, int(ceil(float(tree_entries.size()) / 12.0)))
-			for index in range(0, tree_entries.size(), step):
-				var origin: Vector3 = (tree_entries[index] as Transform3D).origin
-				var angle: float = float(posmod(cell.x * 41 + cell.y * 17 + index * 29, 360)) * PI / 180.0
-				origin += Vector3(cos(angle) * 2.0, 0.0, sin(angle) * 2.0)
-				origin.y = height_at(origin.x, origin.z) + 0.12
-				ray_positions.append(origin)
+			var branch_points := _shaft_branch_vertices(mesh, mesh_path) if "dead" not in mesh_path.to_lower() else []
+			for index in range(tree_entries.size()):
+				var transform: Transform3D = tree_entries[index]
+				var seed_value := absi(hash(Vector2i(roundi(transform.origin.x * 100), roundi(transform.origin.z * 100))))
+				if branch_points.is_empty() or seed_value % 4 != 0: continue
+				var branch: Vector3 = branch_points[seed_value % branch_points.size()]
+				var variation := seed_value % 7
+				ray_positions.append({"anchor": transform * branch, "tree": Vector2(transform.origin.x, transform.origin.z), "tree_transform": transform, "branch_vertex": branch, "mesh_path": mesh_path, "width": .65 + variation * .08, "height": 0.0, "strength": .40 + variation * .08, "position": Vector2.ZERO})
 			var trunk_body := StaticBody3D.new()
 			trunk_body.name = "TreeTrunks"
 			# Separate layer keeps the orbit camera from snapping into the player
@@ -2604,9 +2644,8 @@ func _activate_vegetation_tile(cell: Vector2i, tile: Resource) -> void:
 		rays.instance_count = ray_positions.size()
 		var shaft_data: Array[Dictionary] = []
 		for index in ray_positions.size():
-			rays.set_instance_transform(index, Transform3D(Basis.IDENTITY, ray_positions[index]))
-			var variation: int = posmod(cell.x * 23 + cell.y * 47 + index * 19, 7)
-			shaft_data.append({"position": Vector2(ray_positions[index].x, ray_positions[index].z), "width": 1.2 + variation * 0.18, "height": 7.8 + variation * 0.6, "strength": 0.40 + variation * 0.10})
+			rays.set_instance_transform(index, Transform3D(Basis.IDENTITY, ray_positions[index].anchor))
+			shaft_data.append(ray_positions[index])
 		var ray_node := MultiMeshInstance3D.new()
 		ray_node.name = "SunShafts_%d_%d" % [cell.x, cell.y]
 		ray_node.multimesh = rays

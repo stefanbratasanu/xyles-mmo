@@ -17,6 +17,7 @@ func _run() -> void:
 	game.state.skill_catalog=game.state.skill_catalog.duplicate(true)
 	game.state.skill_catalog.data.rules.critical_chance=0
 	var mana: float=game.state.mana
+	game.skill_runtime.rng.seed = 441
 	game.hud._submit_chat("/attack")
 	var damage: float=10000-enemy.hp
 	check(damage>0,"Chat command damages a nearby enemy")
@@ -26,6 +27,7 @@ func _run() -> void:
 	game.skill_runtime.skill_cooldowns.clear()
 	game.state.skills.melee.evolutions=[{"id":"legacy","op":"legacy","family":"legacy","values":{"power":10}}]
 	game.state.compiled_skills.clear()
+	game.skill_runtime.rng.seed = 441
 	game.basic_attack()
 	check(is_equal_approx(10000-enemy.hp,damage*2),"Melee upgrades do not increase basic attack")
 	game.skill_runtime.skill_cooldowns.clear()

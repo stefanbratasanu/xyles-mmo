@@ -21,10 +21,27 @@ func icon(kind: String) -> Texture2D:
 func render() -> void:
 	var state: Node = hud.game.state
 	var used_slots: int = state.inventory.size() + int(state.wood > 0) + int(state.iron > 0)
-	hud.overlay_title.text = "Inventory                                      (%d/%d)" % [used_slots, Slots.CAPACITY]
+	hud.overlay_title.text = "Character & Inventory                                  (%d/%d)" % [used_slots, Slots.CAPACITY]
 	var body := HBoxContainer.new()
 	body.add_theme_constant_override("separation", 10)
 	hud.overlay_content.add_child(body)
+	var stat_frame: PanelContainer = hud._panel()
+	stat_frame.custom_minimum_size = Vector2(186, 354)
+	body.add_child(stat_frame)
+	var stats: VBoxContainer = hud._column(stat_frame, 10, 9)
+	stats.add_theme_constant_override("separation", 5)
+	stats.add_child(hud._label(str(state.character_name), 13, hud.GOLD, true))
+	stats.add_child(hud._label("Level %d · %s %s" % [state.level, state.character_race, state.character_class], 10, hud.MUTED))
+	hud.character_values.clear()
+	for entry: Array in [["hp", "Health"], ["mp", "Mana"], ["xp", "Experience"], ["weapon", "Weapon"], ["base_attack", "Base attack"], ["weapon_damage", "Weapon damage"], ["attack_damage", "Attack damage"], ["armor", "Armor mitigation"], ["attack", "Attack bonus"], ["melee", "Melee bonus"], ["cast", "Cast bonus"], ["support", "Support bonus"], ["points", "Skill points"], ["earned", "Lifetime points"]]:
+		var line := HBoxContainer.new()
+		stats.add_child(line)
+		var label: Label = hud._label(entry[1], 10, hud.MUTED)
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		line.add_child(label)
+		var value: Label = hud._label("", 10, hud.TEXT)
+		line.add_child(value)
+		hud.character_values[entry[0]] = value
 	var frame: PanelContainer = hud._panel()
 	frame.custom_minimum_size = Vector2(200, 354)
 	body.add_child(frame)
@@ -131,6 +148,7 @@ func render() -> void:
 	trash.tooltip_text = "Discard the selected bag item. Click twice to confirm."
 	trash.pressed.connect(_discard)
 	bottom.add_child(trash)
+	hud._update_character()
 
 
 func _enable_immediate_tooltip(tile: Button) -> void:
@@ -204,7 +222,12 @@ func _description(item: Dictionary) -> String:
 	if item.get("category", "") == "material":
 		return "%s × %d\nCrafting material" % [item.name, item.count]
 	var result := "%s\n%s · %s\nDurability: %d / %d" % [item.get("name", "Equipment"), str(item.get("tier", "basic")).capitalize(), Slots.label(str(item.get("slot", ""))), item.get("durability", 100), item.get("max_durability", 100)]
-	if item.get("slot","")=="weapon": result+="\nWeapon type: "+hud.game.state.item_weapon_type(item).capitalize()
+	if item.get("slot","")=="weapon":
+		result += "\nWeapon type: " + hud.game.state.item_weapon_type(item).capitalize()
+		var maximum := float(item.get("damage_max", item.get("power", 1)))
+		var minimum := float(item.get("damage_min", roundi(maximum * .6)))
+		result += "\nWeapon damage: " + hud.game.state.format_damage_range(Vector2(minimum, maximum))
+		if float(item.get("durability", 100)) <= 0: result += "\nBroken: 25% weapon damage"
 	for modifier: String in item.get("modifiers", []):
 		result += "\n" + hud.game.state.get_modifier_display_text(modifier)
 	return result

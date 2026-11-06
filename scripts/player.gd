@@ -31,6 +31,7 @@ var weapon_visual_variant := ""
 var character_model_id := "human_male"
 var weapon_grips = preload("res://scripts/weapon_grips.gd").new()
 var hand_modifier: SkeletonModifier3D
+var foot_modifier: SkeletonModifier3D
 var sprint_weapon_visual: Node3D
 var hand_rotation_degrees := Vector3.ZERO:
 	set(value):
@@ -42,6 +43,7 @@ var _frozen_base_playing := false
 var _frozen_upper_playing := false
 var _frozen_during_roll := false
 var action_active := false
+var heavy_strike_active := false
 var is_dying := false
 var destination := Vector3.ZERO
 var moving_to_click: bool = false
@@ -152,6 +154,15 @@ func _ready() -> void:
 		hand_modifier = preload("res://scripts/hand_grip_offset.gd").new()
 		hand_modifier.name = "HandGripOffset"
 		skeleton.add_child(hand_modifier)
+		var heavy_pose := preload("res://scripts/heavy_strike_pose.gd").new()
+		heavy_pose.name = "HeavyStrikePose"
+		heavy_pose.actor = self
+		skeleton.add_child(heavy_pose)
+		foot_modifier = preload("res://scripts/foot_grounding.gd").new()
+		foot_modifier.name = "FootGrounding"
+		foot_modifier.actor = self
+		skeleton.add_child(foot_modifier)
+		foot_modifier.rebuild_samples()
 	var ring: MeshInstance3D = get_node_or_null("SelectionRing") as MeshInstance3D
 	if not is_instance_valid(ring):
 		ring = MeshInstance3D.new()
@@ -292,6 +303,8 @@ func _physics_process(delta: float) -> void:
 		velocity.y = -0.2
 	var wade_from := Vector2(global_position.x, global_position.z)
 	move_and_slide()
+	var contact_lift := .04 if is_on_floor() and not sitting and not seat_returning and not rolling and not action_active and not is_dying else 0.0
+	visual.get_node("Character").position.y = move_toward(visual.get_node("Character").position.y, contact_lift, delta * .35)
 	var wade_now: float = float(game.world.water_depth_at(global_position.x, global_position.z))
 	if wade_now > WADE_MAX_DEPTH and wade_depth <= WADE_MAX_DEPTH:
 		# Revert only the horizontal step: gravity and floor snapping stay intact,
@@ -423,6 +436,7 @@ func available_animations() -> PackedStringArray:
 func play_profile_action(action: String) -> bool:
 	if animation_override or animation_frozen: return false
 	if animation_player==null: return false
+	heavy_strike_active = action == "heavy_strike"
 	var entry:=animation_entry(action)
 	if entry.clip=="procedural_roll": return false
 	if action in animation_profiles.ATTACK_TYPES and action != "cast_effect": combat_stance_time = COMBAT_STANCE_SECONDS
@@ -522,6 +536,7 @@ func update_equipment(equipment: Array) -> void:
 	if weapon_attachment != null and weapon_style != "unarmed":
 		weapon_visual = create_weapon_visual(weapon_style, weapon_visual_variant)
 		weapon_attachment.add_child(weapon_visual)
+		preload("res://scripts/weapon_anchor.gd").apply(weapon_attachment.get_parent() as Skeleton3D, weapon_visual, weapon_style, weapon_visual_variant)
 		weapon_grips.apply(weapon_grip_key(), weapon_visual)
 		weapon_visual.visible = not sitting
 	if is_instance_valid(sprint_weapon_visual): sprint_weapon_visual.configure()
@@ -535,6 +550,7 @@ func reset_weapon_grip() -> void:
 	var original := create_weapon_visual(weapon_style, weapon_visual_variant)
 	weapon_visual.transform = original.transform
 	original.free()
+	preload("res://scripts/weapon_anchor.gd").apply(weapon_attachment.get_parent() as Skeleton3D, weapon_visual, weapon_style, weapon_visual_variant)
 
 func play_animation_override(clip: String, speed: float = 1.0) -> bool:
 	if animation_player == null or not animation_player.has_animation(clip) or sitting or seat_returning or is_dying: return false
@@ -913,6 +929,7 @@ func apply_character_appearance(appearance: Dictionary, race: String = "Human", 
 	character.body_size = 2
 	character.muscularity = 3
 	character.initialize_body()
+	if is_instance_valid(foot_modifier): foot_modifier.rebuild_samples()
 	for library_name in _source_animation_libraries:
 		var adapted := FighterAnimationAdapter.adapt(_source_animation_libraries[library_name], skeleton, character.get_meta("animation_source_rests"))
 		animation_player.remove_animation_library(library_name)

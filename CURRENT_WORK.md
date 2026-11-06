@@ -827,3 +827,87 @@ Baked idle-only update; no runtime IK or new arm modifier. All ten race/gender
 wrist checks and combat-idle cycle checks pass. Native closeups reviewed with
 and without saved calibration. F7 Fast Align and F6 weapon controls pass.
 Restart the game to load the updated animation resource.
+
+### Automatic grip, ground contact and developer skill testing - 2026-11-06
+
+Weapon handles now align to each model's fitted hand/finger frame; weapon-local
+contact points cover the existing sword, ornate sword, greatsword, staff, spear
+and bow. New assets can author a GripAnchor marker. Existing exact F7 saves take
+precedence; use Reset to Model followed by Save Grip to replace one with the
+automatic fit. Two-handed off-hand contact remains animation-authored.
+
+Grounded locomotion samples each model's skinned sole and uses bounded leg IK on
+the rendered terrain, including original raised road/camp overlays. Swing feet,
+jumps, actions, seating and overrides keep their authored pose. DEV on the left
+edge enables a temporary all-skills palette. Drag onto the hotbar to test; exiting
+restores the original loadout, and normal saves retain that original loadout.
+
+The ten character rigs and six weapon variants pass contact-frame checks; all
+ten have idle sole-contact checks on uneven terrain. Live physics traversal,
+solver, test-mode save/restore and drag/drop tests pass. World, camp seating,
+weapon controls, sprint weapon, trainer, action-hotbar and animation selection
+tests pass. Native Direct3D starter-sword/feet and developer-panel views were
+reviewed; the other 59 model/weapon pairings were checked geometrically, not
+individually art-reviewed. Ground correction is bounded and does not solve steep
+steps, off-hand grips or unusual future rigs/assets automatically. Existing
+shutdown renderer/resource diagnostics persist. Restart the game to load changes.
+
+### Mesh-measured grip, visible ground and color previews - 2026-11-06
+
+Follow-up to the reported floating and misplaced sword: the palm marker now
+samples each model's hand-weighted mesh near the fingers, and the ornate sword
+marker is centered on its measured handle rather than near its pommel. Native
+front/back closeups show the handle through the Human hand; other race/weapon
+combinations have geometric checks but not full art/motion review. Saved exact
+F7 overrides remain in force. The 1 mm foot target and actual interpolated
+road/camp triangle heights reduce the prior excess clearance; a sole uses the
+overlay height at its foot and samples terrain across the footprint.
+
+Living-tree shaft anchors now come from actual branch vertices, or needle-canopy
+vertices for pines with no branch mesh. They pivot around their canopy anchor as
+the sun moves and retain the existing time window and clearance rules. DEV →
+COLOR offers six temporary world-only grades including Original; disabling DEV
+resets the preview. `Documentation/VISUAL_DEVELOPMENT.md` records the workflow,
+Godot references and limitations. The frame-time microcheck for the new foot
+sampler was approximately 0.51 ms per call on this machine in headless test
+mode, not a whole-game benchmark.
+
+Ground overlay interpolation, ten-race contact/weapon anchors, moving traversal,
+forest ray geometry/schedule, developer mode, F7 Fast Align, world and edited
+terrain checks passed. Direct3D screenshots of the grip, ground, forest shafts
+and grades were reviewed. Existing renderer/resource shutdown diagnostics remain.
+
+### Steel Strike, damage and character inventory - 2026-11-06
+
+Steel Strike is a learned sword skill available in K and DEV → SKILL. It uses a
+dedicated existing sword animation clip, an editable Effekseer slash/impact, and
+a delayed single-target hit. Its 120% damage uses the same 1–3 base plus weapon
+roll as basic attacks; the common ornate starter sword contributes 5–9. Existing
+ornate swords migrate without losing modifiers. Other skills still use their
+previous formulas. I opens the combined character stats/equipment/inventory view.
+
+Focused damage, cooldown, range, hit timing, DEV drag, learned skills and save
+migration tests pass, as do basic attack, Fighter tree, developer mode, hotbar,
+inventory tooltip and animation tests. Direct3D captures of the impact and the
+combined panel at 1600×900 and 1100×650 were reviewed. The older skill-catalog
+test still expects disabled legacy enchantments and does not pass; existing
+renderer/resource diagnostics occur on shutdown. Restart to load these changes.
+
+### Heavy Strike and automatic attacks - 2026-11-06
+
+Heavy Strike deals 200% of a rolled attack, costs 10 mana, and has a 5 second
+cooldown. It is learned by both classes, visible in K and DEV → SKILL, and uses
+an overhead two-hand arm solver layered over an authored full-body attack plus
+its own editable Effekseer impact. Both strikes have new image-generated icons;
+the character/inventory panel no longer shows individual skill damage.
+
+Right-clicking an enemy engages mana-free repeating basic attacks while in range
+and ready. Dragging right mouse continues to rotate the camera. Attacks pause for
+skill animations, channels, sitting, sprint/readiness and modal UI. Out-of-range
+targets are not chased automatically. New tests cover click versus drag, damage,
+mana, cooldown, distance, impact and DEV assignment; related skill, hotbar,
+animation and sprint tests pass. Ten character rigs were checked geometrically
+for overhead arm placement, and the Human animation and effect were reviewed in
+Direct3D. Finger wrapping and every race's appearance in motion are not fully
+art-reviewed. A live four-second test delivered five auto-attacks at zero mana.
+Existing shutdown resource diagnostics persist.

@@ -78,6 +78,9 @@ var corner_menu: PanelContainer
 var drag_guides: Control
 var settings_tab := 0
 var character_values: Dictionary = {}
+var dev_button: Button
+var dev_skill_button: Button
+var dev_color_button: Button
 
 
 func setup(owner_game: Node) -> void:
@@ -110,6 +113,7 @@ func setup(owner_game: Node) -> void:
 	_build_chat()
 	_build_toast()
 	_build_overlay()
+	_build_dev_controls()
 	_build_drag_guides()
 	world_map = preload("res://scripts/world_map.gd").new()
 	world_map.name = "WorldMap"
@@ -283,9 +287,9 @@ func _build_menu() -> void:
 	var head_image := Image.new()
 	head_image.load_svg_from_string(FileAccess.get_file_as_string("res://assets/ui/character_head.svg"))
 	head.icon = ImageTexture.create_from_image(head_image)
-	head.tooltip_text = "Character status"
+	head.tooltip_text = "Character & inventory [I]"
 	head.custom_minimum_size = Vector2(34, 34)
-	head.pressed.connect(toggle_panel.bind("character"))
+	head.pressed.connect(toggle_panel.bind("inventory"))
 	dock.add_child(head)
 	var options := _button("⚙", 18)
 	options.tooltip_text = "Options [O]"
@@ -298,7 +302,7 @@ func _build_menu() -> void:
 	_place(corner_menu, Vector2(-212, -490), Vector2(200, 430), Vector2(1, 1))
 	var column := _column(corner_menu, 10, 10)
 	column.add_child(_label("Windows", 11, GOLD))
-	for item: Array in [["Character", "character"], ["Inventory [I]", "inventory"], ["Class skills [K]", "skills"], ["Actions", "actions"], ["Bestiary [B]", "bestiary"], ["Crafting [C]", "forge"], ["Field guide [H]", "guide"], ["Animations", "animations"], ["Weapon position [F7]", "weapon_position"], ["Debug", "debug"], ["Options [O]", "settings"]]:
+	for item: Array in [["Character & Inventory [I]", "inventory"], ["Class skills [K]", "skills"], ["Actions", "actions"], ["Bestiary [B]", "bestiary"], ["Crafting [C]", "forge"], ["Field guide [H]", "guide"], ["Animations", "animations"], ["Weapon position [F7]", "weapon_position"], ["Debug", "debug"], ["Options [O]", "settings"]]:
 		var button := _button(item[0], 10)
 		button.pressed.connect(func(): corner_menu.hide(); toggle_panel(item[1]))
 		column.add_child(button)
@@ -721,10 +725,11 @@ func blocks_gameplay() -> bool:
 		return true
 	if not debug_rebind_action.is_empty():
 		return true
-	return not current_panel.is_empty() and current_panel != "debug"
+	return not current_panel.is_empty() and current_panel not in ["debug", "dev_skills", "dev_colors"]
 
 
 func toggle_panel(panel_name: String) -> void:
+	if panel_name == "character": panel_name = "inventory"
 	if current_panel == panel_name:
 		close_panel()
 	else:
@@ -745,6 +750,7 @@ func close_panel() -> void:
 
 
 func _switch_panel(panel_name: String) -> void:
+	if panel_name == "character": panel_name = "inventory"
 	weapon_position_view.finish_alignment(false)
 	inventory_view._hide_item_tooltip()
 	corner_menu.hide()
@@ -755,11 +761,12 @@ func _switch_panel(panel_name: String) -> void:
 		game.save_settings()
 	_store_active_position()
 	current_panel = panel_name
-	window_frame.mouse_filter = Control.MOUSE_FILTER_STOP if panel_name == "debug" else Control.MOUSE_FILTER_PASS
+	window_frame.mouse_filter = Control.MOUSE_FILTER_STOP if panel_name in ["debug", "dev_skills", "dev_colors"] else Control.MOUSE_FILTER_PASS
 	var desired := _panel_size(panel_name)
 	window_frame.size = desired.min(get_viewport().get_visible_rect().size - Vector2(24, 40))
 	var default_position := (get_viewport().get_visible_rect().size - window_frame.size) * 0.5
 	if panel_name == "weapon_position": default_position = Vector2(get_viewport().get_visible_rect().size.x - window_frame.size.x - 24, 110)
+	if panel_name in ["dev_skills", "dev_colors"]: default_position = Vector2(72, 110)
 	window_frame.position = window_positions.get(panel_name, default_position)
 	_clamp_window(window_frame)
 	if is_instance_valid(skill_view.picker):
@@ -778,6 +785,9 @@ func skill_description_bbcode(id: String) -> String:
 	var compiled: Dictionary = state.compiled_skill(id)
 	var text := "[b]%s[/b]\n%s" % [str(state.skills[id].name).replace("[", "[lb]"), str(state.skills[id].description).replace("[", "[lb]")]
 	text += "\nMana %.1f · Cooldown %.1fs · Range %.1fm" % [float(compiled.cost) * float(compiled.cost_scale), float(compiled.cooldown) * float(compiled.cooldown_scale), float(compiled.range)]
+	if id in ["steel_strike", "heavy_strike"]:
+		var attack: Vector2 = state.get_attack_damage_range() * float(compiled.power) * float(compiled.power_scale) * (1.0 + game.skill_runtime.own_stat("damage", id))
+		return text + "\nSword required · %.1f–%.1f damage before enemy armor and critical hits" % [attack.x, attack.y]
 	if compiled.tags.has("channel"): text += "\nHold key to channel; click again to stop. Movement 50%; facing limited to 360°/s."
 	if compiled.tags.has("damage") or compiled.role == "support":
 		text += "\nCurrent power: %.1f" % game.skill_runtime.preview_power(id, compiled)
@@ -824,6 +834,8 @@ func _render_overlay() -> void:
 		"weapon_position": weapon_position_view.render()
 		"actions": _render_actions()
 		"debug": _render_debug()
+		"dev_skills": _render_dev_skills()
+		"dev_colors": _render_dev_colors()
 		_: _render_guide()
 
 
@@ -1446,6 +1458,80 @@ func _assign_hotbar(data: Dictionary, slot: int) -> void:
 		game._save_journey()
 		refresh()
 
+func _build_dev_controls() -> void:
+	dev_button = _button("DEV", 11, true)
+	_place(dev_button, Vector2(0, -70), Vector2(56, 34), Vector2(0, .5))
+	dev_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	dev_button.tooltip_text = "Toggle developer mode"
+	dev_button.pressed.connect(_toggle_developer_mode)
+	dev_skill_button = _button("SKILL", 10)
+	_place(dev_skill_button, Vector2(0, -32), Vector2(56, 34), Vector2(0, .5))
+	dev_skill_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	dev_skill_button.tooltip_text = "Open all skills for testing"
+	dev_skill_button.pressed.connect(func(): toggle_panel("dev_skills"))
+	dev_skill_button.hide()
+	dev_color_button = _button("COLOR", 10)
+	_place(dev_color_button, Vector2(0, 6), Vector2(56, 34), Vector2(0, .5))
+	dev_color_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	dev_color_button.tooltip_text = "Preview world color grades"
+	dev_color_button.pressed.connect(func(): toggle_panel("dev_colors"))
+	dev_color_button.hide()
+
+func _toggle_developer_mode() -> void:
+	var enabled: bool = not game.state.developer_mode
+	if not enabled and game.skill_runtime != null: game.skill_runtime.stop_channel()
+	game.state.set_developer_mode(enabled)
+	game.game_log.ui("developer_mode", {"enabled": enabled})
+	dev_button.text = "DEV ON" if enabled else "DEV"
+	dev_skill_button.visible = enabled
+	dev_color_button.visible = enabled
+	if not enabled:
+		game.world.set_color_grade("neutral")
+		if current_panel in ["dev_skills", "dev_colors"]: close_panel()
+	show_notice("Developer mode on · test skills with the SKILL button." if enabled else "Developer mode off · original hotbar restored.")
+	refresh()
+
+func _render_dev_skills() -> void:
+	overlay_title.text = "Developer · Skills"
+	overlay_subtitle.text = "Drag any skill to the hotbar. Test assignments last until developer mode is turned off."
+	var ids: Array = game.state.skills.keys()
+	ids.sort_custom(func(a, b): return str(game.state.skills[a].name).naturalnocasecmp_to(str(game.state.skills[b].name)) < 0)
+	for id: String in ids:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		overlay_content.add_child(row)
+		var tile: Button = skill_view._tile(skill_view.icon(str(game.state.skill_catalog.data.skills[id].get("icon", ""))), 42, GOLD)
+		tile.set_script(preload("res://scripts/skill_drag_button.gd"))
+		tile.drag_payload = {"kind":"hotbar", "id":id}
+		tile.tooltip_text = "Drag to a shortcut to test " + str(game.state.skills[id].name)
+		tile.set_meta("skill_tooltip_bbcode", skill_description_bbcode(id))
+		row.add_child(tile)
+		var label := _label(str(game.state.skills[id].name), 12, TEXT)
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(label)
+
+func _render_dev_colors() -> void:
+	overlay_title.text = "Developer · Color grading"
+	overlay_subtitle.text = "Preview the world mood live. Original restores the current look; previews reset when DEV is turned off."
+	for id: String in game.world.color_grading.PRESETS:
+		var preset: Dictionary = game.world.color_grading.PRESETS[id]
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		overlay_content.add_child(row)
+		var button := _button(str(preset.name), 11, id == game.world.color_grade)
+		button.custom_minimum_size = Vector2(112, 34)
+		button.pressed.connect(func():
+			if game.world.set_color_grade(id):
+				game.game_log.ui("color_grade_preview", {"preset": id})
+				_render_overlay())
+		row.add_child(button)
+		var description := _label(str(preset.description), 10, MUTED)
+		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		description.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		description.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(description)
+
 
 func _set_camera_reverse_vertical(enabled: bool) -> void:
 	game.camera_reverse_vertical = enabled
@@ -1743,6 +1829,8 @@ func _reset_layout() -> void:
 
 
 func _panel_size(panel_name: String) -> Vector2:
+	if panel_name == "dev_colors": return Vector2(390, 430)
+	if panel_name == "dev_skills": return Vector2(330, 480)
 	if panel_name == "npc_dialogue": return Vector2(550, 580)
 	if panel_name == "weapon_position": return Vector2(600, 440)
 	if panel_name == "character": return Vector2(380, 500)
@@ -1750,7 +1838,7 @@ func _panel_size(panel_name: String) -> Vector2:
 	if panel_name == "actions": return Vector2(300,390)
 	if panel_name == "debug": return Vector2(600, 760)
 	if panel_name == "skills": return Vector2(560, 560) if game.state.character_class == "Fighter" else Vector2(1120, 720)
-	if panel_name == "inventory": return Vector2(620, 440)
+	if panel_name == "inventory": return Vector2(820, 460)
 	if panel_name == "animations": return Vector2(1000,740)
 	return Vector2(820, 640)
 
@@ -1785,9 +1873,11 @@ func _render_character() -> void:
 	_update_character()
 
 func _update_character() -> void:
-	if current_panel != "character" or character_values.is_empty(): return
+	if current_panel not in ["character", "inventory"] or character_values.is_empty(): return
 	var s: Node = game.state
 	var mods: Dictionary = s.get_equipment_modifiers()
-	var values := {"hp": "%d / %d" % [s.hp, s.max_hp + mods.max_hp], "mp": "%d / %d" % [s.mana, s.max_mana + mods.max_mana], "xp": "%.2f%%" % (100.0 * s.xp / (s.level * 100)), "weapon": s.weapon_context().capitalize(), "power": "%.1f" % s.get_equipment_power(), "attack": "%+.0f%%" % ((mods.attack_multiplier - 1.0) * 100), "armor": "%.0f%%" % (mods.armor * 100), "melee": "%+.0f%%" % ((mods.melee_multiplier - 1.0) * 100), "cast": "%+.0f%%" % ((mods.cast_multiplier - 1.0) * 100), "support": "%+.0f%%" % ((mods.support_multiplier - 1.0) * 100), "gold": str(s.gold), "points": str(s.skill_points), "earned": "%d / 50" % s.earned_skill_points}
+	var weapon: Vector2 = s.get_weapon_damage_range()
+	var attack_range: Vector2 = s.get_attack_damage_range()
+	var values := {"hp": "%d / %d" % [s.hp, s.max_hp + mods.max_hp], "mp": "%d / %d" % [s.mana, s.max_mana + mods.max_mana], "xp": "%.2f%%" % (100.0 * s.xp / (s.level * 100)), "weapon": s.weapon_context().capitalize(), "base_attack": "%d–%d" % [s.BASE_ATTACK_MIN, s.BASE_ATTACK_MAX], "weapon_damage": s.format_damage_range(weapon), "attack_damage": s.format_damage_range(attack_range), "power": "%.1f" % s.get_equipment_power(), "attack": "%+.0f%%" % ((mods.attack_multiplier - 1.0) * 100), "armor": "%.0f%%" % (mods.armor * 100), "melee": "%+.0f%%" % ((mods.melee_multiplier - 1.0) * 100), "cast": "%+.0f%%" % ((mods.cast_multiplier - 1.0) * 100), "support": "%+.0f%%" % ((mods.support_multiplier - 1.0) * 100), "gold": str(s.gold), "points": str(s.skill_points), "earned": "%d / 50" % s.earned_skill_points}
 	for key: String in values:
-		if is_instance_valid(character_values[key]): character_values[key].text = values[key]
+		if is_instance_valid(character_values.get(key)): character_values[key].text = values[key]

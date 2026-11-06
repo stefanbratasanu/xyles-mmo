@@ -116,3 +116,31 @@ Godot assets/helpers only, no reference screenshots shipped.
 K learned-only follow-up: hide all unlearned skill cards in K. Keep locked and
 available training entries with required levels exclusively in NPC dialogue.
 Show a short trainer direction when K has no learned skills.
+
+### Developer controls - 2026-11-06
+
+Use small bronze/brown DEV and SKILL controls on the left edge. In DEV mode,
+SKILL opens a compact, nonmodal, draggable and scrollable list with square skill
+icons, ivory names and explicit temporary-assignment guidance. The existing
+frameless hotbar remains visible and accepts these drag payloads. Exiting DEV
+restores its original assignments. Match the reference's compact icon rows,
+dark insets, bronze edges and clear information hierarchy using original assets.
+
+DEV → COLOR opens a compact, nonmodal list of live color-grading presets, with
+an Original reset and a short explanation that previews end when DEV is turned
+off. Keep the scene visible beside the panel and preserve the original, untinted
+HUD so colors can be compared without compromising legibility.
+
+### Character and inventory - 2026-11-06
+
+I and the character button open one Character & Inventory panel. Keep character
+identity, health, mana, progression, base attack, weapon damage, total attack,
+and relevant bonuses beside the existing
+equipment and bag. Weapon tooltips show their damage range. Use the existing dark
+insets, bronze borders and compact ivory typography, with equipment and bag
+remaining usable at supported window sizes. Steel Strike has its own square icon
+in both the learned-skills interface and the DEV skill palette.
+
+Skill-specific damage, costs and cooldowns belong in skill descriptions and
+tooltips, not character stats. Steel Strike and Heavy Strike use distinct
+image-generated square icons with dark grounds, silver blades and bronze edges.

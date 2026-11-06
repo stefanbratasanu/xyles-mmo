@@ -30,6 +30,9 @@ func icon(id: String, stage: int = -1) -> Texture2D:
 	var key := "%s:%d" % [id, stage]
 	if textures.has(key):
 		return textures[key]
+	if id in ["steel_strike", "heavy_strike"] and stage < 0:
+		textures[key] = load("res://assets/ui/%s_icon.png" % id)
+		return textures[key]
 	var rect: Rect2
 	if stage < 0:
 		var areas := {
@@ -151,11 +154,12 @@ func _render_fighter_tree() -> void:
 	hud.overlay_title.text="Fighter skill tree"
 	hud.overlay_subtitle.text="Learn available skills from Torven in Emberfall Camp [E]. Drag learned skills onto the bottom bar."
 	var shown := 0
-	for node: Dictionary in state.FighterTree.SKILLS:
+	var entries: Array = [{"id":"steel_strike", "name":"Steel Strike", "level":1}, {"id":"heavy_strike", "name":"Heavy Strike", "level":1}] + state.FighterTree.SKILLS
+	for node: Dictionary in entries:
 		var unlocked: bool=state.is_skill_available(node.id)
 		if not unlocked: continue
 		shown += 1
-		var status: String = state.class_skill_status(str(node.id))
+		var status: String = "Learned" if node.id in ["steel_strike", "heavy_strike"] else state.class_skill_status(str(node.id))
 		var card: PanelContainer = hud._panel()
 		hud.overlay_content.add_child(card)
 		var margin: MarginContainer = hud._margin(card, 10, 8)

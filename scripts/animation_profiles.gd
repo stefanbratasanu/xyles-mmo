@@ -2,7 +2,7 @@ extends RefCounted
 ## Per-weapon, per-delivery action presentation. No gameplay effects are previewed.
 const SAVE_PATH := "res://saves/animation_profiles.json"
 const WEAPONS := ["unarmed","sword","greatsword","staff","spear","bow"]
-const ATTACK_TYPES := ["melee_cone","melee_area","melee_projectile","cast_cone","cast_area_self","cast_area_target","cast_projectile","cast_projectile_area","channel_ray","channel_projectiles","dash","cast_effect","block"]
+const ATTACK_TYPES := ["steel_strike","heavy_strike","melee_cone","melee_area","melee_projectile","cast_cone","cast_area_self","cast_area_target","cast_projectile","cast_projectile_area","channel_ray","channel_projectiles","dash","cast_effect","block"]
 const MOVEMENT := ["idle","combat_idle","run","sprint","sprint_forward_left","sprint_forward_right","walk_forward","walk_back","walk_left","walk_right","jump","fall","land","death"]
 var path := SAVE_PATH
 var overrides: Dictionary = {}
@@ -15,7 +15,15 @@ func default_entry(weapon: String, action: String) -> Dictionary:
 	var clip := ""
 	var upper := action in ATTACK_TYPES and action not in ["block","dash"]
 	var speed := 1.0
-	if action in ["melee_cone","melee_projectile"]:
+	if action == "steel_strike":
+		clip = "actions/sword_SwordAttack2S&S"
+		upper = false
+		speed = 1.25
+	elif action == "heavy_strike":
+		clip = "protof/greatsword_AttackA2HandMelee"
+		upper = false
+		speed = .9
+	elif action in ["melee_cone","melee_projectile"]:
 		clip = "actions/spear_thrust" if weapon=="spear" else "protof/"+base+"_attack"
 	elif action=="melee_area":
 		clip="protof/greatsword_AttackC2HandMelee" if weapon in ["greatsword","spear","staff"] else "protof/"+base+"_attack"
